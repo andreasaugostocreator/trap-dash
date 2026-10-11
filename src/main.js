@@ -127,8 +127,19 @@ async function hostParty() {
 }
 net.onPeer = () => { sfx.cp(); };
 
-$('code').addEventListener('input', () => { $('code').value = cleanCode($('code').value); });
-$('code').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinGo').click(); });
+function bindCode() {
+  $('code').addEventListener('input', () => { $('code').value = cleanCode($('code').value); });
+  $('code').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinGo').click(); });
+}
+bindCode();
+// iOS "Shake to Undo" offers to undo the last typing (your name, the room code) whenever the phone is shaken,
+// which happens a lot mid-game. Swapping the text boxes for fresh copies with the same text drops that history.
+function forgetTyping() {
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  for (const id of ['name', 'code']) { const old = $(id), fresh = old.cloneNode(true); fresh.value = old.value; old.replaceWith(fresh); }
+  bindCode();
+  $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; saveMe(); };
+}
 $('joinGo').onclick = async () => {
   unlockAudio();
   const code = cleanCode($('code').value), st = $('joinStatus');
@@ -204,6 +215,7 @@ function syncLobby() { if (mode === 'online' && isHost) net.send({ t: 'lobby', p
 
 // ---------- lobby
 function openLobby() {
+  forgetTyping();
   show('lobby');
   stopMusic();
   const online = mode === 'online', practice = mode === 'practice';
@@ -547,6 +559,7 @@ function layoutControls() {
 
 // ---------- a run
 function startRun(level, runner, n) {
+  forgetTyping();
   hidePanel();
   show(null);
   const world = new World(levelOf(level));
