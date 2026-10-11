@@ -1,0 +1,547 @@
+// Screens, the party flow and the game loop.
+// A match is played level by level: each player gets one run as the runner while the other works the traps,
+// then the faster runner wins the level. Online, the runner's device runs the world and streams it to the trapper.
+import { DT, TIME_LIMIT, COLORS, TRAPS } from './config.js';
+import { World } from './sim.js';
+import { LEVELS } from './levels.js';
+import { Renderer } from './render.js';
+import { Net, cleanCode } from './net.js';
+import { Bot } from './bot.js';
+import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const DEBUG = new URLSearchParams(location.search).has('debug');
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('trapdash-' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('trapdash-' + k, JSON.stringify(v)); } catch { /* private mode */ } },
+};
+const VEG = ['Radish', 'Sprout', 'Pea', 'Beet', 'Turnip', 'Carrot', 'Leek', 'Bean'];
+const me = store.get('me', { name: VEG[Math.floor(Math.random() * VEG.length)] + Math.floor(Math.random() * 90 + 10), color: 'radish' });
+const colorOf = id => COLORS.find(c => c.id === id) || COLORS[0];
+const otherColor = id => COLORS[(COLORS.findIndex(c => c.id === id) + 1) % COLORS.length].id;
+
+const canvas = $('game'), R = new Renderer(canvas);
+const net = new Net();
+const touchDevice = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
+
+// ---------- party state
+let mode = null;          // 'online' | 'local' | 'practice'
+let isHost = false, roomCode = '';
+let players = { a: null, b: null };  // a = host / player 1, b = guest / player 2
+let lobby = { level: 0, first: 'a' };
+let score = { a: 0, b: 0 };
+let runs = [];            // results of the runs on the current level
+let run = null;
+const mySide = () => (mode === 'online' && !isHost ? 'b' : 'a');
+const other = s => (s === 'a' ? 'b' : 'a');
+
+// ---------- screens
+function show(id) {
+  for (const s of document.querySelectorAll('.screen')) s.classList.toggle('hidden', s.id !== id);
+}
+let toastT;
+function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 3200); }
+
+function portrait(colorId, size = 80) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const r = new Renderer(c); r.t = 0.3; r.blink = 5;
+  r.ctx.setTransform(size / 22, 0, 0, size / 22, size / 2, size * 0.86);
+  r.drawPlayer({ x: -5, y: -13, vx: 0, vy: 0, face: 1, onGround: true }, colorOf(colorId), { line: '#2a1f3d' }, 0);
+  return c;
+}
+
+// ---------- title
+function buildTitle() {
+  $('name').value = me.name;
+  $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; store.set('me', me); };
+  const box = $('colors'); box.innerHTML = '';
+  for (const c of COLORS) {
+    const b = document.createElement('button');
+    b.className = 'swatch' + (c.id === me.color ? ' on' : ''); b.style.background = c.body; b.title = c.name; b.setAttribute('aria-label', c.name);
+    b.onclick = () => { me.color = c.id; store.set('me', me); sfx.click(); buildTitle(); };
+    box.appendChild(b);
+  }
+  $('soundBtn').textContent = 'Sound: ' + (audio.muted ? 'off' : 'on');
+  $('musicBtn').textContent = 'Music: ' + (audio.music ? 'on' : 'off');
+}
+$('soundBtn').onclick = () => { setMuted(!audio.muted); buildTitle(); };
+$('musicBtn').onclick = () => { setMusic(!audio.music); if (audio.music) startMusic(); buildTitle(); };
+$('howBtn').onclick = () => panel(`
+  <h2>How to play</h2>
+  <ul class="help">
+    <li><b>The runner</b> dashes from the start to the checkered flag. Move with <b>← →</b> or <b>A D</b>, jump with <b>Space</b>, <b>W</b> or <b>↑</b> (hold for higher). On a phone, use the buttons.</li>
+    <li><b>The trapper</b> taps or clicks the red buttons to fire traps: pop-up spikes, trapdoors, cannons, crushers and flame jets.</li>
+    <li>Every trap has a <b>cooldown</b> (the dial fills up), and traps can't be fired back to back. The runner sees the dials too, so dash while they're recharging!</li>
+    <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
+  </ul>
+  <div class="buttons"><button class="big pink" data-close>Got it</button></div>`);
+
+document.addEventListener('click', e => {
+  const go = e.target.closest('[data-go]'); if (go) { unlockAudio(); sfx.click(); nav(go.dataset.go); }
+  if (e.target.closest('[data-close]')) { sfx.click(); hidePanel(); }
+});
+
+function nav(where) {
+  if (where === 'title') { leaveParty(); show('title'); buildTitle(); return; }
+  if (where === 'join') { show('join'); $('joinStatus').textContent = ''; $('joinStatus').className = 'status'; setTimeout(() => $('code').focus(), 50); return; }
+  if (where === 'host') return hostParty();
+  if (where === 'local') {
+    mode = 'local'; isHost = true;
+    players = { a: { name: me.name, color: me.color }, b: { name: 'Player 2', color: otherColor(me.color) } };
+    score = { a: 0, b: 0 }; openLobby(); return;
+  }
+  if (where === 'practice') {
+    mode = 'practice'; isHost = true;
+    players = { a: { name: me.name, color: me.color }, b: { name: 'Trap Bot', color: otherColor(me.color) } };
+    score = { a: 0, b: 0 }; openLobby(); return;
+  }
+}
+
+// ---------- online
+async function hostParty() {
+  if (!window.Peer) return toast('Online play needs an internet connection.');
+  mode = 'online'; isHost = true; score = { a: 0, b: 0 };
+  players = { a: { name: me.name, color: me.color }, b: null };
+  roomCode = '';
+  openLobby();
+  $('lobbyStatus').textContent = 'Opening a room…';
+  try {
+    roomCode = await net.host();
+    if (mode !== 'online') return;
+    openLobby();
+  } catch (e) {
+    console.warn(e);
+    $('lobbyStatus').textContent = 'Could not open a room. Check your connection and try again.';
+    $('lobbyStatus').className = 'status err';
+  }
+}
+net.onPeer = () => { sfx.cp(); };
+
+$('code').addEventListener('input', () => { $('code').value = cleanCode($('code').value); });
+$('code').addEventListener('keydown', e => { if (e.key === 'Enter') $('joinGo').click(); });
+$('joinGo').onclick = async () => {
+  unlockAudio();
+  const code = cleanCode($('code').value), st = $('joinStatus');
+  if (code.length !== 4) { st.textContent = 'The code has 4 letters.'; st.className = 'status err'; return; }
+  if (!window.Peer) { st.textContent = 'Online play needs an internet connection.'; st.className = 'status err'; return; }
+  st.textContent = 'Connecting…'; st.className = 'status'; $('joinGo').disabled = true;
+  mode = 'online'; isHost = false; roomCode = code; score = { a: 0, b: 0 };
+  try {
+    await net.join(code);
+    net.send({ t: 'hi', name: me.name, color: me.color });
+    players = { a: null, b: { name: me.name, color: me.color } };
+    openLobby();
+  } catch (e) {
+    console.warn(e);
+    net.close(); mode = null;
+    st.textContent = e && e.type === 'peer-unavailable' ? 'No party with that code. Check the letters?' : 'Could not connect. Try again?';
+    st.className = 'status err';
+  }
+  $('joinGo').disabled = false;
+};
+
+net.onMessage = m => {
+  if (m.t === 'hi' && isHost) {
+    const color = m.color === players.a.color ? otherColor(m.color) : m.color;
+    players.b = { name: String(m.name || 'Friend').slice(0, 12), color };
+    score = { a: 0, b: 0 }; runs = [];
+    syncLobby(); if (!run) openLobby();
+    toast(players.b.name + ' joined!');
+  } else if (m.t === 'lobby' && !isHost) {
+    players = m.players; lobby = m.lobby; score = m.score;
+    if (!run) openLobby();
+  } else if (m.t === 'full') {
+    toast('That party is already full.'); nav('title');
+  } else if (m.t === 'start' && !isHost) {
+    lobby.level = m.level; runs = m.n === 1 ? [] : runs;
+    startRun(m.level, m.runner, m.n);
+  } else if (m.t === 'snap' && run && !run.simOwner) {
+    receiveSnap(m);
+  } else if (m.t === 'act' && run && run.simOwner && run.phase === 'play') {
+    run.world.trigger(m.id);
+  } else if (m.t === 'done' && run && !run.simOwner) {
+    finishRun(m.res);
+  } else if (m.t === 'toLobby' && !isHost) {
+    endRunView(); openLobby();
+  } else if (m.t === 'bye') {
+    friendLeft();
+  }
+};
+net.onLost = () => friendLeft();
+
+function friendLeft() {
+  if (mode !== 'online') return;
+  if (isHost) {
+    const n = players.b ? players.b.name : 'Your friend';
+    players.b = null; score = { a: 0, b: 0 };
+    endRunView(); openLobby(); toast(n + ' left the party.');
+  } else {
+    toast('The host closed the party.');
+    endRunView(); leaveParty(); show('title'); buildTitle();
+  }
+}
+
+function leaveParty() {
+  if (mode === 'online') net.close();
+  mode = null; players = { a: null, b: null }; endRunView();
+}
+
+function syncLobby() { if (mode === 'online' && isHost) net.send({ t: 'lobby', players, lobby, score }); }
+
+// ---------- lobby
+function openLobby() {
+  show('lobby');
+  stopMusic();
+  const online = mode === 'online', practice = mode === 'practice';
+  $('lobbyTitle').textContent = online ? (isHost ? 'Your party' : 'Party') : practice ? 'Practice' : 'Same screen';
+  $('roomBox').classList.toggle('hidden', !online || !roomCode);
+  $('roomCode').textContent = roomCode || '----';
+  const st = $('lobbyStatus'); st.className = 'status';
+  if (online) st.textContent = !players.b || !players.a ? (isHost ? (roomCode ? 'Send your friend the code or the link.' : 'Opening a room…') : 'Waiting for the host…') : isHost ? 'Pick a level and start!' : 'The host picks the level.';
+  else if (practice) st.textContent = 'You run, a bot fires the traps.';
+  else st.textContent = 'One runs on the keyboard (or the touch buttons), the other clicks the traps.';
+
+  const box = $('players'); box.innerHTML = '';
+  for (const s of practice ? ['a'] : ['a', 'b']) {
+    const p = players[s], d = document.createElement('div');
+    if (!p) { d.className = 'player empty'; d.textContent = 'Waiting for a friend…'; box.appendChild(d); continue; }
+    d.className = 'player';
+    d.appendChild(portrait(p.color));
+    const nm = document.createElement('b'); nm.textContent = p.name + (online && s === mySide() ? ' (you)' : ''); d.appendChild(nm);
+    if (mode === 'local' && s === 'b') {   // let player 2 rename
+      nm.contentEditable = 'true'; nm.spellcheck = false; nm.style.userSelect = 'text';
+      nm.onblur = () => { players.b.name = nm.textContent.trim().slice(0, 12) || 'Player 2'; };
+      d.onclick = e => { if (e.target === d.firstChild) { players.b.color = otherColor(players.b.color); if (players.b.color === players.a.color) players.b.color = otherColor(players.b.color); openLobby(); } };
+      d.firstChild.title = 'Tap to change colour';
+    }
+    if (!practice) { const sc = document.createElement('span'); sc.className = 'score'; sc.textContent = '★ ' + score[s]; d.appendChild(sc); }
+    box.appendChild(d);
+  }
+
+  const best = store.get('best', {});
+  const lv = $('levels'); lv.innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement('button');
+    b.className = i === lobby.level ? 'on' : '';
+    b.innerHTML = `<span>${i + 1}. ${esc(L.name)}</span>` + (practice && best[L.id] ? `<small>${best[L.id].toFixed(1)}s</small>` : '');
+    b.disabled = online && !isHost;
+    b.onclick = () => { lobby.level = i; sfx.click(); syncLobby(); openLobby(); };
+    lv.appendChild(b);
+  });
+
+  $('firstRow').classList.toggle('hidden', practice);
+  const seg = $('firstSeg'); seg.innerHTML = '';
+  for (const s of ['a', 'b']) {
+    const b = document.createElement('button');
+    b.textContent = players[s] ? players[s].name : '…'; b.className = lobby.first === s ? 'on' : '';
+    b.disabled = online && !isHost;
+    b.onclick = () => { lobby.first = s; sfx.click(); syncLobby(); openLobby(); };
+    seg.appendChild(b);
+  }
+  const ready = !online || (players.a && players.b);
+  $('startBtn').disabled = !ready || (online && !isHost);
+  $('startBtn').textContent = online && !isHost ? 'Waiting for the host…' : 'Start!';
+}
+
+$('startBtn').onclick = () => { unlockAudio(); sfx.click(); runs = []; hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
+$('leaveBtn').onclick = () => { sfx.click(); nav('title'); };
+$('shareBtn').onclick = async () => {
+  const url = `${location.origin}${location.pathname}?join=${roomCode}`;
+  try {
+    if (navigator.share) await navigator.share({ title: 'Trap Dash', text: `Join my Trap Dash party! Code ${roomCode}`, url });
+    else { await navigator.clipboard.writeText(url); toast('Link copied!'); }
+  } catch { /* cancelled */ }
+};
+
+function hostStart(level, runner, n) {
+  if (mode === 'online') net.send({ t: 'start', level, runner, n });
+  startRun(level, runner, n);
+}
+
+// ---------- input
+const keys = new Set();
+const input = { left: false, right: false, jump: false, jumpQueued: false };
+const JUMP_KEYS = ['Space', 'ArrowUp', 'KeyW', 'KeyZ', 'KeyK'];
+addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.isContentEditable) return;
+  if (JUMP_KEYS.includes(e.code) && !keys.has(e.code)) input.jumpQueued = true;
+  keys.add(e.code);
+  if (run && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.code === 'Escape' && run) togglePause();
+});
+addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('blur', () => keys.clear());
+const touchHeld = { left: new Set(), right: new Set(), jump: new Set() };
+for (const [id, k] of [['tLeft', 'left'], ['tRight', 'right'], ['tJump', 'jump']]) {
+  const el = $(id);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); if (k === 'jump' && !touchHeld.jump.size) input.jumpQueued = true; touchHeld[k].add(e.pointerId); el.classList.add('down'); unlockAudio(); });
+  const up = e => { touchHeld[k].delete(e.pointerId); if (!touchHeld[k].size) el.classList.remove('down'); };
+  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+}
+// Sliding a thumb from ◀ to ▶ should switch direction without lifting.
+$('touch').addEventListener('pointermove', e => {
+  if (!touchHeld.left.has(e.pointerId) && !touchHeld.right.has(e.pointerId)) return;
+  const r = $('tRight').getBoundingClientRect(), onRight = e.clientX >= r.left - 7;
+  const to = onRight ? 'right' : 'left', from = onRight ? 'left' : 'right';
+  if (touchHeld[from].delete(e.pointerId)) { touchHeld[to].add(e.pointerId); $('tLeft').classList.toggle('down', touchHeld.left.size > 0); $('tRight').classList.toggle('down', touchHeld.right.size > 0); }
+});
+function readInput() {
+  input.left = keys.has('ArrowLeft') || keys.has('KeyA') || touchHeld.left.size > 0;
+  input.right = keys.has('ArrowRight') || keys.has('KeyD') || touchHeld.right.size > 0;
+  input.jump = JUMP_KEYS.some(k => keys.has(k)) || touchHeld.jump.size > 0;
+}
+
+// Trapper: click / tap a trap.
+function trapAt(cx, cy) {
+  if (!run) return -1;
+  const w = R.toWorld(cx, cy);
+  let best = -1, bd = 1e9;
+  for (const t of run.world.traps) {
+    const b = R.trapButton(run.world, t), d = Math.hypot(b.x - w.x, b.y - w.y);
+    const inRect = w.x > t.x0 * 16 - 4 && w.x < (t.x1 + 1) * 16 + 4 && w.y > t.y * 16 - 6 + (t.kind === 'crusher' ? t.oy : 0) && w.y < (t.y + 1) * 16 + 6 + (t.kind === 'crusher' ? t.oy : 0);
+    if ((d < b.r + 9 || inRect) && d < bd) { bd = d; best = t.id; }
+  }
+  return best;
+}
+canvas.addEventListener('pointerdown', e => {
+  unlockAudio();
+  if (!run || !run.trapperHere || run.phase !== 'play') return;
+  const id = trapAt(e.clientX, e.clientY);
+  if (id < 0) return;
+  fireTrap(id);
+});
+canvas.addEventListener('pointermove', e => { if (run && run.trapperHere && e.pointerType === 'mouse') run.hover = trapAt(e.clientX, e.clientY); });
+
+function fireTrap(id) {
+  const w = run.world, t = w.traps[id];
+  const ready = t.state === 'idle' && t.cd <= 0 && w.lock <= 0 && !(run.pending[id] > 0);
+  if (!ready) { sfx.denied(); return; }
+  if (run.simOwner) w.trigger(id);
+  else { net.send({ t: 'act', id }); run.pending[id] = 0.35; sfx.click(); }
+}
+
+// ---------- a run
+function startRun(level, runner, n) {
+  hidePanel();
+  show(null);
+  const world = new World(LEVELS[level]);
+  const online = mode === 'online';
+  const runnerHere = !online || runner === mySide();
+  run = {
+    level, runner, n, world, phase: 'count', countT: 3.2, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
+    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere,
+    bot: mode === 'practice' ? new Bot(0.35) : null, colors: colorOf(players[runner].color), paused: false, endT: 0, hintT: 7,
+  };
+  R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
+  $('hud').classList.remove('hidden');
+  const role = $('role');
+  if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
+  else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = LEVELS[level].name; }
+  else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
+  $('touch').classList.toggle('hidden', !(touchDevice && runnerHere));
+  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} taps the red trap buttons`
+    : runnerHere ? (touchDevice ? 'Reach the flag! The dials show when traps are recharging.' : 'Reach the flag! ← → to run, Space to jump. Dials show trap cooldowns.')
+      : 'Tap the red buttons to fire traps. Time it right!';
+  $('hint').textContent = hint; $('hint').classList.remove('hidden');
+  input.jumpQueued = false;
+  startMusic();
+}
+
+function receiveSnap(m) {
+  const w = run.world;
+  if (run.phase === 'count' && m.tm > 0) { run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); }
+  w.applySnap(m);
+  run.snaps.push({ at: performance.now(), x: m.p[0], y: m.p[1], dead: !!(m.p[5] & 2) });
+  if (run.snaps.length > 12) run.snaps.shift();
+  for (const e of m.ev) { R.onEvent(e, run.colors); playEvent(e); }
+  for (const id in run.pending) if (w.traps[id].state !== 'idle' || w.traps[id].cd > 0) run.pending[id] = 0;
+}
+
+function finishRun(res) {
+  if (run.phase === 'end') return;
+  run.phase = 'end';
+  if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
+  runs.push(res);
+  $('touch').classList.add('hidden'); $('hint').classList.add('hidden');
+  setTimeout(() => showRunResult(res), res.finished ? 300 : 0);
+}
+
+function resultOf(world, runner) {
+  const p = world.player, span = Math.max(1, world.goal.x - world.start.x);
+  return { runner, time: Math.round(world.time * 10) / 10, deaths: p.deaths, finished: p.finished,
+    progress: p.finished ? 100 : Math.max(0, Math.min(99, Math.round((p.best - world.start.x) / span * 100))) };
+}
+const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
+function line(r, win) {
+  const p = players[r.runner];
+  return `<div class="line${win ? ' win' : ''}" data-portrait="${p.color}"><div><b>${esc(p.name)}${win ? ' 👑' : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
+}
+const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.progress > y.progress;
+
+function showRunResult(res) {
+  if (!run) return;
+  const name = players[res.runner].name, L = LEVELS[run.level];
+  const controls = mode !== 'online' || isHost;
+  if (mode === 'practice') {
+    const best = store.get('best', {}), prev = best[L.id];
+    const record = res.finished && (!prev || res.time < prev);
+    if (record) { best[L.id] = res.time; store.set('best', best); }
+    panel(`<div class="big-emoji">${res.finished ? '🏁' : '⏰'}</div><h2>${res.finished ? 'You made it!' : 'Out of time'}</h2>
+      <div class="result">${line(res, false)}</div>
+      <p>${record ? 'New best time!' : prev ? `Best: ${prev.toFixed(1)}s` : ''}</p>
+      <div class="buttons"><button class="big pink" id="again">Try again</button>
+      <div class="row"><button class="mid" id="nextLv">Next level</button><button class="mid" id="toLobby">Levels</button></div></div>`);
+    $('again').onclick = () => { sfx.click(); startRun(run.level, 'a', 1); };
+    $('nextLv').onclick = () => { sfx.click(); lobby.level = (run.level + 1) % LEVELS.length; startRun(lobby.level, 'a', 1); };
+    $('toLobby').onclick = () => { sfx.click(); endRunView(); openLobby(); };
+    return;
+  }
+  if (run.n === 1) {
+    const next = other(res.runner);
+    panel(`<div class="big-emoji">${res.finished ? '🏁' : '⏰'}</div><h2>${esc(name)} ${res.finished ? 'made it!' : 'ran out of time'}</h2>
+      <div class="result">${line(res, false)}</div>
+      <p><b>Swap!</b> Now ${esc(players[next].name)} runs and ${esc(name)} gets the traps.</p>
+      <div class="buttons">${controls ? `<button class="big pink" id="go2">Go!</button>` : `<p class="status">Waiting for the host…</p>`}</div>`);
+    if (controls) $('go2').onclick = () => { sfx.click(); hostStart(run.level, next, 2); };
+    return;
+  }
+  const [r1, r2] = runs.slice(-2);
+  const tie = r1 && r2 && !better(r1, r2) && !better(r2, r1);
+  const win = tie ? null : better(r1, r2) ? r1 : r2;
+  if (win && !run.scored) { score[win.runner]++; run.scored = true; }
+  const nextLevel = (run.level + 1) % LEVELS.length;
+  panel(`<div class="big-emoji">${tie ? '🤝' : '🏆'}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
+    <div class="result">${[r1, r2].map(r => line(r, r === win)).join('')}</div>
+    <p>Score: ${esc(players.a.name)} <b>${score.a}</b> – <b>${score.b}</b> ${esc(players.b.name)}</p>
+    <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(LEVELS[nextLevel].name)}</button>
+      <div class="row"><button class="mid" id="again">Rematch</button><button class="mid" id="toLobby">Lobby</button></div>` : `<p class="status">Waiting for the host…</p>`}</div>`);
+  if (!controls) return;
+  const firstNext = other(r1.runner);   // whoever ran second this time runs first next time
+  $('nextLv').onclick = () => { sfx.click(); lobby.level = nextLevel; lobby.first = firstNext; runs = []; syncLobby(); hostStart(nextLevel, firstNext, 1); };
+  $('again').onclick = () => { sfx.click(); lobby.first = firstNext; runs = []; syncLobby(); hostStart(run.level, firstNext, 1); };
+  $('toLobby').onclick = () => { sfx.click(); if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
+}
+
+function endRunView() {
+  run = null; hidePanel();
+  for (const id of ['hud', 'hint', 'count', 'touch', 'rotate']) $(id).classList.add('hidden');
+}
+
+function panel(html) {
+  $('panelCard').innerHTML = html; $('panel').classList.remove('hidden');
+  for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(el.dataset.portrait, 68));
+}
+function hidePanel() { $('panel').classList.add('hidden'); }
+
+function togglePause() {
+  if (!run || run.phase === 'end') return;
+  if (!$('panel').classList.contains('hidden')) { hidePanel(); run.paused = false; return; }
+  const online = mode === 'online';
+  run.paused = !online;
+  panel(`<h2>${online ? 'Menu' : 'Paused'}</h2><div class="buttons">
+    <button class="big pink" id="resume">${online ? 'Back to the game' : 'Resume'}</button>
+    <button class="mid" id="quitRun">${online ? 'Leave the party' : 'Quit to lobby'}</button>
+    <div class="row"><button class="chip" id="pSound">Sound: ${audio.muted ? 'off' : 'on'}</button><button class="chip" id="pMusic">Music: ${audio.music ? 'on' : 'off'}</button></div></div>`);
+  $('resume').onclick = () => { sfx.click(); hidePanel(); if (run) run.paused = false; };
+  $('quitRun').onclick = () => { sfx.click(); if (online) nav('title'); else { endRunView(); openLobby(); } };
+  $('pSound').onclick = () => { setMuted(!audio.muted); togglePause(); togglePause(); };
+  $('pMusic').onclick = () => { setMusic(!audio.music); if (audio.music) startMusic(); togglePause(); togglePause(); };
+}
+$('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
+
+// ---------- main loop
+let last = performance.now();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  try { tick(dt, now); } catch (e) { console.error(e); showError(e); }
+}
+function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
+
+function tick(dt, now) {
+  if (canvas.width !== Math.round(innerWidth * Math.min(devicePixelRatio || 1, 3)) || canvas.height !== Math.round(innerHeight * Math.min(devicePixelRatio || 1, 3))) R.resize();
+  if (!run) { drawAttract(dt); return; }
+  const w = run.world;
+  readInput();
+  $('rotate').classList.toggle('hidden', !(touchDevice && innerHeight > innerWidth && run.phase !== 'end'));
+  // countdown (both devices count on their own; the trapper also switches to 'play' when the first moving snapshot lands)
+  if (run.phase === 'count' && !run.paused) {
+    run.countT -= dt;
+    const n = Math.ceil(run.countT);
+    if (n !== run.lastCount && n <= 3) {
+      run.lastCount = n; const c = $('count'); c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
+      c.textContent = n > 0 ? n : 'GO!'; (n > 0 ? sfx.count : sfx.go)();
+    }
+    if (run.countT <= 0) { run.phase = 'play'; input.jumpQueued = false; setTimeout(() => $('count').classList.add('hidden'), 450); }
+  }
+  run.hintT -= dt; if (run.hintT <= 0) $('hint').classList.add('hidden');
+  for (const id in run.pending) run.pending[id] -= dt;
+
+  if (run.simOwner && !run.paused && run.phase !== 'end') {
+    run.acc += dt;
+    while (run.acc >= DT) {
+      run.acc -= DT;
+      if (run.phase === 'play') {
+        w.step(DT, { left: input.left, right: input.right, jump: input.jump, jumpPressed: input.jumpQueued });
+        input.jumpQueued = false;
+        if (run.bot) run.bot.think(w, DT);
+      }
+      for (const e of w.events) { R.onEvent(e, run.colors); playEvent(e); if (mode === 'online') run.outbox.push(e); }
+      w.events.length = 0;
+      run.steps++;
+      if (mode === 'online' && run.steps % 2 === 0) { const s = w.snapshot(); s.ev = run.outbox; run.outbox = []; net.send(s); }
+      if (run.phase === 'play') {
+        if (w.player.finished) { run.endT += DT; if (run.endT > 1.1) { finishRun(resultOf(w, run.runner)); break; } }
+        else if (w.time >= TIME_LIMIT) { finishRun(resultOf(w, run.runner)); break; }
+      }
+    }
+    if (run && run.phase === 'end' && mode === 'online') { const s = w.snapshot(); s.ev = run.outbox; run.outbox = []; net.send(s); }
+  }
+  if (!run) return;
+  if (!run.simOwner) {
+    // smooth the runner between snapshots, ~90 ms behind
+    const t = performance.now() - 90, S = run.snaps;
+    let i = S.length - 1; while (i > 0 && S[i - 1].at > t) i--;
+    const a = S[i - 1], b = S[i];
+    if (a && b && !a.dead && !b.dead && b.at > a.at && Math.hypot(b.x - a.x, b.y - a.y) < 40) {
+      const k = Math.max(0, Math.min(1, (t - a.at) / (b.at - a.at)));
+      w.player.x = a.x + (b.x - a.x) * k; w.player.y = a.y + (b.y - a.y) * k;
+    }
+    for (const ball of w.balls) ball.x += ball.vx * dt;
+  }
+  R.follow(w, dt, run.trapperHere && !run.runnerHere);
+  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, debug: DEBUG });
+  const left = TIME_LIMIT - w.time;
+  $('timer').textContent = w.time.toFixed(1); $('timer').classList.toggle('low', left < 15);
+  $('deaths').textContent = w.player.deaths;
+}
+
+// Behind the menus: a little demo of the first level with the bot.
+let attract = null;
+function drawAttract(dt) {
+  if (!attract) attract = { world: new World(LEVELS[0]), bot: new Bot(0.3), t: 0, acc: 0 };
+  const a = attract, w = a.world;
+  a.acc += dt;
+  while (a.acc >= DT) {
+    a.acc -= DT; a.t += DT;
+    const p = w.player;
+    const blocked = w.solidAt(Math.floor((p.x + 14) / 16), Math.floor((p.y + 6) / 16)) || !w.solidAt(Math.floor((p.x + 20) / 16), Math.floor((p.y + 20) / 16));
+    w.step(DT, { right: true, jump: true, jumpPressed: blocked && p.onGround });
+    a.bot.think(w, DT);
+    for (const e of w.events) R.onEvent(e, colorOf(me.color));
+    w.events.length = 0;
+    if (p.finished || a.t > 40) { attract = null; return; }
+  }
+  R.follow(w, dt, false);
+  R.draw(w, { dt, colors: colorOf(me.color), trapper: false });
+}
+
+// ---------- boot
+R.resize(); addEventListener('resize', () => R.resize());
+buildTitle();
+const q = new URLSearchParams(location.search);
+if (q.get('join')) { $('code').value = cleanCode(q.get('join')); show('join'); }
+else show('title');
+requestAnimationFrame(frame);
+window.__td = { get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };

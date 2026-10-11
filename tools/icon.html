@@ -1,0 +1,27 @@
+<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:#000}canvas{display:block}</style><canvas></canvas>
+<script type="module">
+import { Renderer } from '../src/render.js';
+import { COLORS } from '../src/config.js';
+window.draw = size => {
+  const c = document.querySelector('canvas'); c.width = c.height = size;
+  const r = new Renderer(c), x = r.ctx, k = size / 64;
+  const g = x.createLinearGradient(0, 0, 0, size); g.addColorStop(0, '#7fd3ff'); g.addColorStop(1, '#c9f0ff');
+  x.fillStyle = g; x.fillRect(0, 0, size, size);
+  x.setTransform(k, 0, 0, k, 0, 0); x.lineJoin = x.lineCap = 'round';
+  x.fillStyle = '#8be08a'; x.beginPath(); x.ellipse(14, 52, 30, 12, 0, 0, 7); x.ellipse(54, 54, 26, 10, 0, 0, 7); x.fill();
+  // ground with grass
+  x.fillStyle = '#b9783f'; x.fillRect(0, 50, 64, 14);
+  x.fillStyle = '#5ccf5f'; x.strokeStyle = '#2b1d14'; x.lineWidth = 1.4; x.beginPath(); x.moveTo(-2, 49); x.lineTo(66, 49); x.lineTo(66, 53);
+  for (let i = 16; i >= 0; i--) x.quadraticCurveTo(i * 4 + 2, 56, i * 4, 53); x.closePath(); x.fill(); x.stroke();
+  // pop-up spikes
+  x.fillStyle = '#e9eef6'; x.beginPath(); for (let i = 0; i < 4; i++) { x.moveTo(36 + i * 5, 49.5); x.lineTo(38.5 + i * 5, 41); x.lineTo(41 + i * 5, 49.5); } x.fill(); x.stroke();
+  // red trap button
+  x.fillStyle = '#ff4d6d'; x.beginPath(); x.arc(46, 33, 6, 0, 7); x.fill(); x.stroke();
+  x.fillStyle = '#fff'; x.font = '700 7px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('▲', 46, 33.5);
+  // the radish mid-jump
+  x.save(); x.translate(21, 44); x.scale(1.7, 1.7); x.rotate(-0.12); x.translate(-5, -13);
+  r.t = 0.6; r.blink = 5; r.drawPlayer({ x: 0, y: 0, vx: 60, vy: -200, face: 1, onGround: false }, COLORS[0], { line: '#2b1d14' }, 0);
+  x.restore();
+};
+window.ready = true;
+</script>

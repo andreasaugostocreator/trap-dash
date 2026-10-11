@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Trap Dash</title>
+<meta name="description" content="A two-player party platformer: one friend runs, the other fires the traps.">
+<meta name="theme-color" content="#2a1f3d">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Trap Dash">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- Title -->
+<section class="screen" id="title">
+  <div class="card wide">
+    <h1 class="logo"><span>TRAP</span><span>DASH</span></h1>
+    <p class="tag">One friend runs. The other springs the traps.</p>
+    <div class="me">
+      <label>Your name <input id="name" maxlength="12" autocomplete="off" spellcheck="false"></label>
+      <div class="colors" id="colors"></div>
+    </div>
+    <div class="buttons">
+      <button class="big pink" data-go="host">Host a party</button>
+      <button class="big blue" data-go="join">Join a party</button>
+      <div class="row">
+        <button class="mid" data-go="local">Same screen</button>
+        <button class="mid" data-go="practice">Practice</button>
+      </div>
+    </div>
+    <div class="row small">
+      <button class="chip" id="howBtn">How to play</button>
+      <button class="chip" id="soundBtn">Sound: on</button>
+      <button class="chip" id="musicBtn">Music: on</button>
+    </div>
+  </div>
+</section>
+
+<!-- Join -->
+<section class="screen hidden" id="join">
+  <div class="card">
+    <h2>Join a party</h2>
+    <p>Type the 4-letter code from your friend's screen.</p>
+    <input id="code" class="code" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="ABCD">
+    <p class="status" id="joinStatus"></p>
+    <div class="buttons">
+      <button class="big blue" id="joinGo">Join</button>
+      <button class="mid" data-go="title">Back</button>
+    </div>
+  </div>
+</section>
+
+<!-- Lobby -->
+<section class="screen hidden" id="lobby">
+  <div class="card wide">
+    <div class="lobbyTop">
+      <div>
+        <h2 id="lobbyTitle">Party</h2>
+        <p class="status" id="lobbyStatus"></p>
+      </div>
+      <div class="roomCode" id="roomBox"><small>Room code</small><b id="roomCode">----</b><button class="chip" id="shareBtn">Share link</button></div>
+    </div>
+    <div class="players" id="players"></div>
+    <h3>Level</h3>
+    <div class="levels" id="levels"></div>
+    <div class="row" id="firstRow"><span>Runs first:</span> <div class="seg" id="firstSeg"></div></div>
+    <div class="buttons">
+      <button class="big pink" id="startBtn">Start!</button>
+      <button class="mid" id="leaveBtn">Leave</button>
+    </div>
+  </div>
+</section>
+
+<!-- In-game HUD -->
+<div class="hud hidden" id="hud">
+  <div class="hudLeft"><span class="role" id="role">RUN</span><span class="who" id="who"></span></div>
+  <div class="timer" id="timer">0.0</div>
+  <div class="hudRight"><span class="deaths" id="deaths">0</span><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
+</div>
+<div class="hint hidden" id="hint"></div>
+<div class="count hidden" id="count">3</div>
+<div class="touch hidden" id="touch">
+  <div class="pad"><button id="tLeft" aria-label="Left">◀</button><button id="tRight" aria-label="Right">▶</button></div>
+  <button id="tJump" class="jump" aria-label="Jump">JUMP</button>
+</div>
+<div class="rotate hidden" id="rotate">Turn your phone sideways for a bigger view ↻</div>
+
+<!-- Results / menus drawn over the game -->
+<section class="screen hidden overlay" id="panel"><div class="card" id="panelCard"></div></section>
+<div class="toast hidden" id="toast"></div>
+
+<script src="lib/peerjs.min.js"></script>
+<script type="module" src="src/main.js"></script>
+<script>
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
