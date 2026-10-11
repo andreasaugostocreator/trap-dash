@@ -19,6 +19,18 @@ await g.screenshot({ path: 'shots/40-trapbar-phone.png' });
 const after = await h.evaluate(() => window.__td.run.world.traps.filter(t => t.kind === 'crusher').map(t => t.state).join());
 console.log('crushers before', before, '| after tapping bar (runner device)', after);
 await h.keyboard.up('ArrowRight');
+// hold the flame button on the phone: the flame on the runner's device burns until the finger lifts
+await h.evaluate(() => { const w = window.__td.run.world; w.player.x = 36 * 16; w.player.y = 14 * 16 - 13; });
+await g.waitForTimeout(600);
+const fb = await g.locator('.tbtn[data-kind="flame"]').boundingBox();
+const cdp = await g.context().newCDPSession(g);
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fb.x + fb.width / 2, y: fb.y + fb.height / 2 }] });
+await g.waitForTimeout(1100);
+const fDuring = await h.evaluate(() => window.__td.run.world.traps.filter(t => t.kind === 'flame').map(t => t.state).join());
+await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+await g.waitForTimeout(400);
+const fAfter = await h.evaluate(() => window.__td.run.world.traps.filter(t => t.kind === 'flame').map(t => t.state + ' cd ' + t.cd.toFixed(1)).join(', '));
+console.log('flame held 1.1 s on the phone -> runner device during:', fDuring, '| after release:', fAfter);
 // same screen on PC: key 1 fires spikes
 const l = await page({ viewport: { width: 1280, height: 720 } });
 await l.goto('http://localhost:8080/'); await l.waitForTimeout(400);

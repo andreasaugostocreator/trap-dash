@@ -32,7 +32,8 @@ export function trapThreat(world, t, cpDist) {
   const margin = window - escape - REACT;
   let threat = clamp(0.5 - margin * 2.5, 0.15, 0.9);
   if (jumpable) threat = Math.min(threat, 0.2 + 0.3 * Math.max(0, (w + PHYS.w) / JUMP_SPAN - 0.75) / 0.25);
-  const baitEase = clamp((C.cd - exposure) / C.cd, 0, 1);   // long cooldown vs. time in danger: easy to bait
+  // long cooldown vs. time in danger: easy to bait. A flame burns as long as it's held, so waiting it out doesn't work.
+  const baitEase = C.hold ? 0.2 : clamp((C.cd - exposure) / C.cd, 0, 1);
   threat *= 1 - 0.35 * baitEase;
   if (!lethal) threat *= 0.35;
   const penalty = PHYS.respawn + cpDist / V;                 // seconds lost when it gets you
@@ -67,4 +68,4 @@ export function rateLevel(level) {
   const stars = score < STAR2 ? 1 : score < STAR3 ? 2 : 3;
   return { score: +score.toFixed(2), stars, trapScore: +trapScore.toFixed(2), combos, platform: +platform.toFixed(2), traps };
 }
-export const STAR2 = 5, STAR3 = 8.5;
+export const STAR2 = 5.3, STAR3 = 9.5;

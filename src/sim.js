@@ -71,7 +71,7 @@ export class World {
     for (const t of this.traps) {
       const x = t.x0 * TILE, w = (t.x1 - t.x0 + 1) * TILE, y = t.y * TILE;
       if (t.kind === 'spikes' && t.state === 'active') out.push({ x: x + 1, y: y + 7, w: w - 2, h: 9 });
-      if (t.kind === 'crusher' && (t.state === 'active' || (t.state === 'recover' && t.t < 0.06))) out.push({ x: x + 1, y: y + t.oy + 2, w: w - 2, h: TILE - 2 });
+      if (t.kind === 'crusher' && (t.state === 'active' || (t.state === 'recover' && t.t < TRAPS.crusher.impact))) out.push({ x, y: y + t.oy + 1, w, h: TILE - 1 });
       if (t.kind === 'flame' && t.state === 'active' && t.reach) out.push({ x: x + 3, y: y - t.reach * TILE + 2, w: w - 6, h: t.reach * TILE - 2 });
     }
     for (const s of this.shots) out.push({ x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h });
@@ -85,12 +85,22 @@ export class World {
   }
 
   // lead: seconds the order spent on the network; the trap skips that much of its warning (at most 60%).
-  trigger(id, lead = 0) {
+  // hold: for traps that act while held (the flame), keep going until release(); otherwise a short burst.
+  trigger(id, lead = 0, hold = false) {
     const t = this.traps[id];
     if (!t || t.state !== 'idle' || t.cd > 0 || this.lock > 0 || this.jam > 0 || this.player.finished) return false;
-    t.state = 'warn'; t.t = Math.min(lead, TRAPS[t.kind].warn * 0.6); t.cd = TRAPS[t.kind].cd; this.lock = TRAP_LOCK;
+    const C = TRAPS[t.kind];
+    t.state = 'warn'; t.t = Math.min(lead, C.warn * 0.6); t.cd = C.hold ? 99 : C.cd; this.lock = TRAP_LOCK;
+    if (C.hold) t.holding = hold;
     this.emit('warn', (t.x0 + t.x1 + 1) * TILE / 2, t.y * TILE, t.kind);
     return true;
+  }
+
+  release(id) { const t = this.traps[id]; if (t) t.holding = false; }
+  // Ends a held burn and sets its cooldown from how long it burned.
+  endBurn(t) {
+    const C = TRAPS[t.kind];
+    t.cd = C.cdBase + C.cdPerSec * t.t; t.state = 'idle'; t.t = 0; t.holding = false;
   }
 
   emit(k, x, y, extra) { this.events.push(extra === undefined ? [k, Math.round(x), Math.round(y)] : [k, Math.round(x), Math.round(y), extra]); }
@@ -113,9 +123,12 @@ export class World {
         }
         this.emit('fire', cx, t.y * TILE, t.kind);
       } else if (t.state === 'active') {
-        if (t.kind === 'crusher') {
+        if (t.kind === 'crusher') {   // slams: starts fast and speeds up
+          if (t.vy < C.slam) t.vy = C.slam;
           t.vy += C.fallG * dt; t.oy += t.vy * dt;
           if (t.oy >= t.drop) { t.oy = t.drop; t.vy = 0; t.state = 'recover'; t.t = 0; this.emit('thud', cx, t.y * TILE + t.oy + TILE, 'crusher'); }
+        } else if (C.hold) {
+          if (t.t >= C.tank || (!t.holding && t.t >= C.minBurn)) this.endBurn(t);
         } else if (t.t >= C.active) {
           if (t.kind === 'trapdoor' && !p.dead && overlap(P.x, P.y, P.w, P.h, { x: t.x0 * TILE, y: t.y * TILE, w: (t.x1 - t.x0 + 1) * TILE, h: TILE })) continue;  // wait until the runner is out of the hole
           t.state = t.kind === 'spikes' ? 'recover' : 'idle'; t.t = 0; t.pass = false;

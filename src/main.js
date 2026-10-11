@@ -169,7 +169,9 @@ net.onMessage = m => {
   } else if (m.t === 'gad' && run && run.simOwner && run.phase === 'play') {
     run.world.useGadget('trapper', m.id, m.x, m.y, Math.max(0, Math.min(0.3, +m.lead || 0)));
   } else if (m.t === 'act' && run && run.simOwner && run.phase === 'play') {
-    run.world.trigger(m.id, Math.max(0, Math.min(0.3, +m.lead || 0)));
+    run.world.trigger(m.id, Math.max(0, Math.min(0.3, +m.lead || 0)), !!m.hold);
+  } else if (m.t === 'rel' && run && run.simOwner) {
+    run.world.release(m.id);
   } else if (m.t === 'done' && run && !run.simOwner) {
     finishRun(m.res);
   } else if (m.t === 'toLobby' && !isHost) {
@@ -302,14 +304,14 @@ addEventListener('keydown', e => {
   const n = /^(Digit|Numpad)([0-9])$/.exec(e.code);
   if (n && run.trapperHere) {
     const d = +n[2];
-    if (d >= 1 && d <= 6 && run.kinds[d - 1]) fireKind(run.kinds[d - 1]);
+    if (d >= 1 && d <= 6 && run.kinds[d - 1]) fireKind(run.kinds[d - 1], e.code);
     const gid = { 7: 'bolt', 8: 'glue', 9: 'gust', 0: 'hex' }[d];
     if (gid) useTrapperGadget(gid, GADGETS.trapper[gid].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
   }
   const rg = { ShiftLeft: 'dash', ShiftRight: 'dash', KeyQ: 'shield', KeyE: 'jam' }[e.code];
   if (rg && run.runnerHere) useRunnerGadget(rg);
 });
-addEventListener('keyup', e => keys.delete(e.code));
+addEventListener('keyup', e => { keys.delete(e.code); releaseHold(e.code); });
 addEventListener('blur', () => keys.clear());
 const touchHeld = { left: new Set(), right: new Set(), jump: new Set() };
 const TOUCH_BTN = { left: 'tLeft', right: 'tRight', jump: 'tJump' };
@@ -378,7 +380,7 @@ canvas.addEventListener('pointerdown', e => {
   if (run.aim) { useTrapperGadget(run.aim.id, R.toWorld(e.clientX, e.clientY)); return; }
   const id = trapAt(e.clientX, e.clientY);
   if (id < 0) return;
-  fireTrap(id);
+  fireTrap(id, 'p' + e.pointerId);
 });
 canvas.addEventListener('pointermove', e => {
   if (e.pointerType === 'mouse') pointer = { x: e.clientX, y: e.clientY };
@@ -387,13 +389,22 @@ canvas.addEventListener('pointermove', e => {
   if (run.aim) Object.assign(run.aim, R.toWorld(e.clientX, e.clientY));
 });
 
-function fireTrap(id) {
+// holdKey: what will let go of it (a pointer id or a key code). Traps that burn while held (the flame) stop on release.
+function fireTrap(id, holdKey) {
   const w = run.world, t = w.traps[id];
   const ready = t.state === 'idle' && t.cd <= 0 && w.lock <= 0 && !(run.pending[id] > 0);
   if (!ready) { sfx.denied(); return; }
-  if (run.simOwner) w.trigger(id);
-  else { net.send({ t: 'act', id, lead: net.lag }); run.pending[id] = 0.35; sfx.click(); }
+  const hold = holdKey !== undefined && !!TRAPS[t.kind].hold;
+  if (hold) run.held.set(holdKey, id);
+  if (run.simOwner) w.trigger(id, 0, hold);
+  else { net.send({ t: 'act', id, lead: net.lag, hold }); run.pending[id] = 0.35; sfx.click(); }
 }
+function releaseHold(holdKey) {
+  if (!run || !run.held.has(holdKey)) return;
+  const id = run.held.get(holdKey); run.held.delete(holdKey);
+  if (run.simOwner) run.world.release(id); else net.send({ t: 'rel', id });
+}
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => releaseHold('p' + e.pointerId));
 
 // ---------- the trap bar: one fixed button per kind of trap, aimed at the runner
 // Each button fires the trap of its kind that is on screen and closest to the runner (preferring traps ahead).
@@ -414,10 +425,10 @@ function pickTarget(world, kind) {
   }
   return bestReady || best;
 }
-function fireKind(kind) {
+function fireKind(kind, holdKey) {
   const t = run.targets[kind];
   if (!t || run.phase !== 'play') { sfx.denied(); return; }
-  fireTrap(t.id);
+  fireTrap(t.id, holdKey);
 }
 function buildTrapBar() {
   const bar = $('trapbar'); bar.innerHTML = '';
@@ -431,7 +442,7 @@ function buildTrapBar() {
     b.innerHTML = `<span class="cool"></span><span class="secs"></span>`;
     b.prepend(ic);
     const lab = document.createElement('small'); lab.textContent = (touchDevice || i > 5 ? '' : (i + 1) + ' ') + TRAPS[k].name; b.appendChild(lab);
-    b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireKind(k); });
+    b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireKind(k, 'p' + e.pointerId); });
     bar.appendChild(b);
   });
   bar.classList.toggle('hidden', !run.trapperHere);
@@ -442,10 +453,11 @@ function updateTrapBar() {
     const k = b.dataset.kind, t = pickTarget(w, k), C = TRAPS[k];
     run.targets[k] = t;
     const ready = t && t.state === 'idle' && t.cd <= 0, pend = t && run.pending[t.id] > 0;
-    const state = !t ? 'none' : w.jam > 0 ? 'jam' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
+    const burning = t && TRAPS[k].hold && t.state === 'active';
+    const state = !t ? 'none' : w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
     if (b.dataset.state !== state) b.dataset.state = state;
-    b.style.setProperty('--cd', t && !ready ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
-    const secs = t && !ready && t.cd > 0 ? Math.ceil(t.cd) : '';
+    b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : t && !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
+    const secs = t && !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
     if (b.lastChild.previousSibling.textContent != secs) b.lastChild.previousSibling.textContent = secs;
   }
 }
@@ -538,7 +550,7 @@ function startRun(level, runner, n) {
   const runnerHere = !online || runner === mySide();
   run = {
     level, runner, n, world, phase: 'count', countT: 3.2, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
-    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere,
+    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere, held: new Map(),
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5,
   };
   R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
@@ -552,7 +564,7 @@ function startRun(level, runner, n) {
   layoutControls();
   const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-6, gadgets 7-0)'}`
     : runnerHere ? (touchDevice ? 'Reach the flag! Gadgets are next to JUMP.' : 'Reach the flag! ← → run, Space jump. Shift dash, Q shield, E jammer.')
-      : (touchDevice ? 'Red buttons fire the nearest trap. Purple gadgets go anywhere.' : 'Keys 1-6 fire traps, 7-0 gadgets (aimed at your mouse). Or click the buttons.');
+      : (touchDevice ? 'Red buttons fire the nearest trap (hold for the flame). Purple gadgets go anywhere.' : 'Keys 1-6 fire traps, 7-0 gadgets (aimed at your mouse). Or click the buttons.');
   $('hint').textContent = hint + (touchDevice && innerHeight > innerWidth ? ' (Tip: turn your phone sideways for a wider view.)' : ''); $('hint').classList.remove('hidden');
   input.jumpQueued = false;
   startMusic();

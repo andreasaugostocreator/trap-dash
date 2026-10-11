@@ -360,7 +360,7 @@ export class Renderer {
         l.fillStyle = Math.floor(this.t * 16) % 2 ? '#ffd84a' : '#5d6475'; for (const ox of [3, 7, 11]) l.fillRect(x + ox, y + 3, 1, 1);
       }
       if (t.state === 'active' && t.reach) {
-        const H = t.reach * TILE, hh = Math.round(H * Math.min(1, t.t / 0.08) * Math.min(1, (C.active - t.t) / 0.1)), fr = Math.floor(this.t * 20);
+        const H = t.reach * TILE, low = C.tank - t.t < 0.4 && Math.floor(this.t * 16) % 2 ? 0.85 : 1, hh = Math.round(H * Math.min(1, t.t / 0.06) * low), fr = Math.floor(this.t * 20);
         for (let j = 0; j < hh + 4; j++) {
           const along = j / (hh + 4);
           const half = Math.max(0, Math.round(6 * (1 - along * 0.55) + Math.sin(j * 0.7 + fr) * 1.3 - (j > hh ? (j - hh) * 1.5 : 0)));

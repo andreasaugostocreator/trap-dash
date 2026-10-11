@@ -112,6 +112,8 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
 .tbtn .secs { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Press Start 2P', monospace; font-size: 20px; z-index: 2; text-shadow: var(--outline); pointer-events: none; }
 .tbtn[data-state="cool"] { background: #5d6475; }
 .tbtn[data-state="lock"] { background: #ff9a3c; }
+.tbtn[data-state="burn"] { background: #ff9a3c; }
+.tbtn[data-state="burn"] .cool { top: auto; bottom: 0; height: calc(var(--cd, 0) * 100%); background: rgba(194, 43, 59, .7); }
 .tbtn[data-state="sent"] { background: #fff; color: var(--ink); }
 .tbtn[data-state="none"] { background: #3b3f52; opacity: .45; }
 .tbtn[data-state="jam"], .gbtn[data-state="jam"] { background: #6b4fa8; }

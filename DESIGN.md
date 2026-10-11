@@ -78,7 +78,7 @@ Per-trap threat (0 to 1) as the rater computes it for typical instances:
 ```
 score = Σ trap threat + 0.3 × combos + platforming
 platforming = Σ (pit width / jump length)² + 0.08 × static spikes + 1.5 if vertical + long stretches without checkpoints
-★ below 5, ★★ below 8.5, ★★★ from 8.5
+★ below 5.3, ★★ below 9.5, ★★★ from 9.5
 ```
 
 | Level | Score | Stars | What makes it so |
@@ -127,6 +127,16 @@ The first numbers made the runner far too strong: the trapper reacted after the 
   for 2 s, Jammer 2 s, 2 air jumps.
 - **Trapper gadgets buffed:** 4 lightning bolts with a 0.45 s warning and a 1.2 s stun, faster Glue and Gust, 2 Hexes.
 - Respawn 0.75 → 1 s, so each catch costs the runner more time.
+
+**Second pass (flame and crusher):**
+- **The flame burns while it's held.** A fixed-length burst could be waited out: stand still, let the trapper fire,
+  walk through during the cooldown. Now the trapper holds the button (or key) and the flame burns until release, up to
+  a 2 s tank. A tap is a 0.35 s puff. The cooldown grows with the burn: `0.4 s + 0.6 × burn time`, so quick puffs can be
+  repeated fast and a long wall of fire costs a long wait. The runner can't know when it stops, and waiting costs time
+  on the clock. `tools/trap-feel.mjs` shows it: waiting out a tap is still safe, waiting out a held burn the same way gets you caught.
+- **The crusher slams.** It starts falling at 520 px/s instead of from rest, falls faster, warns for 0.08 s, rests
+  0.25 s, climbs back twice as fast and recharges in 1.6 s. From button to impact went from about 0.34 s to 0.18 s,
+  and it stays deadly for 0.12 s on impact.
 
 ## 6. Random levels
 
