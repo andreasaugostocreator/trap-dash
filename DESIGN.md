@@ -78,17 +78,17 @@ Per-trap threat (0 to 1) as the rater computes it for typical instances:
 ```
 score = Σ trap threat + 0.3 × combos + platforming
 platforming = Σ (pit width / jump length)² + 0.08 × static spikes + 1.5 if vertical + long stretches without checkpoints
-★ below 4.5, ★★ below 7.5, ★★★ from 7.5
+★ below 5, ★★ below 8.5, ★★★ from 8.5
 ```
 
 | Level | Score | Stars | What makes it so |
 |---|---|---|---|
-| Sunny Hills | 3.9 | ★ | jumpable spikes, a slow cannon, one trapdoor bridge |
-| Cloud Climb | 4.5 | ★★ | few traps, but it's vertical: a slip costs a long fall |
-| Treetop Hop | 5.3 | ★★ | arrows on a pillar, trapdoor over a pit, crushers |
-| Midnight Meadow | 6.4 | ★★ | crusher run, three flames, trapdoor bridge over spikes, many combos |
-| Windy Works | 6.6 | ★★ | three arrow turrets, fans under ceiling spikes, pop-up walls |
-| The Gauntlet | 8.9 | ★★★ | everything, longest stretches, most combos |
+| Sunny Hills | 4.8 | ★ | jumpable spikes, a slow cannon, one trapdoor bridge |
+| Cloud Climb | 5.3 | ★★ | few traps, but it's vertical: a slip costs a long fall |
+| Treetop Hop | 6.3 | ★★ | arrows on a pillar, trapdoor over a pit, crushers |
+| Windy Works | 6.8 | ★★ | three arrow turrets, fans under ceiling spikes, pop-up walls |
+| Midnight Meadow | 8.0 | ★★ | crusher run, three flames, trapdoor bridge over spikes, many combos |
+| The Gauntlet | 10.7 | ★★★ | everything, longest stretches, most combos |
 
 `node tools/rate.mjs -v` prints the breakdown per trap. The rating is a model: playtesting should tune `REACT`, the
 star cut-offs and the modifier weights.
@@ -101,22 +101,34 @@ Stunned in the air you keep your momentum, so a lightning bolt mid-jump doesn't 
 
 | Trapper | Uses | Effect |
 |---|---|---|
-| Lightning | 3 per run, 5 s cooldown, aimed | a cloud and column warn for 0.65 s, then a 1 s stun |
-| Glue | unlimited, 14 s cooldown, aimed | a 3-tile puddle on the floor for 7 s: 45% speed, lower jumps |
-| Gust | 2 per run, 10 s cooldown | 1.3 s of wind against the way you're facing |
-| Hex | once per run | left and right swap for 2.6 s |
+| Lightning | 4 per run, 4 s cooldown, aimed | a cloud and column warn for 0.45 s, then a 1.2 s stun |
+| Glue | unlimited, 10 s cooldown, aimed | a 3-tile puddle on the floor for 7 s: 40% speed, lower jumps |
+| Gust | 3 per run, 8 s cooldown | 1.4 s of wind against the way you're facing |
+| Hex | 2 per run, 12 s cooldown | left and right swap for 2.6 s |
 
 | Runner | Uses | Effect |
 |---|---|---|
-| Dash | unlimited, 3 s cooldown | a burst forward that ignores gravity for a moment: dodge a projectile or slip past a flame |
-| Shield | 2 per run, 6 s cooldown | for 3 s, the next hit (trap or lightning) is blocked and bounces you up |
-| Jammer | once per run | no traps or trapper gadgets for 3 s: the panic button |
-| Air jump | 3 per run | a second jump in mid-air |
+| Dash | 2 per run, 6 s cooldown | a short burst forward (about 2 tiles) |
+| Shield | once per run | for 2 s, the next hit (trap or lightning) is blocked and bounces you up |
+| Jammer | once per run | no traps or trapper gadgets for 2 s: the panic button |
+| Air jump | 2 per run | a second jump in mid-air |
 
 The interesting part is the counterplay: the runner saves the Jammer for the hardest trap, and the trapper baits the
 Shield with a cheap Glue before the real threat. Gadgets reset every run so both players get the same budget.
 
-## 5. Random levels
+## 5. Balance pass (after playtesting)
+
+The first numbers made the runner far too strong: the trapper reacted after the runner was already past.
+- **Warnings roughly halved** (spikes 0.22 → 0.12 s, flame 0.3 → 0.18 s, crusher 0.25 → 0.12 s and it falls faster,
+  cannon 0.18 → 0.1 s and faster shots), **cooldowns cut by about a quarter**, and the lock between two traps 0.4 → 0.25 s.
+- **Network lag compensation:** the game measures the round trip, and a trap fired online skips the part of its warning
+  the order spent on the network (up to 60% of it), so it goes off when the trapper meant it to.
+- **Dash nerfed hard:** 2 per run, 6 s cooldown, shorter and slower (about 2 tiles instead of 3.4). Shield once per run
+  for 2 s, Jammer 2 s, 2 air jumps.
+- **Trapper gadgets buffed:** 4 lightning bolts with a 0.45 s warning and a 1.2 s stun, faster Glue and Gust, 2 Hexes.
+- Respawn 0.75 → 1 s, so each catch costs the runner more time.
+
+## 6. Random levels
 
 A level is a chain of hand-made **segments**, each with a tier 1–3: flat ground, steps, gaps, static spikes, platform hops,
 a spring wall, and one segment per trap (spike strip, trapdoor bridge, crusher hall, flame row, cannon or arrow lane,

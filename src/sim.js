@@ -84,10 +84,11 @@ export class World {
     return out;
   }
 
-  trigger(id) {
+  // lead: seconds the order spent on the network; the trap skips that much of its warning (at most 60%).
+  trigger(id, lead = 0) {
     const t = this.traps[id];
     if (!t || t.state !== 'idle' || t.cd > 0 || this.lock > 0 || this.jam > 0 || this.player.finished) return false;
-    t.state = 'warn'; t.t = 0; t.cd = TRAPS[t.kind].cd; this.lock = TRAP_LOCK;
+    t.state = 'warn'; t.t = Math.min(lead, TRAPS[t.kind].warn * 0.6); t.cd = TRAPS[t.kind].cd; this.lock = TRAP_LOCK;
     this.emit('warn', (t.x0 + t.x1 + 1) * TILE / 2, t.y * TILE, t.kind);
     return true;
   }
@@ -135,11 +136,11 @@ export class World {
   }
 
   // ---------- gadgets
-  useGadget(side, id, x, y) {
+  useGadget(side, id, x, y, lead = 0) {
     const def = GADGETS[side] && GADGETS[side][id], g = this.gad[side] && this.gad[side][id], p = this.player;
     if (!def || !g || def.passive || g.n === 0 || g.cd > 0 || p.finished || p.dead) return false;
     if (side === 'trapper' && this.jam > 0) return false;
-    if (id === 'bolt') this.fx.push({ k: 'bolt', x: Math.round(x), t: 0 });
+    if (id === 'bolt') this.fx.push({ k: 'bolt', x: Math.round(x), t: Math.min(lead, def.warn * 0.5) });
     else if (id === 'glue') {
       const spot = this.floorBelow(x, y);
       if (!spot) return false;

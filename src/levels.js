@@ -61,19 +61,6 @@ export const LEVELS = [
     }),
   },
   {
-    id: 'meadow', name: 'Midnight Meadow', theme: 'night',
-    map: build(120, 18, ({ set, rect, ground, row }) => {
-      rect(0, 0, 0, 17); rect(119, 0, 119, 17); rect(1, 0, 118, 3);
-      ground(1, 30, 14); set(3, 13, 'S');
-      row(8, 9, 4, 'X'); row(14, 15, 4, 'X'); row(20, 21, 4, 'X'); set(28, 13, 'C');
-      ground(34, 60, 14); set(38, 14, 'F'); set(44, 14, 'F'); set(50, 14, 'F'); set(58, 13, 'C');
-      rect(61, 17, 73, 17); row(61, 73, 16, '^');
-      row(62, 64, 14, 'T'); set(65, 14, '#'); row(66, 68, 14, 'T'); set(69, 14, '#'); row(70, 72, 14, 'T');
-      ground(73, 118, 14); row(80, 82, 13, 'P'); set(92, 12, '#'); set(92, 13, '<');
-      row(98, 99, 13, '^'); set(112, 13, 'G'); set(117, 13, '<');
-    }),
-  },
-  {
     id: 'windy', name: 'Windy Works', theme: 'sunset',
     map: build(100, 18, ({ set, rect, ground, row }) => {
       rect(0, 0, 0, 17); rect(99, 0, 99, 17);
@@ -84,6 +71,19 @@ export const LEVELS = [
       ground(45, 98, 14); row(47, 48, 13, 'P'); set(51, 13, 'U'); set(55, 13, 'U'); set(60, 13, '{');
       set(63, 13, 'C'); rect(66, 5, 72, 8); row(66, 72, 9, 'v'); row(68, 69, 14, 'W');
       set(77, 13, 'U'); row(81, 83, 13, 'P'); set(94, 13, 'G'); set(98, 13, '{');
+    }),
+  },
+  {
+    id: 'meadow', name: 'Midnight Meadow', theme: 'night',
+    map: build(120, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(119, 0, 119, 17); rect(1, 0, 118, 3);
+      ground(1, 30, 14); set(3, 13, 'S');
+      row(8, 9, 4, 'X'); row(14, 15, 4, 'X'); row(20, 21, 4, 'X'); set(28, 13, 'C');
+      ground(34, 60, 14); set(38, 14, 'F'); set(44, 14, 'F'); set(50, 14, 'F'); set(58, 13, 'C');
+      rect(61, 17, 73, 17); row(61, 73, 16, '^');
+      row(62, 64, 14, 'T'); set(65, 14, '#'); row(66, 68, 14, 'T'); set(69, 14, '#'); row(70, 72, 14, 'T');
+      ground(73, 118, 14); row(80, 82, 13, 'P'); set(92, 12, '#'); set(92, 13, '<');
+      row(98, 99, 13, '^'); set(112, 13, 'G'); set(117, 13, '<');
     }),
   },
   {

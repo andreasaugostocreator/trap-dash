@@ -81,7 +81,7 @@ $('howBtn').onclick = () => panel(`
     <li><b>The runner</b> dashes from the start to the checkered flag. Move with <b>← →</b> or <b>A D</b>, jump with <b>Space</b>, <b>W</b> or <b>↑</b> (hold for higher). On a phone, use the buttons.</li>
     <li><b>The trapper</b> uses the trap bar (or keys 1-6) to fire the nearest trap of each kind: spikes, trapdoors, pop-up walls, cannons, arrows, crushers, flames and fans.</li>
     <li>Every trap has a <b>cooldown</b> (the dial fills up), and traps can't be fired back to back. The runner sees the dials too, so dash while they're recharging!</li>
-    <li><b>Gadgets</b> never kill on their own. The trapper has Lightning (aim it, stuns), Glue (aim it, slows), Gust (pushes back) and Hex (swaps left and right). The runner has Dash, Shield (blocks one hit), Jammer (traps stop for 3 s) and Air jumps. Small numbers show how many uses are left this run.</li>
+    <li><b>Gadgets</b> never kill on their own. The trapper has Lightning (aim it, stuns), Glue (aim it, slows), Gust (pushes back) and Hex (swaps left and right). The runner has Dash, Shield (blocks one hit), Jammer (traps stop for 2 s) and Air jumps. Small numbers show how many uses are left this run.</li>
     <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
     <li>Levels have ★ to ★★★ difficulty. 🎲 builds a random level of the difficulty you pick.</li>
   </ul>
@@ -167,9 +167,9 @@ net.onMessage = m => {
   } else if (m.t === 'snap' && run && !run.simOwner) {
     receiveSnap(m);
   } else if (m.t === 'gad' && run && run.simOwner && run.phase === 'play') {
-    run.world.useGadget('trapper', m.id, m.x, m.y);
+    run.world.useGadget('trapper', m.id, m.x, m.y, Math.max(0, Math.min(0.3, +m.lead || 0)));
   } else if (m.t === 'act' && run && run.simOwner && run.phase === 'play') {
-    run.world.trigger(m.id);
+    run.world.trigger(m.id, Math.max(0, Math.min(0.3, +m.lead || 0)));
   } else if (m.t === 'done' && run && !run.simOwner) {
     finishRun(m.res);
   } else if (m.t === 'toLobby' && !isHost) {
@@ -374,7 +374,7 @@ function fireTrap(id) {
   const ready = t.state === 'idle' && t.cd <= 0 && w.lock <= 0 && !(run.pending[id] > 0);
   if (!ready) { sfx.denied(); return; }
   if (run.simOwner) w.trigger(id);
-  else { net.send({ t: 'act', id }); run.pending[id] = 0.35; sfx.click(); }
+  else { net.send({ t: 'act', id, lead: net.lag }); run.pending[id] = 0.35; sfx.click(); }
 }
 
 // ---------- the trap bar: one fixed button per kind of trap, aimed at the runner
@@ -481,7 +481,7 @@ function useTrapperGadget(id, at) {
   run.aim = null;
   const x = at ? Math.round(at.x) : 0, y = at ? Math.round(at.y) : 0;
   if (run.simOwner) { if (!w.useGadget('trapper', id, x, y)) sfx.denied(); }
-  else { net.send({ t: 'gad', id, x, y }); g.cd = def.cd; if (g.n > 0) g.n--; sfx.click(); }
+  else { net.send({ t: 'gad', id, x, y, lead: net.lag }); g.cd = def.cd; if (g.n > 0) g.n--; sfx.click(); }
 }
 function useRunnerGadget(id) {
   if (!run.runnerHere || run.phase !== 'play') return;
@@ -695,7 +695,7 @@ function tick(dt, now) {
   if (!run) return;
   if (!run.simOwner) {
     // smooth the runner between snapshots, ~90 ms behind
-    const t = performance.now() - 90, S = run.snaps;
+    const t = performance.now() - 60, S = run.snaps;
     let i = S.length - 1; while (i > 0 && S[i - 1].at > t) i--;
     const a = S[i - 1], b = S[i];
     if (a && b && !a.dead && !b.dead && b.at > a.at && Math.hypot(b.x - a.x, b.y - a.y) < 40) {

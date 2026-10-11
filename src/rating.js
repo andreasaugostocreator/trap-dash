@@ -67,4 +67,4 @@ export function rateLevel(level) {
   const stars = score < STAR2 ? 1 : score < STAR3 ? 2 : 3;
   return { score: +score.toFixed(2), stars, trapScore: +trapScore.toFixed(2), combos, platform: +platform.toFixed(2), traps };
 }
-export const STAR2 = 4.5, STAR3 = 7.5;
+export const STAR2 = 5, STAR3 = 8.5;

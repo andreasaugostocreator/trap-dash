@@ -35,6 +35,7 @@ export class Net {
   }
 
   get connected() { return !!this.ping; }
+  get lag() { return Math.min(0.3, (this.rtt || 150) / 2000); }   // one-way delay estimate, seconds
   get link() { return this.conn && this.conn.open ? 'direct' : 'relay'; }
 
   // ---------- host: open a room and wait for a friend on either transport
@@ -131,6 +132,8 @@ export class Net {
 
   deliver(m) {
     this.lastHeard = performance.now();
+    if (m && m.t === 'ping' && m.ts) { this.send({ t: 'pong', ts: m.ts }); return; }
+    if (m && m.t === 'pong') { const rtt = performance.now() - m.ts; this.rtt = this.rtt ? this.rtt * 0.8 + rtt * 0.2 : rtt; return; }
     if (!m || m.t === 'ping' || m.t === 'knock') return;
     this.onMessage(m);
   }
@@ -150,7 +153,7 @@ export class Net {
     this.lastHeard = performance.now();
     clearInterval(this.ping);
     this.ping = setInterval(() => {
-      this.send({ t: 'ping' });
+      this.send({ t: 'ping', ts: performance.now() });
       if (performance.now() - this.lastHeard > 10000) this.lost();
     }, 1500);
   }
