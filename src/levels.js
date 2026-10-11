@@ -14,7 +14,7 @@ function build(w, h, fn) {
 
 export const LEVELS = [
   {
-    id: 'sprouts', name: 'Sunny Sprouts', theme: 'day',
+    id: 'hills', name: 'Sunny Hills', theme: 'day',
     map: build(104, 18, ({ set, rect, ground, row }) => {
       rect(0, 0, 0, 17); rect(103, 0, 103, 17);
       ground(1, 15, 14); set(3, 13, 'S');
@@ -92,10 +92,16 @@ export const LEVELS = [
   },
 ];
 
+// Pixel palettes: sky bands top to bottom, background layers, grass [dark, mid, light, tip], dirt [darkest .. light].
 export const THEMES = {
-  day:    { sky: ['#7fd3ff', '#c9f0ff'], hill: ['#8be08a', '#6cc46f'], grass: '#5ccf5f', dirt: '#b9783f', dirtDark: '#8d5528', line: '#2b1d14', cloud: '#ffffff' },
-  sunset: { sky: ['#ff9e7a', '#ffd9a0'], hill: ['#e6866e', '#c86a62'], grass: '#7bd35a', dirt: '#a8673b', dirtDark: '#7c4626', line: '#2b1714', cloud: '#ffe7d6' },
-  night:  { sky: ['#1d2147', '#3a3f7a'], hill: ['#2d3266', '#262a57'], grass: '#c9d3e6', dirt: '#8b6a9e', dirtDark: '#5f4774', line: '#120f22', cloud: '#4b5296', stars: true },
-  sky:    { sky: ['#5ec2ff', '#e6f8ff'], hill: ['#ffffff', '#e8f4ff'], grass: '#ffffff', dirt: '#a9c8ef', dirtDark: '#7fa6d9', line: '#24334f', cloud: '#ffffff' },
-  dusk:   { sky: ['#6a4c9c', '#f08aa0'], hill: ['#59407e', '#4a356b'], grass: '#ff9cc0', dirt: '#6d4b6e', dirtDark: '#4c3350', line: '#1e1222', cloud: '#f7b8cf' },
+  day: { sky: ['#5fb8ff', '#82c8ff', '#a9daff', '#d2edff'], far: 'mountains', farCol: ['#7d97d6', '#a2b6ea', '#ffffff'], near: 'trees', nearCol: ['#2f7a45', '#46a056', '#22593a'],
+    grass: ['#2c7a32', '#47ad4b', '#7bd65a', '#c4f08a'], dirt: ['#4f301b', '#6e4425', '#8d5a31', '#ad7442'], cloud: ['#ffffff', '#d8ecff'], line: '#1c1424' },
+  sunset: { sky: ['#ff6f61', '#ff9466', '#ffbb7a', '#ffdfa0'], far: 'mountains', farCol: ['#a8507a', '#c86c8c', '#ffd2a0'], near: 'trees', nearCol: ['#6e2f55', '#8c4468', '#4e1f3e'],
+    grass: ['#2f7a2c', '#55a83a', '#8ad04e', '#d4f07a'], dirt: ['#431f1a', '#62331f', '#81462b', '#a15e38'], cloud: ['#fff1e0', '#ffc9b0'], line: '#1c1424' },
+  night: { sky: ['#121330', '#191c42', '#222759', '#2e3470'], stars: true, far: 'mountains', farCol: ['#252a57', '#313773', '#4a5096'], near: 'pines', nearCol: ['#181b3b', '#22274f', '#10122a'],
+    grass: ['#245452', '#357a72', '#56a594', '#98e0c4'], dirt: ['#1f1833', '#2c2247', '#3c2f5e', '#4e3f76'], cloud: ['#3a4080', '#2c3168'], line: '#0e0b1a' },
+  sky: { sky: ['#3fa6ff', '#68bcff', '#97d2ff', '#cdeaff'], far: 'clouds', farCol: ['#e6f3ff', '#ffffff', '#c3dcf5'], near: 'clouds2', nearCol: ['#f4f9ff', '#ffffff', '#d4e6f8'],
+    grass: ['#a9c6ea', '#dfeeff', '#ffffff', '#ffffff'], dirt: ['#6e8fc4', '#87a7d6', '#a0bde4', '#bcd2ef'], cloud: ['#ffffff', '#e1efff'], line: '#24304f' },
+  dusk: { sky: ['#2d2152', '#4a3075', '#83508f', '#d67896'], far: 'mountains', farCol: ['#3e2a66', '#52387f', '#f2a6c4'], near: 'pines', nearCol: ['#26193f', '#33224f', '#1a1030'],
+    grass: ['#7a2f5e', '#b44f86', '#f07fb4', '#ffc0dc'], dirt: ['#221425', '#331f38', '#47304c', '#5d4162'], cloud: ['#f2a6c4', '#b07aa8'], line: '#140b18' },
 };

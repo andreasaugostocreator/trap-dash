@@ -22,12 +22,3 @@ export const TRAPS = {
 };
 export const TRAP_LOCK = 0.4;   // the trapper can't fire two traps closer together than this
 export const TIME_LIMIT = 100;
-
-export const COLORS = [
-  { id: 'radish', name: 'Radish', body: '#ff5d8f', dark: '#c2305f', leaf: '#4cc76a' },
-  { id: 'sprout', name: 'Sprout', body: '#8fdc5a', dark: '#4f9a2c', leaf: '#2f8a4a' },
-  { id: 'carrot', name: 'Carrot', body: '#ff9a3c', dark: '#c9621a', leaf: '#4cc76a' },
-  { id: 'turnip', name: 'Turnip', body: '#b48cff', dark: '#7650c8', leaf: '#4cc76a' },
-  { id: 'berry',  name: 'Berry',  body: '#5ab4ff', dark: '#2a72c4', leaf: '#3aa860' },
-  { id: 'lemon',  name: 'Lemon',  body: '#ffd84a', dark: '#c99b10', leaf: '#4cc76a' },
-];

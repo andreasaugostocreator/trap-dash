@@ -1,7 +1,8 @@
 // Screens, the party flow and the game loop.
 // A match is played level by level: each player gets one run as the runner while the other works the traps,
 // then the faster runner wins the level. Online, the runner's device runs the world and streams it to the trapper.
-import { DT, TIME_LIMIT, COLORS, TRAPS } from './config.js';
+import { DT, TIME_LIMIT } from './config.js';
+import { CHARS, charOf, charFrame } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS } from './levels.js';
 import { Renderer } from './render.js';
@@ -16,10 +17,10 @@ const store = {
   get(k, d) { try { const v = localStorage.getItem('trapdash-' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
   set(k, v) { try { localStorage.setItem('trapdash-' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
-const VEG = ['Radish', 'Sprout', 'Pea', 'Beet', 'Turnip', 'Carrot', 'Leek', 'Bean'];
-const me = store.get('me', { name: VEG[Math.floor(Math.random() * VEG.length)] + Math.floor(Math.random() * 90 + 10), color: 'radish' });
-const colorOf = id => COLORS.find(c => c.id === id) || COLORS[0];
-const otherColor = id => COLORS[(COLORS.findIndex(c => c.id === id) + 1) % COLORS.length].id;
+const NICK = ['Ace', 'Pixel', 'Dash', 'Zip', 'Jinx', 'Moxie', 'Turbo', 'Scout'];
+const me = store.get('me2', { name: NICK[Math.floor(Math.random() * NICK.length)] + Math.floor(Math.random() * 90 + 10), char: CHARS[Math.floor(Math.random() * CHARS.length)].id });
+const saveMe = () => store.set('me2', me);
+const otherChar = id => CHARS[(CHARS.findIndex(c => c.id === id) + 1) % CHARS.length].id;
 
 const canvas = $('game'), R = new Renderer(canvas);
 const net = new Net();
@@ -43,25 +44,26 @@ function show(id) {
 let toastT;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 3200); }
 
-function portrait(colorId, size = 80) {
-  const c = document.createElement('canvas'); c.width = c.height = size;
-  const r = new Renderer(c); r.t = 0.3; r.blink = 5;
-  r.ctx.setTransform(size / 22, 0, 0, size / 22, size / 2, size * 0.86);
-  r.drawPlayer({ x: -5, y: -13, vx: 0, vy: 0, face: 1, onGround: true }, colorOf(colorId), { line: '#2a1f3d' }, 0);
+// A character sprite as a small canvas (CSS scales it up with image-rendering: pixelated).
+function portrait(charId, frame = 'idle') {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 18; c.className = 'pix';
+  c.getContext('2d').drawImage(charFrame(charOf(charId), frame, 1, 0), 2, 1);
   return c;
 }
 
 // ---------- title
 function buildTitle() {
   $('name').value = me.name;
-  $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; store.set('me', me); };
+  $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; saveMe(); };
   const box = $('colors'); box.innerHTML = '';
-  for (const c of COLORS) {
+  for (const c of CHARS) {
     const b = document.createElement('button');
-    b.className = 'swatch' + (c.id === me.color ? ' on' : ''); b.style.background = c.body; b.title = c.name; b.setAttribute('aria-label', c.name);
-    b.onclick = () => { me.color = c.id; store.set('me', me); sfx.click(); buildTitle(); };
+    b.className = 'swatch' + (c.id === me.char ? ' on' : ''); b.title = c.name; b.setAttribute('aria-label', c.name);
+    b.appendChild(portrait(c.id, c.id === me.char ? 'jump' : 'idle'));
+    b.onclick = () => { me.char = c.id; saveMe(); sfx.click(); buildTitle(); };
     box.appendChild(b);
   }
+  $('charName').textContent = charOf(me.char).name;
   $('soundBtn').textContent = 'Sound: ' + (audio.muted ? 'off' : 'on');
   $('musicBtn').textContent = 'Music: ' + (audio.music ? 'on' : 'off');
 }
@@ -88,12 +90,12 @@ function nav(where) {
   if (where === 'host') return hostParty();
   if (where === 'local') {
     mode = 'local'; isHost = true;
-    players = { a: { name: me.name, color: me.color }, b: { name: 'Player 2', color: otherColor(me.color) } };
+    players = { a: { name: me.name, char: me.char }, b: { name: 'Player 2', char: otherChar(me.char) } };
     score = { a: 0, b: 0 }; openLobby(); return;
   }
   if (where === 'practice') {
     mode = 'practice'; isHost = true;
-    players = { a: { name: me.name, color: me.color }, b: { name: 'Trap Bot', color: otherColor(me.color) } };
+    players = { a: { name: me.name, char: me.char }, b: { name: 'Trap Bot', char: otherChar(me.char) } };
     score = { a: 0, b: 0 }; openLobby(); return;
   }
 }
@@ -102,7 +104,7 @@ function nav(where) {
 async function hostParty() {
   if (!window.Peer) return toast('Online play needs an internet connection.');
   mode = 'online'; isHost = true; score = { a: 0, b: 0 };
-  players = { a: { name: me.name, color: me.color }, b: null };
+  players = { a: { name: me.name, char: me.char }, b: null };
   roomCode = '';
   openLobby();
   $('lobbyStatus').textContent = 'Opening a room…';
@@ -129,8 +131,8 @@ $('joinGo').onclick = async () => {
   mode = 'online'; isHost = false; roomCode = code; score = { a: 0, b: 0 };
   try {
     await net.join(code);
-    net.send({ t: 'hi', name: me.name, color: me.color });
-    players = { a: null, b: { name: me.name, color: me.color } };
+    net.send({ t: 'hi', name: me.name, char: me.char });
+    players = { a: null, b: { name: me.name, char: me.char } };
     openLobby();
   } catch (e) {
     console.warn(e);
@@ -143,8 +145,8 @@ $('joinGo').onclick = async () => {
 
 net.onMessage = m => {
   if (m.t === 'hi' && isHost) {
-    const color = m.color === players.a.color ? otherColor(m.color) : m.color;
-    players.b = { name: String(m.name || 'Friend').slice(0, 12), color };
+    const char = charOf(m.char).id === players.a.char ? otherChar(players.a.char) : charOf(m.char).id;
+    players.b = { name: String(m.name || 'Friend').slice(0, 12), char };
     score = { a: 0, b: 0 }; runs = [];
     syncLobby(); if (!run) openLobby();
     toast(players.b.name + ' joined!');
@@ -207,13 +209,13 @@ function openLobby() {
     const p = players[s], d = document.createElement('div');
     if (!p) { d.className = 'player empty'; d.textContent = 'Waiting for a friend…'; box.appendChild(d); continue; }
     d.className = 'player';
-    d.appendChild(portrait(p.color));
+    d.appendChild(portrait(p.char));
     const nm = document.createElement('b'); nm.textContent = p.name + (online && s === mySide() ? ' (you)' : ''); d.appendChild(nm);
     if (mode === 'local' && s === 'b') {   // let player 2 rename
       nm.contentEditable = 'true'; nm.spellcheck = false; nm.style.userSelect = 'text';
       nm.onblur = () => { players.b.name = nm.textContent.trim().slice(0, 12) || 'Player 2'; };
-      d.onclick = e => { if (e.target === d.firstChild) { players.b.color = otherColor(players.b.color); if (players.b.color === players.a.color) players.b.color = otherColor(players.b.color); openLobby(); } };
-      d.firstChild.title = 'Tap to change colour';
+      d.onclick = e => { if (e.target === d.firstChild) { players.b.char = otherChar(players.b.char); if (players.b.char === players.a.char) players.b.char = otherChar(players.b.char); openLobby(); } };
+      d.firstChild.title = 'Tap to change character';
     }
     if (!practice) { const sc = document.createElement('span'); sc.className = 'score'; sc.textContent = '★ ' + score[s]; d.appendChild(sc); }
     box.appendChild(d);
@@ -331,7 +333,7 @@ function startRun(level, runner, n) {
   run = {
     level, runner, n, world, phase: 'count', countT: 3.2, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
     runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere,
-    bot: mode === 'practice' ? new Bot(0.35) : null, colors: colorOf(players[runner].color), paused: false, endT: 0, hintT: 7,
+    bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 7,
   };
   R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
   $('hud').classList.remove('hidden');
@@ -375,7 +377,7 @@ function resultOf(world, runner) {
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
 function line(r, win) {
   const p = players[r.runner];
-  return `<div class="line${win ? ' win' : ''}" data-portrait="${p.color}"><div><b>${esc(p.name)}${win ? ' 👑' : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
+  return `<div class="line${win ? ' win' : ''}" data-portrait="${p.char}"><div><b>${esc(p.name)}${win ? ' 👑' : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
 }
 const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.progress > y.progress;
 
@@ -430,7 +432,7 @@ function endRunView() {
 
 function panel(html) {
   $('panelCard').innerHTML = html; $('panel').classList.remove('hidden');
-  for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(el.dataset.portrait, 68));
+  for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(el.dataset.portrait));
 }
 function hidePanel() { $('panel').classList.add('hidden'); }
 
@@ -454,7 +456,7 @@ $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.1, (now - last) / 1000); last = now;
+  const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;   // rAF time can trail performance.now() on the first frame
   try { tick(dt, now); } catch (e) { console.error(e); showError(e); }
 }
 function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
@@ -529,12 +531,12 @@ function drawAttract(dt) {
     const blocked = w.solidAt(Math.floor((p.x + 14) / 16), Math.floor((p.y + 6) / 16)) || !w.solidAt(Math.floor((p.x + 20) / 16), Math.floor((p.y + 20) / 16));
     w.step(DT, { right: true, jump: true, jumpPressed: blocked && p.onGround });
     a.bot.think(w, DT);
-    for (const e of w.events) R.onEvent(e, colorOf(me.color));
+    for (const e of w.events) R.onEvent(e, charOf(me.char));
     w.events.length = 0;
     if (p.finished || a.t > 40) { attract = null; return; }
   }
   R.follow(w, dt, false);
-  R.draw(w, { dt, colors: colorOf(me.color), trapper: false });
+  R.draw(w, { dt, colors: charOf(me.char), trapper: false });
 }
 
 // ---------- boot

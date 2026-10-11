@@ -1,375 +1,411 @@
-// Everything drawn in code: backgrounds, tiles, traps, the veggie runner and particles.
+// Pixel-art renderer. The world is drawn 1:1 onto a small canvas (1 canvas pixel = 1 world pixel),
+// which is then scaled up by a whole number with smoothing off, so every pixel stays crisp.
 import { TILE, PHYS, TRAPS } from './config.js';
-import { SOLID, ONEWAY, SPIKE, SPRING, DOOR, CANNON, NOZZLE } from './sim.js';
+import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE } from './sim.js';
 import { THEMES } from './levels.js';
+import { SPR, initSprites, charFrame, mirror, drawDigits } from './sprites.js';
 
 const TAU = Math.PI * 2;
 const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
-export const TRAP_ICON = { spikes: '▲', trapdoor: '▤', cannon: '●', crusher: '■', flame: '♨' };
+const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
+const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+const FIRE = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
 
 export class Renderer {
   constructor(canvas) {
+    initSprites();
     this.c = canvas; this.ctx = canvas.getContext('2d');
-    this.cam = { x: 0, y: 0, s: 3 }; this.parts = []; this.shake = 0; this.t = 0; this.springT = {};
-    this.squash = 0; this.lastFace = 1; this.blink = 0;
+    this.lo = canvasOf(320, 180); this.l = this.lo.getContext('2d');
+    this.cam = { x: 0, y: 0 }; this.k = 3; this.parts = []; this.shake = 0; this.t = 0; this.springT = {};
+    this.levelCache = null; this.bgCache = {}; this.anim = 0;
   }
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const w = window.innerWidth, h = window.innerHeight;
-    this.c.width = Math.round(w * dpr); this.c.height = Math.round(h * dpr);
-    this.c.style.width = w + 'px'; this.c.style.height = h + 'px';
-    this.dpr = dpr; this.vw = w; this.vh = h;
+    this.dpr = dpr; this.vw = window.innerWidth; this.vh = window.innerHeight;
+    this.c.width = Math.round(this.vw * dpr); this.c.height = Math.round(this.vh * dpr);
+    this.c.style.width = this.vw + 'px'; this.c.style.height = this.vh + 'px';
+    this.wide = null;
   }
 
-  // Follow the runner; zoom so about 15 tiles fit vertically (a little more for the trapper).
+  // Whole-number zoom so about 15 tiles fit vertically (17 for the trapper), keeping at least ~13 across.
+  setZoom(wide) {
+    if (this.wide === wide) return;
+    this.wide = wide;
+    const W = this.c.width, H = this.c.height;
+    let k = Math.round(H / (TILE * (wide ? 17 : 15)));
+    k = Math.max(1, Math.min(k, Math.floor(W / (TILE * 13))));
+    this.k = k;
+    this.lo.width = Math.ceil(W / k); this.lo.height = Math.ceil(H / k);
+    this.l = this.lo.getContext('2d'); this.l.imageSmoothingEnabled = false;
+    this.bgCache = {};
+  }
+
   follow(world, dt, wide, snap) {
-    const p = world.player;
-    let s = Math.min(this.vh / (TILE * (wide ? 17 : 15)), this.vw / (TILE * 22)) * this.dpr;
-    s = Math.max(s, Math.min(this.c.height / (world.h * TILE), this.c.width / (TILE * 13)));   // tall screens: zoom in, but keep ~13 tiles across
-    this.cam.s = s;
-    const vw = this.c.width / s, vh = this.c.height / s;
-    this.lookX = (this.lookX ?? 0) + ((p.face * 40 + p.vx * 0.25) - (this.lookX ?? 0)) * Math.min(1, dt * 3);
+    this.setZoom(!!wide);
+    const p = world.player, vw = this.lo.width, vh = this.lo.height;
+    this.lookX = (this.lookX ?? 0) + ((p.face * 36 + p.vx * 0.25) - (this.lookX ?? 0)) * Math.min(1, dt * 3);
     let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * 0.55;
     const W = world.w * TILE, H = world.h * TILE;
     tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
     ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
     const k = snap ? 1 : Math.min(1, dt * 6);
-    this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * Math.min(1, k * 0.8 + (snap ? 1 : 0));
-    this.vwW = vw; this.vhW = vh;
+    this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * (snap ? 1 : k * 0.8);
   }
 
-  toWorld(cx, cy) { return { x: cx * this.dpr / this.cam.s + this.cam.x, y: cy * this.dpr / this.cam.s + this.cam.y }; }
+  get camX() { return Math.round(this.cam.x); }
+  get camY() { return Math.round(this.cam.y); }
+  toWorld(cx, cy) { return { x: cx * this.dpr / this.k + this.camX, y: cy * this.dpr / this.k + this.camY }; }
 
-  // ---- events from the world become particles and little animations
-  onEvent([k, x, y, extra], colors) {
+  // ---------- events -> particles
+  onEvent([k, x, y, extra], ch) {
     const P = (n, f) => { for (let i = 0; i < n; i++) this.parts.push(f(i)); };
-    const dust = (n, sp = 40) => P(n, i => ({ x, y, vx: (Math.random() - 0.5) * sp * 2, vy: -Math.random() * sp * 0.6, life: 0.35 + Math.random() * 0.2, size: 2 + Math.random() * 2, color: '#ffffffcc', g: 60 }));
-    if (k === 'jump') dust(5, 35);
-    if (k === 'land') { dust(4 + Math.round(extra * 6), 50); this.squash = 0.25 * extra + 0.1; }
+    const dust = (n, sp = 40, col = '#ffffffdd') => P(n, () => ({ x, y: y - 1, vx: (Math.random() - 0.5) * sp * 2, vy: -Math.random() * sp * 0.5, life: 0.3 + Math.random() * 0.25, size: Math.random() < 0.3 ? 2 : 1, color: col, g: 40 }));
+    const pal = ch.pal || {};
+    if (k === 'jump') dust(5, 30);
+    if (k === 'land') dust(3 + Math.round(extra * 6), 50);
     if (k === 'die') {
       this.shake = 0.3;
-      P(18, () => { const a = Math.random() * TAU, v = 60 + Math.random() * 140; return { x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 60, life: 0.6 + Math.random() * 0.4, size: 2 + Math.random() * 3, color: Math.random() < 0.7 ? colors.body : colors.leaf, g: 500 }; });
-      P(6, () => ({ x, y, vx: (Math.random() - 0.5) * 80, vy: (Math.random() - 0.5) * 80, life: 0.5, size: 5, color: '#ffffffaa', g: -20 }));
+      const cols = [pal.A, pal.a, pal.B, ch.ui, '#ffffff'].filter(Boolean);
+      P(22, () => { const a = Math.random() * TAU, v = 50 + Math.random() * 140; return { x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 70, life: 0.6 + Math.random() * 0.5, size: Math.random() < 0.4 ? 2 : 1, color: cols[Math.floor(Math.random() * cols.length)], g: 480 }; });
+      P(8, i => { const a = i / 8 * TAU; return { x, y, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 0.3, size: 2, color: '#ffffff', g: 0 }; });
     }
-    if (k === 'spawn') P(10, i => { const a = i / 10 * TAU; return { x, y, vx: Math.cos(a) * 50, vy: Math.sin(a) * 50, life: 0.35, size: 2.5, color: '#fff', g: 0 }; });
-    if (k === 'cp' || k === 'goal') P(k === 'goal' ? 50 : 22, () => ({ x, y: y - 8, vx: (Math.random() - 0.5) * 160, vy: -80 - Math.random() * 140, life: 1 + Math.random() * 0.6, size: 2 + Math.random() * 2, color: ['#ff5d8f', '#ffd84a', '#5ab4ff', '#8fdc5a', '#b48cff'][Math.floor(Math.random() * 5)], g: 300, spin: true }));
-    if (k === 'poof') P(6, () => ({ x, y, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60, life: 0.35, size: 3 + Math.random() * 2, color: '#8a8a8acc', g: -30 }));
-    if (k === 'thud') { this.shake = Math.max(this.shake, 0.18); dust(10, 80); }
-    if (k === 'fire' && extra === 'cannon') { this.shake = Math.max(this.shake, 0.06); P(5, () => ({ x, y: y + 8, vx: (Math.random() - 0.5) * 70, vy: -Math.random() * 40, life: 0.3, size: 3, color: '#cfcfcfcc', g: -20 })); }
+    if (k === 'spawn') P(12, i => { const a = i / 12 * TAU; return { x: x + Math.cos(a) * 14, y: y + Math.sin(a) * 14, vx: -Math.cos(a) * 45, vy: -Math.sin(a) * 45, life: 0.3, size: 1, color: '#ffffff', g: 0 }; });
+    if (k === 'cp' || k === 'goal') P(k === 'goal' ? 60 : 24, () => ({ x, y: y - 10, vx: (Math.random() - 0.5) * 150, vy: -70 - Math.random() * 140, life: 1 + Math.random() * 0.7, size: Math.random() < 0.5 ? 2 : 1, color: ['#ff5d8f', '#ffd84a', '#5ab4ff', '#7bd65a', '#b48cff', '#ffffff'][Math.floor(Math.random() * 6)], g: 260, flicker: true }));
+    if (k === 'poof') P(7, () => ({ x, y, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60, life: 0.35, size: 2, color: '#9aa3b5', g: -20 }));
+    if (k === 'thud') { this.shake = Math.max(this.shake, 0.18); dust(12, 80, '#d8d2c8'); }
+    if (k === 'fire' && extra === 'cannon') { this.shake = Math.max(this.shake, 0.05); P(6, () => ({ x, y: y + 7, vx: (Math.random() - 0.5) * 60, vy: -Math.random() * 40, life: 0.35, size: 2, color: '#c8c8d0', g: -20 })); }
     if (k === 'spring') this.springT[x + ',' + y] = this.t;
   }
 
   draw(world, o) {
-    const { ctx } = this, dt = o.dt;
+    const dt = o.dt;
     this.t += dt; this.shake = Math.max(0, this.shake - dt);
     const th = THEMES[world.level.theme] || THEMES.day;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    this.drawSky(th);
-    const s = this.cam.s, sh = this.shake > 0 ? this.shake * 10 : 0;
-    const cx = Math.round((this.cam.x + (Math.random() - 0.5) * sh) * s) / s, cy = Math.round((this.cam.y + (Math.random() - 0.5) * sh) * s) / s;
-    ctx.setTransform(s, 0, 0, s, -cx * s, -cy * s);
-    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-    this.drawTiles(world, th);
-    this.drawGoalAndFlags(world, th);
-    for (const t of world.traps) this.drawTrap(world, t, th);
-    for (const b of world.balls) this.drawBall(b, th);
-    if (!world.player.dead) this.drawPlayer(world.player, o.colors, th, dt);
+    const l = this.l, s = this.shake > 0 ? this.shake * 12 : 0;
+    const cx = this.camX + Math.round((Math.random() - 0.5) * s), cy = this.camY + Math.round((Math.random() - 0.5) * s);
+    this.drawBackground(world, th, cx, cy);
+    l.save(); l.translate(-cx, -cy);
+    l.drawImage(this.levelCanvas(world, th), 0, 0);
+    this.drawProps(world);
+    for (const t of world.traps) this.drawTrap(t, th);
+    for (const b of world.balls) {
+      l.drawImage(SPR.ball, Math.round(b.x) - 4, Math.round(b.y) - 4);
+      l.fillStyle = '#ffffff88'; l.fillRect(Math.round(b.x - Math.sign(b.vx) * (7 + (Math.floor(this.t * 20) % 2) * 3)), Math.round(b.y) - 1, 2, 2);
+    }
+    if (!world.player.dead) this.drawPlayer(world.player, o.colors, dt);
     this.drawParticles(dt);
-    this.drawTrapButtons(world, o, th, !o.trapper);
-    if (o.debug) for (const d of world.dangers()) { ctx.strokeStyle = 'red'; ctx.lineWidth = 0.5; ctx.strokeRect(d.x, d.y, d.w, d.h); }
+    this.drawTrapButtons(world, o, !o.trapper);
+    if (o.debug) { l.strokeStyle = 'red'; l.lineWidth = 1; for (const d of world.dangers()) l.strokeRect(Math.round(d.x) + 0.5, Math.round(d.y) + 0.5, d.w - 1, d.h - 1); }
+    l.restore();
+    const ctx = this.ctx; ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(this.lo, 0, 0, this.lo.width * this.k, this.lo.height * this.k);
   }
 
-  drawSky(th) {
-    const { ctx, c } = this, s = this.cam.s;
-    const g = ctx.createLinearGradient(0, 0, 0, c.height);
-    g.addColorStop(0, th.sky[0]); g.addColorStop(1, th.sky[1]);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, c.width, c.height);
-    if (th.stars) {
-      ctx.fillStyle = '#ffffffaa';
-      for (let i = 0; i < 70; i++) {
-        const x = ((hash(i, 1) * c.width * 1.5 - this.cam.x * s * 0.05) % c.width + c.width) % c.width, y = hash(i, 2) * c.height * 0.7;
-        const r = (0.6 + hash(i, 3) * 1.2) * s * 0.4 * (0.7 + 0.3 * Math.sin(this.t * 2 + i));
-        ctx.fillRect(x, y, r, r);
-      }
-      ctx.fillStyle = '#fff6d0'; ctx.beginPath(); ctx.arc(c.width * 0.8 - this.cam.x * s * 0.02, c.height * 0.18, 14 * s, 0, TAU); ctx.fill();
-    }
-    // clouds
-    ctx.fillStyle = th.cloud; ctx.globalAlpha = th.stars ? 0.35 : 0.9;
-    for (let i = 0; i < 7; i++) {
-      const span = c.width + 120 * s;
-      const x = ((hash(i, 7) * span - this.cam.x * s * 0.15 + this.t * 6 * s * (0.5 + hash(i, 9))) % span + span) % span - 60 * s;
-      const y = (hash(i, 8) * 0.4 + 0.05) * c.height - this.cam.y * s * 0.05;
-      const r = (10 + hash(i, 10) * 10) * s;
-      ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.arc(x + r * 1.1, y + r * 0.2, r * 0.8, 0, TAU); ctx.arc(x - r * 1.0, y + r * 0.3, r * 0.7, 0, TAU);
-      ctx.rect(x - r * 1.6, y + r * 0.3, r * 3.4, r * 0.7); ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-    // two layers of rolling hills
-    for (let layer = 0; layer < 2; layer++) {
-      const par = layer ? 0.45 : 0.25, base = c.height * (layer ? 0.78 : 0.68) - this.cam.y * s * par * 0.3;
-      ctx.fillStyle = th.hill[layer];
-      ctx.beginPath(); ctx.moveTo(0, c.height);
-      for (let x = 0; x <= c.width + 10; x += 8) {
-        const wx = (x / s + this.cam.x * par) / 40;
-        ctx.lineTo(x, base - (Math.sin(wx + layer * 2) * 0.5 + Math.sin(wx * 0.37 + layer) * 0.5 + 1) * 22 * s * (layer ? 0.8 : 1.2));
-      }
-      ctx.lineTo(c.width, c.height); ctx.fill();
-    }
-  }
+  // ---------- background: dithered sky, far layer, near layer, clouds
+  bg(key, make) { return this.bgCache[key] || (this.bgCache[key] = make()); }
 
-  drawTiles(world, th) {
-    const { ctx } = this;
-    const x0 = Math.max(0, Math.floor(this.cam.x / TILE) - 1), x1 = Math.min(world.w - 1, Math.ceil((this.cam.x + this.vwW) / TILE) + 1);
-    const y0 = Math.max(0, Math.floor(this.cam.y / TILE) - 1), y1 = Math.min(world.h - 1, Math.ceil((this.cam.y + this.vhW) / TILE) + 1);
-    const ground = (x, y) => { const t = world.tile(x, y); return t === SOLID || t === NOZZLE; };
-    // fill pass
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const t = world.tile(x, y), px = x * TILE, py = y * TILE;
-      if (t === SOLID) {
-        ctx.fillStyle = th.dirt; ctx.fillRect(px - 0.05, py - 0.05, TILE + 0.1, TILE + 0.1);
-        ctx.fillStyle = th.dirtDark;
-        for (let i = 0; i < 3; i++) { const r = hash(x * 3 + i, y); if (r < 0.6) { ctx.beginPath(); ctx.ellipse(px + 2 + hash(x, y * 5 + i) * 12, py + 3 + hash(x * 7, y + i) * 10, 1.6, 1.1, 0, 0, TAU); ctx.fill(); } }
-      }
-    }
-    // outline + grass pass
-    ctx.strokeStyle = th.line; ctx.lineWidth = 1.2;
-    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-      const t = world.tile(x, y), px = x * TILE, py = y * TILE;
-      if (t === SOLID) {
-        ctx.beginPath();
-        if (!ground(x - 1, y) && x > 0) { ctx.moveTo(px, py); ctx.lineTo(px, py + TILE); }
-        if (!ground(x + 1, y) && x < world.w - 1) { ctx.moveTo(px + TILE, py); ctx.lineTo(px + TILE, py + TILE); }
-        if (!ground(x, y + 1) && y < world.h - 1) { ctx.moveTo(px, py + TILE); ctx.lineTo(px + TILE, py + TILE); }
-        ctx.stroke();
-        if (!ground(x, y - 1) && y > 0 && world.tile(x, y - 1) !== SPRING) {  // grass on exposed tops
-          ctx.fillStyle = th.grass;
-          ctx.beginPath(); ctx.moveTo(px - (ground(x - 1, y) ? 0 : 1), py - 1);
-          ctx.lineTo(px + TILE + (ground(x + 1, y) ? 0 : 1), py - 1);
-          ctx.lineTo(px + TILE + (ground(x + 1, y) ? 0 : 1), py + 4);
-          for (let i = 4; i >= 0; i--) ctx.quadraticCurveTo(px + i * 4 + 2, py + 7 + hash(x, i) * 1.5, px + i * 4 - (i ? 0 : (ground(x - 1, y) ? 0 : 1)), py + 4);
-          ctx.closePath(); ctx.fill(); ctx.stroke();
-          if (hash(x, y + 99) < 0.25) { ctx.fillStyle = hash(x, 5) < 0.5 ? '#fff' : '#ffd84a'; ctx.beginPath(); ctx.arc(px + 4 + hash(x, 6) * 8, py - 2, 1.4, 0, TAU); ctx.fill(); }
+  drawBackground(world, th, cx, cy) {
+    const l = this.l, W = this.lo.width, H = this.lo.height, theme = world.level.theme;
+    l.drawImage(this.bg('sky' + theme, () => {
+      const c = canvasOf(W, H), x = c.getContext('2d'), n = th.sky.length;
+      for (let y = 0; y < H; y++) {
+        const f = y / H * (n - 1), i = Math.min(n - 2, Math.floor(f)), frac = f - i;
+        for (let xx = 0; xx < W; xx++) {
+          x.fillStyle = frac > (BAYER[(y % 4) * 4 + (xx % 4)] + 0.5) / 16 ? th.sky[i + 1] : th.sky[i];
+          x.fillRect(xx, y, 1, 1);
         }
-      } else if (t === ONEWAY) {
-        ctx.fillStyle = '#c98b4f'; ctx.fillRect(px, py, TILE, 5); ctx.strokeRect(px, py, TILE, 5);
-        ctx.beginPath(); ctx.moveTo(px + 4, py + 5); ctx.lineTo(px + 6, py + 9); ctx.moveTo(px + 12, py + 5); ctx.lineTo(px + 10, py + 9); ctx.stroke();
-      } else if (t === SPIKE) {
-        ctx.fillStyle = '#dfe6f0';
-        ctx.beginPath(); for (let i = 0; i < 3; i++) { ctx.moveTo(px + i * 5.3 + 0.5, py + TILE); ctx.lineTo(px + i * 5.3 + 3, py + 8); ctx.lineTo(px + i * 5.3 + 5.5, py + TILE); }
-        ctx.fill(); ctx.stroke();
-      } else if (t === SPRING) {
-        ctx.fillStyle = th.dirt; ctx.fillRect(px, py + 6, TILE, TILE - 6);
-        const since = this.t - (this.springT[(px + 8) + ',' + py] ?? -9), comp = since < 0.25 ? Math.sin(since / 0.25 * Math.PI) : 0;
-        const top = py - 3 - comp * 6 + (since < 0.08 ? 3 : 0);
-        ctx.strokeStyle = '#555'; ctx.lineWidth = 1.4; ctx.beginPath();
-        for (let i = 0; i <= 4; i++) { const yy = py + 6 - (py + 6 - top) * i / 4; ctx.lineTo(px + (i % 2 ? 4 : 12), yy); }
-        ctx.stroke(); ctx.strokeStyle = th.line; ctx.lineWidth = 1.2;
-        ctx.fillStyle = '#ff4d5e'; ctx.beginPath(); ctx.roundRect(px + 1, top - 3, 14, 4, 2); ctx.fill(); ctx.stroke();
-        ctx.fillStyle = '#ffd84a'; ctx.beginPath(); ctx.roundRect(px + 1, py + 6, 14, 5, 1.5); ctx.fill(); ctx.stroke();
       }
+      return c;
+    }), 0, 0);
+    if (th.stars) {
+      for (let i = 0; i < 70; i++) {
+        const x = Math.floor(((hash(i, 1) * 900 - cx * 0.05) % W + W) % W), y = Math.floor(hash(i, 2) * H * 0.65);
+        const tw = Math.sin(this.t * (1 + hash(i, 4) * 2) + i) > 0.2;
+        l.fillStyle = tw ? '#ffffff' : '#8f95d6'; l.fillRect(x, y, 1, 1);
+        if (hash(i, 3) > 0.88 && tw) { l.fillStyle = '#ffffff66'; l.fillRect(x - 1, y, 3, 1); l.fillRect(x, y - 1, 1, 3); }
+      }
+      l.drawImage(this.bg('moon', () => {
+        const c = canvasOf(22, 22), x = c.getContext('2d');
+        for (let j = 0; j < 22; j++) for (let i = 0; i < 22; i++) {
+          const d = Math.hypot(i - 10.5, j - 10.5); if (d >= 10) continue;
+          const crater = Math.hypot(i - 7, j - 8) < 2.2 || Math.hypot(i - 13, j - 13) < 1.6 || Math.hypot(i - 14, j - 6) < 1.2;
+          x.fillStyle = d > 8.6 ? '#e8d9a8' : crater ? '#e3d39c' : '#fff6d0'; x.fillRect(i, j, 1, 1);
+        }
+        return c;
+      }), Math.round(W * 0.78 - cx * 0.02), Math.round(H * 0.1));
     }
+    for (let i = 0; i < 6; i++) {
+      const cl = this.cloudSprite(th, i % 3), span = W + cl.width + 40;
+      const x = Math.round((((hash(i, 7) * span - cx * 0.12 + this.t * (3 + hash(i, 9) * 4)) % span) + span) % span - cl.width - 20);
+      l.drawImage(cl, x, Math.round(hash(i, 8) * H * 0.35 + 6 - cy * 0.04));
+    }
+    const bottom = world.h * TILE;
+    const layer = (name, par, lift) => {
+      const img = this.bg(name + theme, () => this.makeLayer(th, name));
+      const y = Math.round((bottom - lift - img.height - cy) * par + (H - img.height) * (1 - par));
+      const off = Math.round(((cx * par) % img.width + img.width) % img.width);
+      for (let x = -off; x < W; x += img.width) l.drawImage(img, x, y);
+      if (y + img.height < H) { l.fillStyle = img.bottomColor; l.fillRect(0, y + img.height, W, H - y - img.height); }
+    };
+    layer(th.far, 0.2, 30);
+    layer(th.near, 0.45, 10);
   }
 
-  drawGoalAndFlags(world, th) {
-    const { ctx } = this;
-    ctx.strokeStyle = th.line; ctx.lineWidth = 1.2;
-    for (const c of world.checkpoints) {
-      const x = c.x + 5, y = c.y + TILE;
-      ctx.fillStyle = '#8a6a4a'; ctx.fillRect(x, y - 22, 2, 22); ctx.strokeRect(x, y - 22, 2, 22);
-      const wave = Math.sin(this.t * 6 + c.x) * 1.5;
-      ctx.fillStyle = c.on ? '#5ccf5f' : '#d8d8d8';
-      ctx.beginPath(); ctx.moveTo(x + 2, y - 22); ctx.quadraticCurveTo(x + 7, y - 21 + wave, x + 12, y - 18 + wave); ctx.lineTo(x + 2, y - 14); ctx.closePath(); ctx.fill(); ctx.stroke();
-    }
-    if (world.goal) {
-      const x = world.goal.x + 4, y = world.goal.y + TILE;
-      ctx.fillStyle = '#e8e8f0'; ctx.fillRect(x, y - 34, 2.5, 34); ctx.strokeRect(x, y - 34, 2.5, 34);
-      ctx.fillStyle = '#ffd84a'; ctx.beginPath(); ctx.arc(x + 1.25, y - 35, 2.5, 0, TAU); ctx.fill(); ctx.stroke();
-      const wave = Math.sin(this.t * 5) * 2;
-      for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) {
-        ctx.fillStyle = (i + j) % 2 ? '#222' : '#fff';
-        ctx.fillRect(x + 2.5 + i * 4, y - 33 + j * 4 + wave * (i / 3), 4, 4);
-      }
-      ctx.strokeRect(x + 2.5, y - 33, 12, 8 + wave);
-      ctx.fillStyle = '#b48a5a'; ctx.beginPath(); ctx.roundRect(x - 4, y - 3, 11, 3, 1); ctx.fill(); ctx.stroke();
-    }
+  cloudSprite(th, v) {
+    return this.bg('cloud' + v + th.cloud[0], () => {
+      const w = [44, 30, 58][v], h = [16, 12, 20][v], c = canvasOf(w, h), x = c.getContext('2d');
+      const blobs = [[0.25, 0.65, 0.3], [0.5, 0.45, 0.42], [0.75, 0.65, 0.3], [0.38, 0.6, 0.35], [0.62, 0.62, 0.34]];
+      const inside = (i, j) => j < h - 1 && blobs.some(([bx, by, r]) => Math.hypot((i - bx * w) / w * 2.2, (j - by * h) / h) < r * 1.05);
+      for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) if (inside(i, j)) { x.fillStyle = !inside(i, j + 2) || j > h * 0.72 ? th.cloud[1] : th.cloud[0]; x.fillRect(i, j, 1, 1); }
+      return c;
+    });
   }
 
-  drawTrap(world, t, th) {
-    const { ctx } = this, C = TRAPS[t.kind];
+  makeLayer(th, name) {
+    const W = 480, H = name === 'mountains' ? 130 : name.startsWith('clouds') ? 70 : 90;
+    const c = canvasOf(W, H), x = c.getContext('2d');
+    const [base, light, top] = name === 'mountains' || name === 'clouds' ? th.farCol : th.nearCol;
+    const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
+    if (name === 'mountains') {
+      const peaks = [[40, 70], [120, 22], [190, 60], [262, 12], [340, 52], [410, 30]];
+      const hAt = i => { let best = H; for (const [p, py] of peaks) for (const pp of [p, p - W, p + W]) best = Math.min(best, py + Math.abs(i - pp) * 0.9); return best; };
+      for (let i = 0; i < W; i++) {
+        const h0 = Math.round(hAt(i)), lit = hAt(i - 1) > hAt(i);   // slopes facing left catch the light
+        for (let j = h0; j < H; j++) {
+          let col = base;
+          if (lit && hash(i, j) > (j - h0) / 46) col = light;
+          if (h0 < 36 && j < h0 + 5 + Math.round(hash(i, 1) * 3)) col = top;
+          px(i, j, col);
+        }
+      }
+    } else if (name === 'trees' || name === 'pines') {
+      const ground = H - 18;
+      for (let i = 0; i < W; i++) { const b = Math.round(Math.sin(i / W * TAU * 4) * 3 + Math.sin(i / W * TAU * 11) * 1.5); x.fillStyle = base; x.fillRect(i, ground - 3 + b, 1, H); px(i, ground - 3 + b, light); }
+      for (let n = 0; n < 18; n++) {
+        const tx = Math.floor(hash(n, 11) * W), s = 0.7 + hash(n, 12) * 0.6;
+        for (const ox of [0, -W, W]) {
+          const cx0 = tx + ox;
+          if (name === 'trees') {
+            const r = Math.round(11 * s), cyy = ground - Math.round(16 * s);
+            x.fillStyle = top; x.fillRect(cx0 - 1, cyy, 3, ground - cyy + 2);
+            for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+              const d = Math.hypot(i, j * 1.1) + (hash(cx0 + i, j) - 0.5) * 2.5;
+              if (d < r && cx0 + i >= 0 && cx0 + i < W) px(cx0 + i, cyy + j, i + j < -r * 0.5 && d > r * 0.35 ? light : d > r - 1.3 ? top : base);
+            }
+          } else {
+            const hh = Math.round(36 * s), w0 = Math.round(10 * s);
+            for (let j = 0; j < hh; j++) {
+              const half = Math.round((j / hh) * w0 + ((j % 7) > 4 ? 1 : 0));
+              for (let i = -half; i <= half; i++) if (cx0 + i >= 0 && cx0 + i < W) px(cx0 + i, ground - hh + j, i < 0 && i > -half ? light : i === half ? top : base);
+            }
+            x.fillStyle = top; x.fillRect(cx0 - 1, ground, 3, 3);
+          }
+        }
+      }
+    } else {   // cloud banks for the sky level
+      const yb = name === 'clouds' ? 34 : 44;
+      for (let i = 0; i < W; i++) {
+        const h0 = Math.round(yb - (Math.abs(Math.sin(i / W * TAU * 6)) * 14 + Math.abs(Math.sin(i / W * TAU * 15 + 1)) * 6));
+        for (let j = h0; j < H; j++) px(i, j, j < h0 + 2 ? light : j > H - 10 && hash(i, j) < (j - H + 10) / 10 ? top : base);
+      }
+    }
+    const d = x.getImageData(0, H - 1, 1, 1).data; c.bottomColor = `rgb(${d[0]},${d[1]},${d[2]})`;
+    return c;
+  }
+
+  // ---------- static tiles, painted once per level
+  levelCanvas(world, th) {
+    if (this.levelCache && this.levelCache.world === world) return this.levelCache.c;
+    const c = canvasOf(world.w * TILE, world.h * TILE), x = c.getContext('2d');
+    const isGround = (i, j) => { const t = world.tile(i, j); return t === SOLID || t === NOZZLE || t === SPRING; };
+    const D = th.dirt, G = th.grass, line = th.line;
+    const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
+    for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
+      const t = world.tile(tx, ty), X = tx * TILE, Y = ty * TILE;
+      if (t === SOLID || t === SPRING) {
+        let depth = 0; while (depth < 4 && isGround(tx, ty - depth - 1)) depth++;
+        // dirt: 2x2 clumps of shade, a few specks, and a dithered fade to the darker deep soil
+        for (let j = 0; j < 16; j++) for (let i = 0; i < 16; i++) {
+          const gy = depth * 16 + j, deep = gy > 22 + (BAYER[(j % 4) * 4 + (i % 4)] / 16) * 12;
+          const n = hash((X + i) >> 1, (Y + j) >> 1), m = hash(X + i, Y + j);
+          let col = deep ? D[1] : D[2];
+          if (n < 0.1) col = deep ? D[0] : D[1];
+          else if (n > 0.93 && !deep) col = D[3];
+          if (m < 0.025) col = D[0];
+          px(X + i, Y + j, col);
+        }
+        if (hash(tx, ty * 3) < 0.4) {   // pebble
+          const sx = X + 2 + Math.floor(hash(tx, ty) * 10), sy = Y + 4 + Math.floor(hash(ty, tx) * 9);
+          x.fillStyle = D[0]; x.fillRect(sx, sy + 1, 4, 2); x.fillStyle = D[3]; x.fillRect(sx, sy, 3, 1); x.fillRect(sx, sy + 1, 1, 1);
+        }
+        const L = tx > 0 && !isGround(tx - 1, ty), R = tx < world.w - 1 && !isGround(tx + 1, ty), B = ty < world.h - 1 && !isGround(tx, ty + 1);
+        x.fillStyle = D[0];
+        if (L) x.fillRect(X + 1, Y, 1, 16); if (R) x.fillRect(X + 14, Y, 1, 16); if (B) x.fillRect(X, Y + 14, 16, 1);
+        x.fillStyle = line;
+        if (L) x.fillRect(X, Y, 1, 16); if (R) x.fillRect(X + 15, Y, 1, 16); if (B) x.fillRect(X, Y + 15, 16, 1);
+      } else if (t === ONEWAY) x.drawImage(SPR.oneway, X, Y);
+      else if (t === SPIKE) x.drawImage(SPR.spike, X, Y);
+      else if (t === NOZZLE) x.drawImage(SPR.nozzle, X, Y);
+    }
+    // grass caps on exposed tops; blades poke a little into the tile above
+    for (let ty = 1; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
+      if (world.tile(tx, ty) !== SOLID) continue;
+      const above = world.tile(tx, ty - 1);
+      if (above === SOLID || above === NOZZLE || above === SPRING) continue;
+      const X = tx * TILE, Y = ty * TILE, L = !isGround(tx - 1, ty), R = !isGround(tx + 1, ty);
+      for (let i = 0; i < 16; i++) {
+        const gx = X + i, tip = hash(gx, 7) < 0.3 ? 2 : hash(gx, 8) < 0.5 ? 1 : 0, depth = 4 + Math.floor(hash(gx, 9) * 3);
+        const edge = (L && i === 0) || (R && i === 15), top = Y - tip;
+        px(gx, top - 1, line);
+        for (let j = top; j < Y + depth; j++) {
+          let col = j <= Y ? G[2] : G[1];
+          if (j === top && tip) col = G[3];
+          if (j === Y + depth - 1) col = G[0];
+          if (j === Y + 1 && hash(gx, 3) < 0.25) col = G[2];
+          px(gx, j, edge ? line : col);
+        }
+        if (edge) px(gx, Y + depth, line);
+        if (!edge && i > 1 && i < 14 && hash(gx, 21) < 0.07) { px(gx, Y - 3, hash(gx, 22) < 0.5 ? '#ffffff' : '#ffd84a'); px(gx, Y - 2, G[0]); }
+      }
+    }
+    this.levelCache = { world, c };
+    return c;
+  }
+
+  drawProps(world) {
+    const l = this.l, f = Math.floor(this.t * 4) % 2;
+    for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
+      if (world.tile(tx, ty) !== SPRING) continue;
+      const X = tx * TILE, Y = ty * TILE, since = this.t - (this.springT[(X + 8) + ',' + Y] ?? -9);
+      l.drawImage(since < 0.18 ? SPR.spring1 : SPR.spring0, X, Y);
+    }
+    for (const c of world.checkpoints) l.drawImage(SPR[(c.on ? 'flagOn' : 'flagOff') + f], c.x + 4, c.y + TILE - 23);
+    if (world.goal) l.drawImage(SPR['goal' + f], world.goal.x + 3, world.goal.y + TILE - 36);
+  }
+
+  drawTrap(t, th) {
+    const l = this.l, C = TRAPS[t.kind];
     const x = t.x0 * TILE, w = (t.x1 - t.x0 + 1) * TILE, y = t.y * TILE;
-    const warn = t.state === 'warn', wk = warn ? t.t / C.warn : 0;
-    const jig = warn ? Math.sin(this.t * 80) * 0.8 : 0;
-    ctx.strokeStyle = th.line; ctx.lineWidth = 1.2;
+    const warn = t.state === 'warn', jig = warn ? (Math.floor(this.t * 30) % 2 ? 1 : -1) : 0;
     if (t.kind === 'spikes') {
       let h = 0;
-      if (warn) h = 2 + wk * 1.5; else if (t.state === 'active') h = Math.min(1, t.t / 0.05) * 9; else if (t.state === 'recover') h = 9 * (1 - t.t / 0.15);
-      ctx.fillStyle = '#6b6f80';
-      for (let i = 0; i < w / 4; i++) ctx.fillRect(x + i * 4 + 1, y + TILE - 1.2, 2, 1.2);
-      if (h > 0.2) {
-        ctx.fillStyle = '#e9eef6';
-        ctx.beginPath();
-        for (let i = 0; i < w / 4; i++) { const bx = x + i * 4 + jig * 0.3; ctx.moveTo(bx, y + TILE); ctx.lineTo(bx + 2, y + TILE - h); ctx.lineTo(bx + 4, y + TILE); }
-        ctx.fill(); ctx.stroke();
+      if (warn) h = 2; else if (t.state === 'active') h = Math.min(10, Math.round(t.t / 0.04 * 10)); else if (t.state === 'recover') h = Math.round(10 * (1 - t.t / 0.15));
+      for (let i = 0; i < w; i += 16) {
+        if (h > 0) l.drawImage(SPR.popSpike, 0, 0, 16, h, x + i + jig, y + TILE - h - 1, 16, h);
+        l.drawImage(SPR.slots, x + i, y + TILE - 2);
       }
     } else if (t.kind === 'trapdoor') {
-      const open = t.state === 'active' || t.state === 'recover';
-      if (!open) {
-        ctx.fillStyle = warn ? '#d9a066' : '#c98b4f';
-        ctx.beginPath(); ctx.rect(x + jig, y, w, 6); ctx.fill(); ctx.stroke();
-        for (let i = 1; i < w / 8; i++) { ctx.beginPath(); ctx.moveTo(x + i * 8 + jig, y); ctx.lineTo(x + i * 8 + jig, y + 6); ctx.stroke(); }
-        ctx.fillStyle = '#6b6f80'; ctx.fillRect(x + 1, y + 1.5, 2, 3); ctx.fillRect(x + w - 3, y + 1.5, 2, 3);
-        ctx.strokeStyle = '#00000033'; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.moveTo(x + w / 2 + jig, y); ctx.lineTo(x + w / 2 + jig, y + 6); ctx.stroke(); ctx.setLineDash([]);
-      } else {
-        const sw = Math.min(1, t.t / 0.12);
-        ctx.fillStyle = '#c98b4f';
-        ctx.save(); ctx.translate(x, y); ctx.rotate(sw * Math.PI / 2); ctx.beginPath(); ctx.rect(0, 0, w / 2, 6); ctx.fill(); ctx.stroke(); ctx.restore();
-        ctx.save(); ctx.translate(x + w, y); ctx.rotate(-sw * Math.PI / 2); ctx.beginPath(); ctx.rect(-w / 2, 0, w / 2, 6); ctx.fill(); ctx.stroke(); ctx.restore();
+      if (!(t.state === 'active' || t.state === 'recover')) { for (let i = 0; i < w; i += 16) l.drawImage(SPR.plank, x + i + jig, y); return; }
+      const len = Math.round(w / 2 * Math.min(1, t.t / 0.1));
+      for (const [hx, dir] of [[x, 1], [x + w - 6, -1]]) {
+        l.fillStyle = th.line; l.fillRect(hx, y, 6, 6 + len);
+        l.fillStyle = '#c98b4f'; l.fillRect(hx + 1, y + 1, 4, 4 + len);
+        l.fillStyle = '#e0aa6e'; l.fillRect(hx + (dir > 0 ? 1 : 4), y + 1, 1, 4 + len);
+        l.fillStyle = '#8a5a32'; for (let j = y + 8; j < y + 4 + len; j += 8) l.fillRect(hx + 1, j, 4, 1);
       }
     } else if (t.kind === 'cannon') {
-      const recoil = t.state === 'idle' && t.cd > C.cd - 0.15 ? 2 : 0;
-      ctx.fillStyle = '#5d6475'; ctx.beginPath(); ctx.roundRect(x + 1, y + 6, 14, 10, 2); ctx.fill(); ctx.stroke();
-      ctx.save(); ctx.translate(x + 8 - t.dir * recoil, y + 8); ctx.scale(t.dir, 1);
-      ctx.fillStyle = '#2f3340'; ctx.beginPath(); ctx.roundRect(-5, -5, 13, 9, 3); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = warn ? `rgba(255,${120 - wk * 100},40,1)` : '#111'; ctx.beginPath(); ctx.ellipse(8, -0.5, 1.6, 3.5, 0, 0, TAU); ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = '#ffd84a'; ctx.beginPath(); ctx.arc(x + 8 - t.dir * 5, y + 4, 1, 0, TAU); ctx.fill();
+      const recoil = t.state === 'idle' && t.cd > C.cd - 0.12 ? -t.dir : 0;
+      l.drawImage(t.dir > 0 ? SPR.cannon : mirror(SPR.cannon, 'cannonL'), x + recoil, y);
+      if (warn) { l.fillStyle = Math.floor(this.t * 20) % 2 ? '#ffd84a' : '#ff5a2a'; l.fillRect(t.dir > 0 ? x + 14 : x, y + 7, 2, 2); }
+      if (t.state === 'idle' && t.cd > C.cd - 0.08) { l.fillStyle = '#fff6c8'; l.fillRect(t.dir > 0 ? x + 16 : x - 3, y + 6, 3, 4); }
     } else if (t.kind === 'crusher') {
-      const oy = t.oy, cy = y + oy;
-      ctx.strokeStyle = '#6b6f80'; ctx.lineWidth = 1.2; ctx.setLineDash([2, 1.5]);
-      ctx.beginPath(); ctx.moveTo(x + 4, y - 2); ctx.lineTo(x + 4, cy); ctx.moveTo(x + w - 4, y - 2); ctx.lineTo(x + w - 4, cy); ctx.stroke(); ctx.setLineDash([]);
-      ctx.strokeStyle = th.line;
-      ctx.fillStyle = '#9aa3b5'; ctx.beginPath(); ctx.roundRect(x + 1 + jig, cy, w - 2, TILE, 3); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#7d8699'; ctx.fillRect(x + 3 + jig, cy + TILE - 4, w - 6, 2);
-      // angry face
-      const mad = warn || t.state === 'active', ex = x + w / 2 + jig;
-      ctx.fillStyle = '#fff';
-      ctx.beginPath(); ctx.ellipse(ex - 5, cy + 7, 2.6, mad ? 3 : 2, 0, 0, TAU); ctx.ellipse(ex + 5, cy + 7, 2.6, mad ? 3 : 2, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#111'; ctx.beginPath(); ctx.arc(ex - 4.5, cy + 7.5, 1.2, 0, TAU); ctx.arc(ex + 4.5, cy + 7.5, 1.2, 0, TAU); ctx.fill();
-      ctx.beginPath(); ctx.moveTo(ex - 8, cy + (mad ? 3 : 4)); ctx.lineTo(ex - 2.5, cy + 5); ctx.moveTo(ex + 8, cy + (mad ? 3 : 4)); ctx.lineTo(ex + 2.5, cy + 5); ctx.stroke();
+      this.drawCrusher(t, x, w, y, warn, jig, th);
     } else if (t.kind === 'flame') {
-      ctx.fillStyle = '#5d6475'; ctx.fillRect(x, y, w, TILE); ctx.strokeRect(x, y, w, TILE);
-      ctx.fillStyle = '#2f3340'; ctx.beginPath(); ctx.roundRect(x + 3, y - 2, w - 6, 5, 1); ctx.fill(); ctx.stroke();
-      ctx.fillStyle = '#ff9a3c'; ctx.fillRect(x + 4, y + 7, w - 8, 2);
-      if (warn) for (let i = 0; i < 3; i++) { const k = (this.t * 3 + i / 3) % 1; ctx.fillStyle = `rgba(80,80,90,${0.6 * (1 - k)})`; ctx.beginPath(); ctx.arc(x + 8 + Math.sin(i * 3 + this.t * 5) * 2, y - 3 - k * 10, 2 + k * 3, 0, TAU); ctx.fill(); }
+      if (warn) {
+        for (let i = 0; i < 4; i++) { const k = (this.t * 2.5 + i / 4) % 1, s = k < 0.3 ? 1 : 2; l.fillStyle = k < 0.5 ? '#9aa3b5' : '#6b7285'; l.fillRect(x + 7 + Math.round(Math.sin(i * 3 + this.t * 6) * 2), y - 2 - Math.round(k * 12), s, s); }
+        l.fillStyle = Math.floor(this.t * 16) % 2 ? '#ffd84a' : '#5d6475'; for (const ox of [3, 7, 11]) l.fillRect(x + ox, y + 3, 1, 1);
+      }
       if (t.state === 'active' && t.reach) {
-        const H = t.reach * TILE, grow = Math.min(1, t.t / 0.08), fade = Math.min(1, (C.active - t.t) / 0.1);
-        const hh = H * grow * fade;
-        for (const [col, wid] of [['#ff5a2a', 1], ['#ff9a3c', 0.7], ['#ffe066', 0.38]]) {
-          ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x + 8 - 6 * wid, y);
-          for (let i = 0; i <= 6; i++) { const yy = y - hh * i / 6; ctx.lineTo(x + 8 - (6 - i * 0.6) * wid + Math.sin(this.t * 30 + i * 2) * 1.2, yy); }
-          ctx.lineTo(x + 8, y - hh - 4 * wid);
-          for (let i = 6; i >= 0; i--) { const yy = y - hh * i / 6; ctx.lineTo(x + 8 + (6 - i * 0.6) * wid + Math.sin(this.t * 27 + i * 3) * 1.2, yy); }
-          ctx.fill();
+        const H = t.reach * TILE, hh = Math.round(H * Math.min(1, t.t / 0.08) * Math.min(1, (C.active - t.t) / 0.1)), fr = Math.floor(this.t * 20);
+        for (let j = 0; j < hh + 4; j++) {
+          const along = j / (hh + 4);
+          const half = Math.max(0, Math.round(6 * (1 - along * 0.55) + Math.sin(j * 0.7 + fr) * 1.3 - (j > hh ? (j - hh) * 1.5 : 0)));
+          for (let i = -half; i <= half; i++) {
+            const e = Math.abs(i) / Math.max(1, half), n = hash(i + fr * 3, j + fr);
+            l.fillStyle = FIRE[Math.max(0, Math.min(4, Math.round(4 - e * 3 - along * 1.6 + (n - 0.5) * 1.2)))];
+            l.fillRect(x + 8 + i, y - 1 - j, 1, 1);
+          }
         }
+        if (Math.random() < 0.6) this.parts.push({ x: x + 8 + (Math.random() - 0.5) * 8, y: y - hh, vx: (Math.random() - 0.5) * 20, vy: -40 - Math.random() * 40, life: 0.3, size: 1, color: '#ffd84a', g: 0 });
       }
     }
   }
 
-  drawBall(b, th) {
-    const { ctx } = this;
-    ctx.fillStyle = '#ffffff55'; ctx.beginPath(); ctx.arc(b.x - Math.sign(b.vx) * 6, b.y, 3, 0, TAU); ctx.arc(b.x - Math.sign(b.vx) * 10, b.y, 2, 0, TAU); ctx.fill();
-    ctx.fillStyle = '#23262f'; ctx.strokeStyle = th.line; ctx.beginPath(); ctx.arc(b.x, b.y, 4.2, 0, TAU); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ffffff88'; ctx.beginPath(); ctx.arc(b.x - 1.3, b.y - 1.3, 1.2, 0, TAU); ctx.fill();
+  drawCrusher(t, x, w, y, warn, jig, th) {
+    const l = this.l, K = th.line, cy = y + Math.round(t.oy), X = x + jig;
+    for (const cx of [x + 4, x + w - 6]) for (let j = y - 3; j < cy; j += 3) { l.fillStyle = '#5d6475'; l.fillRect(cx, j, 2, 2); l.fillStyle = '#9aa3b5'; l.fillRect(cx, j, 1, 1); }
+    l.fillStyle = K; l.fillRect(X, cy, w, 16);
+    l.fillStyle = '#8b93a6'; l.fillRect(X + 1, cy + 1, w - 2, 12);
+    l.fillStyle = '#a7afc0'; l.fillRect(X + 1, cy + 1, w - 2, 1); l.fillRect(X + 1, cy + 1, 1, 11);
+    l.fillStyle = '#6b7285'; l.fillRect(X + 1, cy + 12, w - 2, 1); l.fillRect(X + w - 2, cy + 2, 1, 10);
+    for (let i = 0; i < w - 4; i += 7) { l.fillRect(X + i + 3, cy + (i % 14 ? 10 : 3), 2, 1); }
+    l.fillStyle = '#dfe6f0';
+    for (let i = 1; i < w - 1; i += 3) { l.fillRect(X + i, cy + 13, 2, 1); l.fillRect(X + i, cy + 14, 1, 1); }
+    const mad = warn || t.state === 'active', mx = X + Math.floor(w / 2);
+    for (const [ex, dir] of [[mx - 6, 1], [mx + 2, -1]]) {
+      l.fillStyle = K; l.fillRect(ex, cy + 4, 4, mad ? 5 : 4);
+      l.fillStyle = '#ffffff'; l.fillRect(ex + 1, cy + 5, 2, mad ? 3 : 2);
+      l.fillStyle = mad ? '#e8414f' : K; l.fillRect(ex + (dir > 0 ? 2 : 1), cy + 6, 1, 1);
+      l.fillStyle = K; l.fillRect(ex + (dir > 0 ? -1 : 2), cy + 2, 3, 1); l.fillRect(ex + (dir > 0 ? 2 : 0), cy + 3, 2, 1);
+    }
   }
 
-  drawPlayer(p, col, th, dt) {
-    const { ctx } = this;
-    this.squash = Math.max(0, this.squash - dt * 1.5);
-    const run = p.onGround && Math.abs(p.vx) > 10;
-    const stretch = p.onGround ? -this.squash : Math.max(-0.15, Math.min(0.22, -p.vy / 1800));
-    const sx = 1 - stretch * 0.6, sy = 1 + stretch;
-    const cx = p.x + PHYS.w / 2, by = p.y + PHYS.h;
-    const bob = run ? Math.abs(Math.sin(this.t * 18)) * 1.2 : Math.sin(this.t * 3) * 0.3;
-    ctx.save(); ctx.translate(cx, by); ctx.scale(sx, sy);
-    ctx.strokeStyle = th.line; ctx.lineWidth = 1.2;
-    // feet
-    const step = run ? Math.sin(this.t * 18) * 2.5 : 0;
-    ctx.fillStyle = col.dark;
-    if (p.onGround) { ctx.beginPath(); ctx.ellipse(-3 + step, -1, 2.3, 1.5, 0, 0, TAU); ctx.ellipse(3 - step, -1, 2.3, 1.5, 0, 0, TAU); ctx.fill(); }
-    else { ctx.beginPath(); ctx.ellipse(-3, -0.5, 2, 1.8, 0, 0, TAU); ctx.ellipse(3, -1.5, 2, 1.8, 0, 0, TAU); ctx.fill(); }
-    ctx.translate(0, -bob);
-    // leaves
-    const sway = Math.sin(this.t * 4) * 0.15 - p.vx / 900;
-    ctx.fillStyle = col.leaf;
-    for (const [a, l] of [[-0.5, 7], [0.1, 9], [0.65, 6.5]]) {
-      ctx.save(); ctx.translate(0, -13); ctx.rotate(a + sway); ctx.beginPath(); ctx.ellipse(0, -l / 2, 2.3, l / 2, 0, 0, TAU); ctx.fill(); ctx.stroke(); ctx.restore();
-    }
-    // body
-    ctx.fillStyle = col.body;
-    ctx.beginPath(); ctx.moveTo(0, -14.5);
-    ctx.bezierCurveTo(7.5, -14.5, 9, -7, 7, -3.5); ctx.bezierCurveTo(5.5, -1, 2.5, -0.5, 0, -0.5);
-    ctx.bezierCurveTo(-2.5, -0.5, -5.5, -1, -7, -3.5); ctx.bezierCurveTo(-9, -7, -7.5, -14.5, 0, -14.5);
-    ctx.fill(); ctx.stroke();
-    ctx.fillStyle = '#ffffff55'; ctx.beginPath(); ctx.ellipse(-3.8, -10.5, 1.4, 2.2, -0.4, 0, TAU); ctx.fill();
-    // face
-    this.blink -= dt; if (this.blink < -0.12) this.blink = 2 + Math.random() * 3;
-    const f = p.face, eyeY = -8.5, closed = this.blink < 0;
-    for (const ex of [-2.2, 2.2]) {
-      const x = ex + f * 1.6;
-      if (closed) { ctx.beginPath(); ctx.moveTo(x - 1.4, eyeY); ctx.lineTo(x + 1.4, eyeY); ctx.stroke(); continue; }
-      ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(x, eyeY, 1.7, 2.1, 0, 0, TAU); ctx.fill();
-      ctx.fillStyle = '#1b1320'; ctx.beginPath(); ctx.arc(x + f * 0.6, eyeY + (p.vy > 50 ? 0.6 : 0), 1, 0, TAU); ctx.fill();
-    }
-    ctx.fillStyle = '#ff8fb066'; ctx.beginPath(); ctx.arc(-4 + f * 1.5, -5.3, 1.2, 0, TAU); ctx.arc(4 + f * 1.5, -5.3, 1.2, 0, TAU); ctx.fill();
-    ctx.beginPath(); ctx.strokeStyle = '#1b1320'; ctx.lineWidth = 0.8;
-    if (!p.onGround && p.vy > 120) ctx.arc(f * 1.6, -4.6, 1, 0, TAU); else ctx.arc(f * 1.6, -5.6, 1.4, 0.2, Math.PI - 0.2);
-    ctx.stroke();
-    ctx.restore();
+  drawPlayer(p, ch, dt) {
+    let frame = 'idle', bob = 0;
+    if (!p.onGround) frame = p.vy < 0 ? 'jump' : 'fall';
+    else if (Math.abs(p.vx) > 12) { this.anim += Math.abs(p.vx) * dt / 9; frame = ['run0', 'run1', 'run2', 'run1'][Math.floor(this.anim) % 4]; bob = frame === 'run1' ? 1 : 0; }
+    else bob = Math.floor(this.t * 2) % 2;
+    this.l.drawImage(charFrame(ch, frame, p.face, bob), Math.round(p.x + PHYS.w / 2 - 6), Math.round(p.y + PHYS.h - 16));
   }
 
   drawParticles(dt) {
-    const { ctx } = this;
+    const l = this.l;
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const q = this.parts[i];
       q.life -= dt; if (q.life <= 0) { this.parts.splice(i, 1); continue; }
       q.vy += (q.g || 0) * dt; q.x += q.vx * dt; q.y += q.vy * dt;
-      ctx.fillStyle = q.color; ctx.globalAlpha = Math.min(1, q.life * 3);
-      if (q.spin) { ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.life * 8); ctx.fillRect(-q.size / 2, -q.size / 4, q.size, q.size / 2); ctx.restore(); }
-      else { ctx.beginPath(); ctx.arc(q.x, q.y, q.size / 2, 0, TAU); ctx.fill(); }
+      if (q.flicker && q.life < 0.4 && Math.floor(q.life * 20) % 2) continue;
+      l.fillStyle = q.color; l.fillRect(Math.round(q.x), Math.round(q.y), q.size, q.size);
     }
-    ctx.globalAlpha = 1;
   }
 
-  // Trapper: a round button over every trap, filling up while it cools down.
+  // ---------- trap buttons (trapper) and cooldown dials (runner)
   trapButton(world, t) {
     const x = (t.x0 + t.x1 + 1) * TILE / 2;
     let y = t.y * TILE - 12;
-    if (t.kind === 'crusher') y = t.y * TILE + 8;
-    if (t.kind === 'trapdoor') y = t.y * TILE + 16;
-    if (t.kind === 'cannon') y = t.y * TILE - 10;
-    if (t.kind === 'flame') y = t.y * TILE + 9;
+    if (t.kind === 'crusher') y = t.y * TILE - 9;
+    if (t.kind === 'trapdoor') y = t.y * TILE + 17;
+    if (t.kind === 'cannon') y = t.y * TILE - 6;
+    if (t.kind === 'flame') y = t.y * TILE + 10;
     return { x, y, r: 7 };
   }
 
-  drawTrapButtons(world, o, th, mini) {
-    const { ctx } = this;
+  dial(cx, cy, r, frac, bg, fg, ring) {
+    const l = this.l;
+    for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
+      const d = Math.hypot(i, j);
+      if (d > r + 0.3) continue;
+      let col = bg;
+      if (d > r - 0.9) col = ring;
+      else if (frac > 0) { let a = Math.atan2(i, -j); if (a < 0) a += TAU; if (a / TAU <= frac) col = fg; }
+      l.fillStyle = col; l.fillRect(cx + i, cy + j, 1, 1);
+    }
+  }
+
+  drawTrapButtons(world, o, mini) {
+    const l = this.l, W = this.lo.width, H = this.lo.height;
     for (const t of world.traps) {
-      const b = this.trapButton(world, t), C = TRAPS[t.kind];
-      if (b.x < this.cam.x - 20 || b.x > this.cam.x + this.vwW + 20 || b.y < this.cam.y - 20 || b.y > this.cam.y + this.vhW + 20) continue;
-      const ready = t.state === 'idle' && t.cd <= 0, hover = o.hover === t.id, pend = o.pending && o.pending[t.id] > 0;
-      const blocked = ready && world.lock > 0;
-      const pulse = ready && !blocked ? 1 + Math.sin(this.t * 6) * 0.06 : 1;
-      if (mini) {   // the runner sees a small cooldown dial too, so they can time their dash
-        if (ready) continue;
-        ctx.save(); ctx.translate(b.x, b.y); ctx.globalAlpha = 0.75;
-        ctx.fillStyle = '#3b3f52'; ctx.beginPath(); ctx.arc(0, 0, 3.5, 0, TAU); ctx.fill();
-        ctx.fillStyle = '#9ff0a0'; ctx.beginPath(); ctx.moveTo(0, 0); ctx.arc(0, 0, 3, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - t.cd / C.cd)); ctx.closePath(); ctx.fill();
-        ctx.restore(); continue;
-      }
-      ctx.save(); ctx.translate(b.x, b.y); ctx.scale(pulse * (hover ? 1.15 : 1), pulse * (hover ? 1.15 : 1));
-      ctx.globalAlpha = ready ? 0.95 : 0.8;
-      ctx.fillStyle = ready ? (blocked ? '#ffb070' : '#ff4d6d') : '#3b3f52';
-      ctx.strokeStyle = '#1b1320'; ctx.lineWidth = 1.2;
-      ctx.beginPath(); ctx.arc(0, 0, b.r, 0, TAU); ctx.fill(); ctx.stroke();
-      if (!ready && t.cd > 0) {
-        ctx.fillStyle = '#ffffff55'; ctx.beginPath(); ctx.moveTo(0, 0);
-        ctx.arc(0, 0, b.r - 1.5, -Math.PI / 2, -Math.PI / 2 + TAU * (1 - t.cd / C.cd)); ctx.closePath(); ctx.fill();
-      }
-      if (pend) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(0, 0, b.r + 2, 0, TAU); ctx.stroke(); }
-      ctx.fillStyle = '#fff'; ctx.font = '700 8px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(ready ? TRAP_ICON[t.kind] : (t.cd > 0 ? Math.ceil(t.cd) : '…'), 0, 0.5);
-      ctx.restore();
+      const b = this.trapButton(world, t), C = TRAPS[t.kind], bx = Math.round(b.x), by = Math.round(b.y);
+      if (bx < this.camX - 12 || bx > this.camX + W + 12 || by < this.camY - 12 || by > this.camY + H + 12) continue;
+      const ready = t.state === 'idle' && t.cd <= 0, frac = ready ? 0 : 1 - t.cd / C.cd;
+      if (mini) { if (!ready) this.dial(bx, by, 3, frac, '#3b3f52', '#7bd65a', '#1c1424'); continue; }
+      const hover = o.hover === t.id, pend = o.pending && o.pending[t.id] > 0, blocked = ready && world.lock > 0;
+      const pulse = ready && !blocked && Math.floor(this.t * 3) % 2 === 0, r = hover ? 8 : 7;
+      if (ready) this.dial(bx, by + 1, r, 0, '#1c1424', '#1c1424', '#1c1424');
+      this.dial(bx, by, r, frac, ready ? (blocked ? '#ff9a3c' : '#e8414f') : '#3b3f52', '#8b93a6', pend || pulse ? '#ffffff' : '#1c1424');
+      if (ready) { l.fillStyle = blocked ? '#ffc488' : '#ff8a96'; l.fillRect(bx - 3, by - r + 2, 3, 1); l.drawImage(SPR.icon[t.kind], bx - 3, by - 3); }
+      else drawDigits(l, Math.ceil(t.cd) || 0, bx - 1, by - 2, '#ffffff');
     }
   }
 }

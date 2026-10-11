@@ -1,0 +1,13 @@
+<!doctype html><meta charset="utf-8"><style>body{margin:0;background:#7fd3ff}canvas{image-rendering:pixelated;display:block}</style><canvas id=c></canvas>
+<script type="module">
+import { CHARS, charFrame, initSprites, SPR } from '../src/sprites.js';
+initSprites();
+const c = document.getElementById('c'), x = c.getContext('2d'), S = 6;
+c.width = 1200; c.height = 900; x.imageSmoothingEnabled = false;
+const frames = ['idle', 'run0', 'run1', 'run2', 'jump', 'fall'];
+CHARS.forEach((ch, j) => frames.forEach((f, i) => { x.drawImage(charFrame(ch, f, 1, 0), 10 + i * 16 * S, 10 + j * 17 * S, 12 * S, 16 * S); }));
+x.drawImage(charFrame(CHARS[0], 'idle', -1), 10 + 6 * 16 * S, 10, 12 * S, 16 * S);
+let px = 10, py = 10 + 6 * 17 * S;
+for (const k of ['spike', 'popSpike', 'plank', 'oneway', 'cannon', 'ball', 'nozzle', 'spring0', 'spring1', 'flagOff0', 'flagOn1', 'goal0']) { const s = SPR[k]; x.drawImage(s, px, py, s.width * 4, s.height * 4); px += s.width * 4 + 8; }
+window.ready = true;
+</script>
