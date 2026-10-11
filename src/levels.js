@@ -3,7 +3,8 @@
 //   S  start           C  checkpoint            G  goal flag
 //   Traps the trapper can fire (side-by-side tiles of the same letter are one trap):
 //   P  pop-up spikes   T  trapdoor              X  crusher (falls down)    F  flame jet (shoots up)
-//   <  >  cannon facing left / right
+//   <  >  cannon facing left / right    {  }  arrow turret facing left / right
+//   U  pop-up wall (rises two tiles)     W  fan (blows upward)      v  ceiling spikes (always out)
 function build(w, h, fn) {
   const g = Array.from({ length: h }, () => Array(w).fill('.'));
   const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < w && y < h) g[y][x] = c; };
@@ -34,8 +35,8 @@ export const LEVELS = [
       rect(0, 0, 0, 19); rect(119, 0, 119, 19);
       ground(1, 8, 16); set(3, 15, 'S');
       ground(11, 12, 15); ground(15, 16, 14); ground(19, 20, 13); row(19, 20, 12, 'P');
-      ground(23, 30, 13); set(30, 12, '<');
-      ground(34, 40, 15); set(36, 14, 'C');
+      ground(23, 30, 13); set(30, 12, '{');
+      ground(34, 40, 15); set(36, 14, 'C'); set(39, 14, 'U');
       row(42, 44, 13, '='); row(46, 48, 11, '='); row(50, 52, 9, '=');
       ground(54, 62, 9); rect(56, 0, 59, 2); row(57, 58, 3, 'X'); set(61, 9, 'F');
       ground(63, 65, 16); row(66, 69, 16, 'T'); ground(70, 81, 16); row(73, 74, 15, '^'); set(78, 15, 'C');
@@ -77,7 +78,7 @@ export const LEVELS = [
     map: build(150, 20, ({ set, rect, ground, row }) => {
       rect(0, 0, 0, 19); rect(149, 0, 149, 19);
       ground(1, 10, 16); set(3, 15, 'S'); row(6, 8, 15, 'P');
-      ground(14, 30, 16); set(30, 15, '<');
+      ground(14, 30, 16); set(30, 15, '{');
       row(31, 34, 16, 'T'); ground(35, 44, 16);
       rect(36, 7, 43, 9); row(37, 38, 10, 'X'); row(41, 42, 10, 'X'); set(44, 15, 'C');
       ground(46, 50, 14); ground(51, 55, 12); set(53, 12, 'F'); ground(56, 60, 10);
@@ -88,6 +89,19 @@ export const LEVELS = [
       ground(105, 130, 16); rect(109, 0, 112, 8); row(110, 111, 9, 'X');
       set(116, 16, 'F'); set(120, 16, 'F'); set(124, 15, '^'); set(127, 15, 'C');
       row(131, 135, 16, 'T'); ground(136, 148, 16); set(144, 15, 'G'); set(148, 15, '<');
+    }),
+  },
+  {
+    id: 'windy', name: 'Windy Works', theme: 'sunset',
+    map: build(100, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(99, 0, 99, 17);
+      ground(1, 40, 14); set(3, 13, 'S'); set(11, 13, 'U'); set(16, 13, '{');
+      rect(20, 5, 29, 8); row(20, 29, 9, 'v'); row(23, 25, 14, 'W');
+      set(32, 13, 'C'); row(36, 37, 13, 'P');
+      row(41, 44, 14, 'T');
+      ground(45, 98, 14); row(47, 48, 13, 'P'); set(51, 13, 'U'); set(55, 13, 'U'); set(60, 13, '{');
+      set(63, 13, 'C'); rect(66, 5, 72, 8); row(66, 72, 9, 'v'); row(68, 69, 14, 'W');
+      set(77, 13, 'U'); row(81, 83, 13, 'P'); set(94, 13, 'G'); set(98, 13, '{');
     }),
   },
 ];

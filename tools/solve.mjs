@@ -25,6 +25,7 @@ function solve(level) {
     for (const a of ACTIONS) {
       if (a.jump === 2 && n.p.vy >= 0) continue;
       w.player = { ...n.p, cp: { ...n.p.cp } };
+      w.gad.runner.feather.n = 0;   // levels must be beatable without gadgets
       let ok = true;
       for (let i = 0; i < CHUNK; i++) {
         w.step(DT, { left: a.dir < 0, right: a.dir > 0, jump: a.jump > 0, jumpPressed: a.jump === 1 && i === 0 });

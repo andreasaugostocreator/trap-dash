@@ -1,7 +1,7 @@
 // Screens, the party flow and the game loop.
 // A match is played level by level: each player gets one run as the runner while the other works the traps,
 // then the faster runner wins the level. Online, the runner's device runs the world and streams it to the trapper.
-import { DT, TIME_LIMIT, TILE, TRAPS } from './config.js';
+import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS } from './config.js';
 import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS } from './levels.js';
@@ -158,6 +158,8 @@ net.onMessage = m => {
     startRun(m.level, m.runner, m.n);
   } else if (m.t === 'snap' && run && !run.simOwner) {
     receiveSnap(m);
+  } else if (m.t === 'gad' && run && run.simOwner && run.phase === 'play') {
+    run.world.useGadget('trapper', m.id, m.x, m.y);
   } else if (m.t === 'act' && run && run.simOwner && run.phase === 'play') {
     run.world.trigger(m.id);
   } else if (m.t === 'done' && run && !run.simOwner) {
@@ -271,8 +273,16 @@ addEventListener('keydown', e => {
   keys.add(e.code);
   if (run && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'Escape' && run) togglePause();
-  const n = /^(Digit|Numpad)([1-5])$/.exec(e.code);
-  if (n && run && run.trapperHere && run.kinds[+n[2] - 1]) fireKind(run.kinds[+n[2] - 1]);
+  if (!run || e.repeat) return;
+  const n = /^(Digit|Numpad)([0-9])$/.exec(e.code);
+  if (n && run.trapperHere) {
+    const d = +n[2];
+    if (d >= 1 && d <= 6 && run.kinds[d - 1]) fireKind(run.kinds[d - 1]);
+    const gid = { 7: 'bolt', 8: 'glue', 9: 'gust', 0: 'hex' }[d];
+    if (gid) useTrapperGadget(gid, GADGETS.trapper[gid].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
+  }
+  const rg = { ShiftLeft: 'dash', ShiftRight: 'dash', KeyQ: 'shield', KeyE: 'jam' }[e.code];
+  if (rg && run.runnerHere) useRunnerGadget(rg);
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -317,14 +327,22 @@ function trapAt(cx, cy) {
   }
   return best;
 }
+let pointer = null;   // last mouse position over the game, for aiming gadgets with the keyboard
+canvas.addEventListener('pointerleave', () => { pointer = null; });
 canvas.addEventListener('pointerdown', e => {
   unlockAudio();
   if (!run || !run.trapperHere || run.phase !== 'play') return;
+  if (run.aim) { useTrapperGadget(run.aim.id, R.toWorld(e.clientX, e.clientY)); return; }
   const id = trapAt(e.clientX, e.clientY);
   if (id < 0) return;
   fireTrap(id);
 });
-canvas.addEventListener('pointermove', e => { if (run && run.trapperHere && e.pointerType === 'mouse') run.hover = trapAt(e.clientX, e.clientY); });
+canvas.addEventListener('pointermove', e => {
+  if (e.pointerType === 'mouse') pointer = { x: e.clientX, y: e.clientY };
+  if (!run || !run.trapperHere) return;
+  if (e.pointerType === 'mouse') run.hover = trapAt(e.clientX, e.clientY);
+  if (run.aim) Object.assign(run.aim, R.toWorld(e.clientX, e.clientY));
+});
 
 function fireTrap(id) {
   const w = run.world, t = w.traps[id];
@@ -336,7 +354,7 @@ function fireTrap(id) {
 
 // ---------- the trap bar: one fixed button per kind of trap, aimed at the runner
 // Each button fires the trap of its kind that is on screen and closest to the runner (preferring traps ahead).
-const KIND_ORDER = ['spikes', 'trapdoor', 'cannon', 'crusher', 'flame'];
+const KIND_ORDER = ['spikes', 'trapdoor', 'wall', 'cannon', 'arrows', 'crusher', 'flame', 'fan'];
 function pickTarget(world, kind) {
   const p = world.player, px = p.x + 5, py = p.y + 6, W = R.lo.width, H = R.lo.height;
   let best = null, bestReady = null, bs = 1e9, brs = 1e9;
@@ -369,7 +387,7 @@ function buildTrapBar() {
     ic.getContext('2d').drawImage(SPR.icon[k], 0, 0);
     b.innerHTML = `<span class="cool"></span><span class="secs"></span>`;
     b.prepend(ic);
-    const lab = document.createElement('small'); lab.textContent = (touchDevice ? '' : (i + 1) + ' ') + TRAPS[k].name; b.appendChild(lab);
+    const lab = document.createElement('small'); lab.textContent = (touchDevice || i > 5 ? '' : (i + 1) + ' ') + TRAPS[k].name; b.appendChild(lab);
     b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireKind(k); });
     bar.appendChild(b);
   });
@@ -381,12 +399,70 @@ function updateTrapBar() {
     const k = b.dataset.kind, t = pickTarget(w, k), C = TRAPS[k];
     run.targets[k] = t;
     const ready = t && t.state === 'idle' && t.cd <= 0, pend = t && run.pending[t.id] > 0;
-    const state = !t ? 'none' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
+    const state = !t ? 'none' : w.jam > 0 ? 'jam' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
     if (b.dataset.state !== state) b.dataset.state = state;
     b.style.setProperty('--cd', t && !ready ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
     const secs = t && !ready && t.cd > 0 ? Math.ceil(t.cd) : '';
     if (b.lastChild.previousSibling.textContent != secs) b.lastChild.previousSibling.textContent = secs;
   }
+}
+
+// ---------- gadgets: the trapper's (left column) and the runner's (above the jump button / bottom left on PC)
+const T_GAD = Object.keys(GADGETS.trapper), R_GAD = ['dash', 'shield', 'jam'];
+const T_KEY = { bolt: '7', glue: '8', gust: '9', hex: '0' }, R_KEY = { dash: 'Shift', shield: 'Q', jam: 'E' };
+function gadgetButton(id, side, onPress) {
+  const b = document.createElement('button');
+  b.className = 'gbtn ' + side; b.dataset.id = id;
+  const ic = document.createElement('canvas'); ic.width = ic.height = 7; ic.className = 'pix';
+  ic.getContext('2d').drawImage(SPR.icon[id], 0, 0);
+  b.innerHTML = '<span class="cool"></span><span class="secs"></span><i class="badge"></i>';
+  b.prepend(ic);
+  const lab = document.createElement('small');
+  lab.textContent = (touchDevice ? '' : (side === 'trapper' ? T_KEY : R_KEY)[id] + ' ') + GADGETS[side][id].name;
+  b.appendChild(lab);
+  if (onPress) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); unlockAudio(); if (run) onPress(id); });
+  return b;
+}
+function buildGadgets() {
+  const gb = $('gadbar'), rb = $('rgad');
+  gb.innerHTML = ''; rb.innerHTML = '';
+  if (run.trapperHere) for (const id of T_GAD) gb.appendChild(gadgetButton(id, 'trapper', id => useTrapperGadget(id)));
+  if (run.runnerHere) { for (const id of R_GAD) rb.appendChild(gadgetButton(id, 'runner', useRunnerGadget)); rb.appendChild(gadgetButton('feather', 'runner', null)); }
+  gb.classList.toggle('hidden', !run.trapperHere);
+  rb.classList.toggle('hidden', !run.runnerHere);
+  rb.classList.toggle('touchy', touchDevice);
+}
+function updateGadgets() {
+  const w = run.world;
+  for (const [bar, side] of [['gadbar', 'trapper'], ['rgad', 'runner']]) for (const b of $(bar).children) {
+    const id = b.dataset.id, g = w.gad[side][id], def = GADGETS[side][id];
+    const state = g.n === 0 ? 'none' : side === 'trapper' && w.jam > 0 ? 'jam' : run.aim && run.aim.id === id ? 'aim' : g.cd > 0 ? 'cool' : def.passive ? 'passive' : 'ready';
+    if (b.dataset.state !== state) b.dataset.state = state;
+    b.style.setProperty('--cd', g.cd > 0 && def.cd ? Math.min(1, g.cd / def.cd).toFixed(3) : 0);
+    const secs = g.cd > 0 && g.n !== 0 ? Math.ceil(g.cd) : '', badge = g.n < 0 ? '' : g.n;
+    const [cool, secsEl, badgeEl] = b.querySelectorAll('.cool, .secs, .badge');
+    if (secsEl.textContent != secs) secsEl.textContent = secs;
+    if (badgeEl.textContent != badge) badgeEl.textContent = badge;
+  }
+}
+function useTrapperGadget(id, at) {
+  const w = run.world, def = GADGETS.trapper[id], g = w.gad.trapper[id];
+  if (run.phase !== 'play' || g.n === 0 || g.cd > 0 || w.jam > 0) { sfx.denied(); return; }
+  if (def.aim && !at) {   // pick a spot: the next tap / click on the map
+    if (run.aim && run.aim.id === id) { run.aim = null; return; }
+    run.aim = { id, x: w.player.x + 40 * (w.player.face || 1), y: w.player.y };
+    $('hint').textContent = touchDevice ? `Tap where the ${def.name.toLowerCase()} should go` : `Click where the ${def.name.toLowerCase()} should go`;
+    $('hint').classList.remove('hidden'); run.hintT = 2.5; sfx.click();
+    return;
+  }
+  run.aim = null;
+  const x = at ? Math.round(at.x) : 0, y = at ? Math.round(at.y) : 0;
+  if (run.simOwner) { if (!w.useGadget('trapper', id, x, y)) sfx.denied(); }
+  else { net.send({ t: 'gad', id, x, y }); g.cd = def.cd; if (g.n > 0) g.n--; sfx.click(); }
+}
+function useRunnerGadget(id) {
+  if (!run.runnerHere || run.phase !== 'play') return;
+  if (!run.world.useGadget('runner', id)) sfx.denied();
 }
 
 // ---------- a run
@@ -409,9 +485,10 @@ function startRun(level, runner, n) {
   else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
   $('touch').classList.toggle('hidden', !(touchDevice && runnerHere));
   buildTrapBar();
-  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-5)'}`
-    : runnerHere ? (touchDevice ? 'Reach the flag! The dials show when traps are recharging.' : 'Reach the flag! ← → to run, Space to jump. Dials show trap cooldowns.')
-      : (touchDevice ? 'Use the trap buttons at the bottom. Each fires the nearest trap of that kind.' : 'Press 1-5 or click the buttons at the bottom. Each fires the nearest trap of that kind.');
+  buildGadgets();
+  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-6, gadgets 7-0)'}`
+    : runnerHere ? (touchDevice ? 'Reach the flag! Your gadgets are above the jump button.' : 'Reach the flag! ← → run, Space jump. Shift dash, Q shield, E jammer.')
+      : (touchDevice ? 'Trap buttons at the bottom, gadgets on the left.' : 'Keys 1-6 fire traps, 7-0 gadgets (aimed at your mouse). Or click the buttons.');
   $('hint').textContent = hint; $('hint').classList.remove('hidden');
   input.jumpQueued = false;
   startMusic();
@@ -432,7 +509,8 @@ function finishRun(res) {
   run.phase = 'end';
   if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
   runs.push(res);
-  $('touch').classList.add('hidden'); $('hint').classList.add('hidden'); $('trapbar').classList.add('hidden');
+  for (const id of ['touch', 'hint', 'trapbar', 'gadbar', 'rgad']) $(id).classList.add('hidden');
+  run.aim = null;
   setTimeout(() => showRunResult(res), res.finished ? 300 : 0);
 }
 
@@ -494,7 +572,7 @@ function showRunResult(res) {
 
 function endRunView() {
   run = null; hidePanel();
-  for (const id of ['hud', 'hint', 'count', 'touch', 'rotate', 'trapbar']) $(id).classList.add('hidden');
+  for (const id of ['hud', 'hint', 'count', 'touch', 'rotate', 'trapbar', 'gadbar', 'rgad']) $(id).classList.add('hidden');
 }
 
 function panel(html) {
@@ -577,11 +655,12 @@ function tick(dt, now) {
       const k = Math.max(0, Math.min(1, (t - a.at) / (b.at - a.at)));
       w.player.x = a.x + (b.x - a.x) * k; w.player.y = a.y + (b.y - a.y) * k;
     }
-    for (const ball of w.balls) ball.x += ball.vx * dt;
+    for (const shot of w.shots) shot.x += shot.vx * dt;
   }
   R.follow(w, dt, run.trapperHere && !run.runnerHere, false, run.trapperHere);
+  updateGadgets();
   if (run.trapperHere) { updateTrapBar(); const bar = $('trapbar').getBoundingClientRect(); R.bottomPad = Math.ceil((innerHeight - bar.top + 6) * R.dpr / R.k); }
-  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, debug: DEBUG });
+  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, debug: DEBUG });
   const left = TIME_LIMIT - w.time;
   $('timer').textContent = w.time.toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = w.player.deaths;

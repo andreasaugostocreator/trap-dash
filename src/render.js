@@ -1,7 +1,7 @@
 // Pixel-art renderer. The world is drawn 1:1 onto a small canvas (1 canvas pixel = 1 world pixel),
 // which is then scaled up by a whole number with smoothing off, so every pixel stays crisp.
-import { TILE, PHYS, TRAPS } from './config.js';
-import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE } from './sim.js';
+import { TILE, PHYS, TRAPS, GADGETS } from './config.js';
+import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE, TURRET, FAN, CEILSPIKE } from './sim.js';
 import { THEMES } from './levels.js';
 import { SPR, initSprites, charFrame, mirror, drawDigits } from './sprites.js';
 
@@ -78,6 +78,13 @@ export class Renderer {
     if (k === 'thud') { this.shake = Math.max(this.shake, 0.18); dust(12, 80, '#d8d2c8'); }
     if (k === 'fire' && extra === 'cannon') { this.shake = Math.max(this.shake, 0.05); P(6, () => ({ x, y: y + 7, vx: (Math.random() - 0.5) * 60, vy: -Math.random() * 40, life: 0.35, size: 2, color: '#c8c8d0', g: -20 })); }
     if (k === 'spring') this.springT[x + ',' + y] = this.t;
+    if (k === 'airjump') P(8, i => ({ x: x + (i - 3.5) * 2, y, vx: (i - 3.5) * 12, vy: 30, life: 0.3, size: 1, color: '#ffffff', g: 0 }));
+    if (k === 'zap') { this.shake = Math.max(this.shake, 0.2); this.flash = 0.12; }
+    if (k === 'stun') P(10, () => ({ x, y, vx: (Math.random() - 0.5) * 80, vy: -Math.random() * 60, life: 0.4, size: 1, color: '#ffd84a', g: 100 }));
+    if (k === 'block') P(16, i => { const a = i / 16 * TAU; return { x: x + Math.cos(a) * 11, y: y + Math.sin(a) * 11, vx: Math.cos(a) * 60, vy: Math.sin(a) * 60, life: 0.35, size: 1, color: '#8fe8ff', g: 0 }; });
+    if (k === 'gadget' && extra === 'dash') dust(6, 40);
+    if (k === 'gadget' && extra === 'jam') P(20, () => ({ x, y, vx: (Math.random() - 0.5) * 200, vy: (Math.random() - 0.5) * 200, life: 0.4, size: 1, color: '#6ff7ff', g: 0 }));
+    if (k === 'gadget' && extra === 'glue') P(10, () => ({ x, y: y - 2, vx: (Math.random() - 0.5) * 60, vy: -Math.random() * 60, life: 0.4, size: 2, color: '#56c24e', g: 300 }));
   }
 
   draw(world, o) {
@@ -96,15 +103,20 @@ export class Renderer {
     }
     this.drawProps(world);
     for (const t of world.traps) this.drawTrap(t, th);
-    for (const b of world.balls) {
+    this.drawGlue(world);
+    for (const b of world.shots) {
+      if (b.kind === 'arrows') { l.drawImage(b.vx > 0 ? SPR.arrow : mirror(SPR.arrow, 'arrowL'), Math.round(b.x) - 5, Math.round(b.y) - 1); continue; }
       l.drawImage(SPR.ball, Math.round(b.x) - 4, Math.round(b.y) - 4);
       l.fillStyle = '#ffffff88'; l.fillRect(Math.round(b.x - Math.sign(b.vx) * (7 + (Math.floor(this.t * 20) % 2) * 3)), Math.round(b.y) - 1, 2, 2);
     }
     if (!world.player.dead) this.drawPlayer(world.player, o.colors, dt);
+    this.drawBolts(world);
+    if (o.aim) this.drawAim(world, o.aim);
     this.drawParticles(dt);
     this.drawTrapButtons(world, o, !o.trapper);
     if (o.debug) { l.strokeStyle = 'red'; l.lineWidth = 1; for (const d of world.dangers()) l.strokeRect(Math.round(d.x) + 0.5, Math.round(d.y) + 0.5, d.w - 1, d.h - 1); }
     l.restore();
+    if (this.flash > 0) { this.flash -= dt; l.fillStyle = '#ffffff55'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     const ctx = this.ctx; ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.lo, 0, 0, this.lo.width * this.k, this.lo.height * this.k);
   }
@@ -225,7 +237,7 @@ export class Renderer {
   levelCanvas(world, th) {
     if (this.levelCache && this.levelCache.world === world) return this.levelCache.c;
     const c = canvasOf(world.w * TILE, world.h * TILE), x = c.getContext('2d');
-    const isGround = (i, j) => { const t = world.tile(i, j); return t === SOLID || t === NOZZLE || t === SPRING; };
+    const isGround = (i, j) => { const t = world.tile(i, j); return t === SOLID || t === NOZZLE || t === SPRING || t === FAN; };
     const D = th.dirt, G = th.grass, line = th.line;
     const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
     for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
@@ -253,13 +265,16 @@ export class Renderer {
         if (L) x.fillRect(X, Y, 1, 16); if (R) x.fillRect(X + 15, Y, 1, 16); if (B) x.fillRect(X, Y + 15, 16, 1);
       } else if (t === ONEWAY) x.drawImage(SPR.oneway, X, Y);
       else if (t === SPIKE) x.drawImage(SPR.spike, X, Y);
+      else if (t === CEILSPIKE) { x.save(); x.translate(X, Y + 16); x.scale(1, -1); x.drawImage(SPR.spike, 0, 0); x.restore(); }
       else if (t === NOZZLE) x.drawImage(SPR.nozzle, X, Y);
+      else if (t === FAN) x.drawImage(SPR.fan, X, Y);
+      else if (t === TURRET) { /* drawn with its trap */ }
     }
     // grass caps on exposed tops; blades poke a little into the tile above
     for (let ty = 1; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
       if (world.tile(tx, ty) !== SOLID) continue;
       const above = world.tile(tx, ty - 1);
-      if (above === SOLID || above === NOZZLE || above === SPRING) continue;
+      if (above === SOLID || above === NOZZLE || above === SPRING || above === FAN) continue;
       const X = tx * TILE, Y = ty * TILE, L = !isGround(tx - 1, ty), R = !isGround(tx + 1, ty);
       for (let i = 0; i < 16; i++) {
         const gx = X + i, tip = hash(gx, 7) < 0.3 ? 2 : hash(gx, 8) < 0.5 ? 1 : 0, depth = 4 + Math.floor(hash(gx, 9) * 3);
@@ -318,6 +333,26 @@ export class Renderer {
       if (t.state === 'idle' && t.cd > C.cd - 0.08) { l.fillStyle = '#fff6c8'; l.fillRect(t.dir > 0 ? x + 16 : x - 3, y + 6, 3, 4); }
     } else if (t.kind === 'crusher') {
       this.drawCrusher(t, x, w, y, warn, jig, th);
+    } else if (t.kind === 'arrows') {
+      const recoil = t.state === 'idle' && t.cd > C.cd - 0.1 ? -t.dir : 0;
+      l.drawImage(t.dir > 0 ? SPR.turret : mirror(SPR.turret, 'turretL'), x + recoil, y);
+      if (warn) { l.fillStyle = Math.floor(this.t * 30) % 2 ? '#ffd84a' : '#ffffff'; l.fillRect(t.dir > 0 ? x + 15 : x, y + 7, 1, 1); }
+    } else if (t.kind === 'wall') {
+      const up = t.state === 'active' ? Math.min(1, t.t / 0.08) : 0, h = Math.round(32 * up);
+      if (warn) { l.fillStyle = '#9aa3b5'; for (let i = 0; i < 4; i++) l.fillRect(x + 2 + i * 4 + jig, y + 13 + (i % 2), 2, 1); }
+      l.fillStyle = '#5d6475'; l.fillRect(x + 1, y + 14, 14, 2); l.fillStyle = th.line; l.fillRect(x + 1, y + 15, 14, 1);
+      if (h > 0) {
+        const top = y + 16 - h;
+        l.fillStyle = th.line; l.fillRect(x + 1, top, 14, h);
+        l.fillStyle = '#9aa3b5'; l.fillRect(x + 2, top + 1, 12, h - 2);
+        l.fillStyle = '#c3c9d6'; l.fillRect(x + 2, top + 1, 12, 1);
+        l.fillStyle = '#6b7285'; for (let j = top + 5; j < y + 15; j += 5) { l.fillRect(x + 2, j, 12, 1); l.fillRect(x + ((j / 5) % 2 ? 7 : 4), j - 4, 1, 4); }
+        l.fillStyle = '#dfe6f0'; for (let i = x + 2; i < x + 14; i += 3) l.fillRect(i, top - 1, 2, 1);
+      }
+    } else if (t.kind === 'fan') {
+      const spin = t.state === 'active' ? Math.floor(this.t * 30) % 2 : t.state === 'warn' ? Math.floor(this.t * 10) % 2 : 0;
+      for (let i = 0; i < w; i += 16) { l.fillStyle = spin ? '#9aa3b5' : '#2f3340'; l.fillRect(x + i + 4, y + 4, 8, 1); }
+      if (t.state === 'active' && t.reach && Math.random() < 0.8) this.parts.push({ x: x + 2 + Math.random() * (w - 4), y: y - 1, vx: 0, vy: -180 - Math.random() * 80, life: t.reach * TILE / 220, size: 1, color: '#ffffffaa', g: 0 });
     } else if (t.kind === 'flame') {
       if (warn) {
         for (let i = 0; i < 4; i++) { const k = (this.t * 2.5 + i / 4) % 1, s = k < 0.3 ? 1 : 2; l.fillStyle = k < 0.5 ? '#9aa3b5' : '#6b7285'; l.fillRect(x + 7 + Math.round(Math.sin(i * 3 + this.t * 6) * 2), y - 2 - Math.round(k * 12), s, s); }
@@ -363,7 +398,67 @@ export class Renderer {
     if (!p.onGround) frame = p.vy < 0 ? 'jump' : 'fall';
     else if (Math.abs(p.vx) > 12) { this.anim += Math.abs(p.vx) * dt / 9; frame = ['run0', 'run1', 'run2', 'run1'][Math.floor(this.anim) % 4]; bob = frame === 'run1' ? 1 : 0; }
     else bob = Math.floor(this.t * 2) % 2;
-    this.l.drawImage(charFrame(ch, frame, p.face, bob), Math.round(p.x + PHYS.w / 2 - 6), Math.round(p.y + PHYS.h - 16));
+    const l = this.l, X = Math.round(p.x + PHYS.w / 2), Y = Math.round(p.y + PHYS.h);
+    if (p.dash > 0 || Math.abs(p.vx) > PHYS.maxRun * 1.3) for (let i = 1; i <= 2; i++) { l.globalAlpha = 0.35 / i; l.drawImage(charFrame(ch, frame, p.face, bob), X - 6 - p.face * i * 6, Y - 16); l.globalAlpha = 1; }
+    if (p.inv > 0 && Math.floor(this.t * 20) % 2) return;
+    l.drawImage(charFrame(ch, frame, p.face, bob), X - 6, Y - 16);
+    if (p.stun > 0) for (let i = 0; i < 3; i++) {   // little stars circling the head
+      const a = this.t * 8 + i * TAU / 3;
+      l.fillStyle = i ? '#ffd84a' : '#ffffff'; l.fillRect(X + Math.round(Math.cos(a) * 7), Y - 19 + Math.round(Math.sin(a) * 2), 2, 2);
+    }
+    if (p.rev > 0) {   // swapped controls: a purple double arrow over the head
+      l.fillStyle = '#b48cff'; l.fillRect(X - 4, Y - 21, 9, 1); l.fillRect(X - 4, Y - 19, 9, 1);
+      l.fillRect(X - 5, Y - 21, 1, 1); l.fillRect(X - 4, Y - 22, 1, 1); l.fillRect(X + 5, Y - 19, 1, 1); l.fillRect(X + 4, Y - 18, 1, 1);
+    }
+    if (p.shield > 0 && (p.shield > 0.6 || Math.floor(this.t * 12) % 2)) {   // bubble
+      for (let a = 0; a < TAU; a += 0.12) { l.fillStyle = (a * 10 | 0) % 3 ? '#8fe8ff' : '#ffffff'; l.fillRect(X + Math.round(Math.cos(a) * 11), Y - 8 + Math.round(Math.sin(a) * 11), 1, 1); }
+    }
+    if (p.slow && Math.random() < 0.3) this.parts.push({ x: X + (Math.random() - 0.5) * 10, y: Y - 1, vx: 0, vy: 15, life: 0.3, size: 1, color: '#7bd65a', g: 0 });
+    if (p.gust > 0 && Math.random() < 0.6) this.parts.push({ x: X - p.gustDir * 30 + (Math.random() - 0.5) * 10, y: Y - 4 - Math.random() * 14, vx: p.gustDir * 220, vy: 0, life: 0.25, size: 1, color: '#ffffffcc', g: 0 });
+    if (p.lifted && Math.random() < 0.5) this.parts.push({ x: X + (Math.random() - 0.5) * 12, y: Y + 4, vx: 0, vy: -160, life: 0.2, size: 1, color: '#ffffffaa', g: 0 });
+  }
+
+  // Lightning: a cloud and a flickering column while it charges, then the bolt.
+  drawBolts(world) {
+    const l = this.l, B = GADGETS.trapper.bolt, top = this.camY;
+    for (const f of world.fx) {
+      if (f.k !== 'bolt') continue;
+      let ground = world.h * TILE;
+      for (let ty = Math.max(0, Math.floor(top / TILE)); ty < world.h; ty++) if (world.solidAt(Math.floor(f.x / TILE), ty)) { ground = ty * TILE; break; }
+      if (f.t < B.warn) {
+        l.fillStyle = '#4b5063'; for (const [ox, oy, w] of [[-10, 2, 20], [-7, 0, 14], [-12, 4, 24]]) l.fillRect(f.x + ox, top + 4 + oy, w, 3);
+        if (Math.floor(this.t * 16) % 2) { l.fillStyle = '#ffd84a66'; for (let y = top + 10; y < ground; y += 4) l.fillRect(f.x - B.width / 2, y, B.width, 1); }
+        l.fillStyle = '#ffd84a'; l.fillRect(f.x - B.width / 2, ground - 2, B.width, 2);
+      } else {
+        let x = f.x;
+        for (let y = top; y < ground; y += 3) {
+          const nx = f.x + Math.round(Math.sin(y * 0.7 + f.t * 40) * 3);
+          l.fillStyle = '#ffffff'; l.fillRect(Math.min(x, nx), y, Math.abs(nx - x) + 2, 3);
+          l.fillStyle = '#ffd84a'; l.fillRect(nx - 2, y, 1, 3); l.fillRect(nx + 2, y, 1, 3);
+          x = nx;
+        }
+      }
+    }
+  }
+
+  drawGlue(world) {
+    const l = this.l;
+    for (const f of world.fx) {
+      if (f.k !== 'glue') continue;
+      const fade = f.t < 1 && Math.floor(this.t * 10) % 2;
+      l.fillStyle = fade ? '#3c7a37' : '#56c24e'; l.fillRect(f.x0, f.y - 2, f.x1 - f.x0, 3);
+      l.fillStyle = '#9ff07a';
+      for (let x = f.x0 + 2; x < f.x1 - 2; x += 5) { l.fillRect(x, f.y - 3 - ((x + Math.floor(this.t * 3)) % 3 === 0 ? 1 : 0), 2, 1); l.fillRect(x + 1, f.y + 1, 1, 2 + (x % 3)); }
+    }
+  }
+
+  // Where the trapper is aiming a gadget.
+  drawAim(world, aim) {
+    const l = this.l, x = Math.round(aim.x), y = Math.round(aim.y), blink = Math.floor(this.t * 6) % 2;
+    l.fillStyle = blink ? '#ffffff' : '#ffd84a';
+    if (aim.id === 'bolt') { const w = GADGETS.trapper.bolt.width; for (let yy = this.camY; yy < this.camY + this.lo.height; yy += 6) { l.fillRect(x - w / 2, yy, 1, 3); l.fillRect(x + w / 2, yy, 1, 3); } }
+    if (aim.id === 'glue') { const f = world.floorBelow(x, y); if (f) { l.fillRect(f.x0, f.y - 3, f.x1 - f.x0, 1); l.fillRect(f.x0, f.y - 3, 1, 3); l.fillRect(f.x1 - 1, f.y - 3, 1, 3); } }
+    l.fillRect(x - 5, y, 4, 1); l.fillRect(x + 2, y, 4, 1); l.fillRect(x, y - 5, 1, 4); l.fillRect(x, y + 2, 1, 4);
   }
 
   drawParticles(dt) {
@@ -384,7 +479,9 @@ export class Renderer {
     if (t.kind === 'crusher') y = t.y * TILE - 9;
     if (t.kind === 'trapdoor') y = t.y * TILE + 17;
     if (t.kind === 'cannon') y = t.y * TILE - 6;
-    if (t.kind === 'flame') y = t.y * TILE + 10;
+    if (t.kind === 'flame' || t.kind === 'fan') y = t.y * TILE + 10;
+    if (t.kind === 'arrows') y = t.y * TILE - 6;
+    if (t.kind === 'wall') y = t.y * TILE - 20;
     return { x, y, r: 7 };
   }
 

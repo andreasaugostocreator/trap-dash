@@ -251,6 +251,47 @@ export function initSprites() {
     '.KKgdKKKKKgdKK..',
     '..KKK.....KKK...',
   ], P);
+  SPR.turret = compile([
+    'KKKKKKKKKKKKKKKK',
+    'KgggggggggggggdK',
+    'KgddddddddddddsK',
+    'KgdgggdgggdgggsK',
+    'KgddddddddddddsK',
+    'KgggggKKKKKKKKsK',
+    'KgggggKDDDDDDKKK',
+    'KgdgggKDLLLLLLLW',
+    'KgggggKDDDDDDKKK',
+    'KgggggKKKKKKKKsK',
+    'KgddddddddddddsK',
+    'KgdgggdgggdgggsK',
+    'KgddddddddddddsK',
+    'KgdgggdgggdgggsK',
+    'KssssssssssssssK',
+    'KKKKKKKKKKKKKKKK',
+  ], P);
+  SPR.arrow = compile([
+    'rr......K.',
+    'rLLLLLLLWW',
+    'rr......K.',
+  ], P);
+  SPR.fan = compile([
+    'KKKKKKKKKKKKKKKK',
+    'KgggggggggggggdK',
+    'KgKKKKKKKKKKKKdK',
+    'KgKDDDDDDDDDDKdK',
+    'KgKDsDsDsDsDDKdK',
+    'KgKDDDDDDDDDDKdK',
+    'KgKKKKKKKKKKKKdK',
+    'KdddddddddddddsK',
+    'KgggggggggggggdK',
+    'KgdKgdKgdKgdKgdK',
+    'KgggggggggggggdK',
+    'KgdKgdKgdKgdKgdK',
+    'KgggggggggggggdK',
+    'KgdKgdKgdKgdKgdK',
+    'KssssssssssssssK',
+    'KKKKKKKKKKKKKKKK',
+  ], P);
   SPR.ball = compile([
     '..KKKK..',
     '.KDDDDK.',
@@ -318,6 +359,17 @@ export function initSprites() {
     cannon: compile(['.......', '..WWW..', '.WWWWW.', '.WWWWW.', '.WWWWW.', '..WWW..', '.......'], I),
     crusher: compile(['WWWWWWW', 'WWWWWWW', 'WWWWWWW', 'W.W.W.W', '.......', '...W...', '..WWW..'], I),
     flame: compile(['...W...', '..WW...', '..WWW..', '.WWWW..', '.WW.WW.', '.WW.WW.', '..WWW..'], I),
+    arrows: compile(['.......', '....W..', '.....W.', 'WWWWWWW', '.....W.', '....W..', '.......'], I),
+    wall: compile(['WWW.WWW', 'WWW.WWW', '.......', 'W.WWW.W', 'W.WWW.W', '.......', 'WWW.WWW'], I),
+    fan: compile(['W..W..W', '.......', 'W..W..W', '.......', 'WWWWWWW', 'W.W.W.W', 'WWWWWWW'], I),
+    bolt: compile(['...WWW.', '..WWW..', '.WWW...', 'WWWWWW.', '...WW..', '..WW...', '.W.....'], I),
+    glue: compile(['.......', '..W....', '.WWW...', '.WWW.W.', 'WWWWWWW', 'WWWWWWW', '.WWWWW.'], I),
+    gust: compile(['WWWW...', '....W..', 'WWWWW..', '.......', 'WWWWWW.', '......W', 'WWWWWW.'], I),
+    hex: compile(['..W.W..', '.W...W.', 'WWWWWWW', '.......', 'WWWWWWW', '.W...W.', '..W.W..'], I),
+    dash: compile(['.......', 'W.WW...', '...WWW.', 'WW.WWWW', '...WWW.', 'W.WW...', '.......'], I),
+    shield: compile(['.WWWWW.', 'WWWWWWW', 'WWW.WWW', 'WW...WW', 'WWW.WWW', '.WWWWW.', '..WWW..'], I),
+    jam: compile(['W.....W', '.W...W.', '..W.W..', '...W...', '..W.W..', '.W...W.', 'W.....W'], I),
+    feather: compile(['.....WW', '....WWW', '...WWW.', '..WWW..', '.WWW...', '.W.....', 'W......'], I),
   };
 }
 

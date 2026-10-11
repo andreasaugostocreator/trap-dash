@@ -50,6 +50,20 @@ export const sfx = {
   poof: () => noise(0.08, { vol: 0.12, freq: 900 }),
   bonk: () => tone(200, 0.06, { vol: 0.08 }),
   close: () => noise(0.06, { vol: 0.12, freq: 800 }),
+  arrows: () => { noise(0.06, { vol: 0.2, freq: 5000 }); tone(1400, 0.06, { slide: -600, vol: 0.06, type: 'triangle' }); },
+  wall: () => { noise(0.2, { vol: 0.35, freq: 400 }); tone(90, 0.2, { slide: 60, vol: 0.2, type: 'square' }); },
+  fan: () => noise(1.2, { vol: 0.18, freq: 2500, q: 0.3 }),
+  airjump: () => tone(600, 0.15, { slide: 600, vol: 0.1, type: 'triangle' }),
+  zap: () => { noise(0.4, { vol: 0.5, freq: 3000 }); tone(1800, 0.25, { slide: -1500, vol: 0.12, type: 'sawtooth' }); },
+  stun: () => [880, 660, 880].forEach((f, i) => tone(f, 0.08, { vol: 0.07, delay: i * 0.08, type: 'square' })),
+  block: () => { tone(1200, 0.2, { slide: 400, vol: 0.12, type: 'triangle' }); tone(1800, 0.15, { vol: 0.06, delay: 0.05 }); },
+  bolt: () => tone(200, 0.6, { slide: 100, vol: 0.05, type: 'sawtooth' }),
+  glue: () => noise(0.25, { vol: 0.25, freq: 500, q: 3 }),
+  gust: () => noise(1.0, { vol: 0.2, freq: 1200, q: 0.4 }),
+  hex: () => [500, 400, 300, 450].forEach((f, i) => tone(f, 0.12, { vol: 0.08, delay: i * 0.07, type: 'square' })),
+  dash: () => noise(0.15, { vol: 0.25, freq: 2500 }),
+  shield: () => tone(500, 0.3, { slide: 700, vol: 0.1, type: 'triangle' }),
+  jam: () => { noise(0.5, { vol: 0.3, freq: 6000 }); [300, 200, 300, 200].forEach((f, i) => tone(f, 0.06, { vol: 0.06, delay: i * 0.06 })); },
   click: () => tone(880, 0.05, { vol: 0.07, type: 'triangle' }),
   count: () => tone(660, 0.12, { vol: 0.12, type: 'square' }),
   go: () => tone(990, 0.3, { vol: 0.14, type: 'square' }),
@@ -59,6 +73,8 @@ export const sfx = {
 export function playEvent([k, , , extra]) {
   if (k === 'fire') return (sfx[extra] || sfx.warn)();
   if (k === 'warn') return sfx.warn();
+  if (k === 'gadget') return (sfx[extra] || sfx.click)();
+  if (k === 'poof' && extra === 'arrows') return;
   if (sfx[k]) sfx[k]();
 }
 
