@@ -34,7 +34,7 @@ export class Renderer {
     this.wide = wide;
     const W = this.c.width, H = this.c.height;
     // Short views (phones) show fewer, bigger tiles: about one tile per 22 CSS px of height, 10 to 15 tiles.
-    const tiles = Math.max(10, Math.min(15, this.vh / 22)) + (wide ? 2 : 0);
+    const tiles = Math.max(10, Math.min(15, this.vh / 22)) + (wide ? 3 : 0);
     let k = Math.round(H / (TILE * tiles));
     k = Math.max(1, Math.min(k, Math.floor(W / (TILE * 13))));
     this.k = k;
@@ -47,8 +47,11 @@ export class Renderer {
     this.setZoom(!!wide);
     if (!this.lo.width) return;
     const p = world.player, vw = this.lo.width, vh = this.lo.height;
-    this.lookX = (this.lookX ?? 0) + ((p.face * 36 + p.vx * 0.25) - (this.lookX ?? 0)) * Math.min(1, dt * 3);
-    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * 0.55;
+    // The trapper's camera looks far ahead (toward the flag), so they see the traps coming before the runner reaches them.
+    const ahead = Math.sign(world.goal.x - p.x) || p.face, up = wide && world.goal.y < p.y - 3 * TILE;
+    const lead = wide ? ahead * vw * 0.27 : p.face * 36 + p.vx * 0.25;
+    this.lookX = snap ? lead : (this.lookX ?? 0) + (lead - (this.lookX ?? 0)) * Math.min(1, dt * (wide ? 1.5 : 3));
+    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * (up ? 0.7 : 0.55);
     const W = world.w * TILE, H = world.h * TILE;
     tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
     ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
@@ -128,6 +131,7 @@ export class Renderer {
     if (this.flash > 0) { this.flash -= dt; l.fillStyle = '#ffffff55'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (world.slowmo > 0) { l.fillStyle = '#5ab4ff22'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (o.runnerView && world.player.fog > 0) this.drawFog(world, cx, cy);
+    if (o.trapper) this.drawUpcoming(world, cx, cy);
     const ctx = this.ctx; ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.lo, 0, 0, this.lo.width * this.k, this.lo.height * this.k);
   }
@@ -604,6 +608,33 @@ export class Renderer {
       if (d > r - 0.9) col = ring;
       else if (frac > 0) { let a = Math.atan2(i, -j); if (a < 0) a += TAU; if (a / TAU <= frac) col = fg; }
       l.fillStyle = col; l.fillRect(cx + i, cy + j, 1, 1);
+    }
+  }
+
+  // Traps ahead of the runner but off the trapper's screen: a marker on the edge with the trap and the seconds until the runner gets there.
+  drawUpcoming(world, cx, cy) {
+    const l = this.l, W = this.lo.width, H = this.lo.height, p = world.player, px = p.x + PHYS.w / 2;
+    const dir = Math.sign(world.goal.x - px) || 1, list = [];
+    for (const t of world.traps) {
+      const tx = (t.x0 + t.x1 + 1) * TILE / 2, ty = t.y * TILE + 8, ahead = (tx - px) * dir;
+      if (ahead < 0 || ahead > W * 2.5) continue;
+      if (tx >= cx && tx <= cx + W && ty >= cy && ty <= cy + H) continue;
+      list.push({ t, ahead, tx, ty });
+    }
+    list.sort((a, b) => a.ahead - b.ahead);
+    const boxes = [];
+    for (const m of list.slice(0, 5)) {
+      let x = Math.max(1, Math.min(W - 18, m.tx - cx - 9)), y = Math.max(1, Math.min(H - 10, m.ty - cy - 5));
+      while (boxes.some(b => Math.abs(b.x - x) < 18 && Math.abs(b.y - y) < 10)) y += m.ty < cy ? 10 : -10;
+      boxes.push({ x, y });
+      const ready = m.t.state === 'idle' && m.t.cd <= 0, eta = Math.min(9, Math.ceil(m.ahead / PHYS.maxRun));
+      l.globalAlpha = Math.max(0.55, 1 - m.ahead / (W * 3));
+      l.fillStyle = '#1c1424'; l.fillRect(x - 1, y - 1, 19, 11);
+      l.fillStyle = ready ? '#e8414f' : '#5d6475'; l.fillRect(x, y, 17, 9);
+      l.drawImage(SPR.icon[m.t.kind], x + 1, y + 1);
+      drawDigits(l, eta, x + 9, y + 2, '#ffd84a');
+      l.fillStyle = '#ffd84a'; l.fillRect(x + 13, y + 6, 1, 1); l.fillRect(x + 14, y + 5, 1, 1); l.fillRect(x + 14, y + 7, 1, 1); l.fillRect(x + 15, y + 6, 1, 1);
+      l.globalAlpha = 1;
     }
   }
 

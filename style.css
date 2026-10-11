@@ -118,6 +118,9 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
 .tbtn[data-state="burn"] .cool { top: auto; bottom: 0; height: calc(var(--cd, 0) * 100%); background: rgba(194, 43, 59, .7); }
 .tbtn[data-state="sent"] { background: #fff; color: var(--ink); }
 .tbtn[data-state="none"] { background: #3b3f52; opacity: .45; }
+.tbtn[data-state="soon"] { background: #3b3f52; opacity: .8; }
+.tbtn .eta { position: absolute; left: 2px; top: 2px; font-style: normal; font-family: 'Press Start 2P', monospace; font-size: 8px; color: #ffd84a; background: rgba(28, 20, 36, .8); padding: 2px 2px; z-index: 3; pointer-events: none; }
+.tbtn .eta:empty { display: none; }
 .tbtn[data-state="jam"], .gbtn[data-state="jam"] { background: #6b4fa8; }
 .gadbar { position: fixed; left: max(10px, env(safe-area-inset-left)); top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 8px; z-index: 2; }
 .rgad { position: fixed; left: max(14px, env(safe-area-inset-left)); bottom: max(14px, env(safe-area-inset-bottom)); display: flex; gap: 8px; z-index: 2; }

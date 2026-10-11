@@ -198,3 +198,14 @@ of the time; the accept step does the rest.
 - **Use the kinds it picked**: when choosing a trap segment, kinds not yet used in the level are preferred, so a ★★★ level
   really uses all 6 of its trap kinds.
 - `node tools/segments.mjs` checks every segment, at every tier and floor height, can be passed by the solver.
+
+### The trapper sees ahead
+
+Playtesting: the runner and the trapper saw each trap at the same moment, so the trapper had no time to plan. Now:
+- The trapper's camera leads toward the flag: the runner sits about a quarter in from the trailing edge, so roughly three
+  quarters of the view is what's coming (on climbing levels the runner sits low in the view). The trapper also sees 3
+  more tiles of height than the runner.
+- Traps ahead that are still off-screen show as markers on the screen edge with the trap's icon and the seconds until the
+  runner gets there (red = ready).
+- Each trap button shows **in 3s** / **now**: when the runner reaches the next trap of that kind. A kind that isn't on
+  screen yet stays dimmed but shows its countdown, so the trapper can plan which trap and gadget to use.

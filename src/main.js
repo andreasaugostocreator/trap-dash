@@ -1,7 +1,7 @@
 // Screens, the party flow and the game loop.
 // A match is played level by level: each player gets one run as the runner while the other works the traps,
 // then the faster runner wins the level. Online, the runner's device runs the world and streams it to the trapper.
-import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS } from './config.js';
+import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS, PHYS } from './config.js';
 import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS } from './levels.js';
@@ -493,7 +493,7 @@ function buildTrapBar() {
     b.className = 'tbtn'; b.dataset.kind = k;
     const ic = document.createElement('canvas'); ic.width = ic.height = 7; ic.className = 'pix';
     ic.getContext('2d').drawImage(SPR.icon[k], 0, 0);
-    b.innerHTML = `<span class="cool"></span><span class="secs"></span>`;
+    b.innerHTML = `<i class="eta"></i><span class="cool"></span><span class="secs"></span>`;
     b.prepend(ic);
     const lab = document.createElement('small'); lab.textContent = (touchDevice || i > 5 ? '' : (i + 1) + ' ') + TRAPS[k].name; b.appendChild(lab);
     b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireKind(k, 'p' + e.pointerId); });
@@ -508,12 +508,28 @@ function updateTrapBar() {
     run.targets[k] = t;
     const ready = t && t.state === 'idle' && t.cd <= 0, pend = t && run.pending[t.id] > 0;
     const burning = t && TRAPS[k].hold && t.state === 'active';
-    const state = !t ? 'none' : w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
+    const eta = etaOf(w, k);
+    const state = !t ? (eta != null ? 'soon' : 'none') : w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
     if (b.dataset.state !== state) b.dataset.state = state;
     b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : t && !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
     const secs = t && !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
     if (b.lastChild.previousSibling.textContent != secs) b.lastChild.previousSibling.textContent = secs;
+    const etaText = eta == null ? '' : eta < 0.5 ? 'now' : `in ${Math.ceil(eta)}s`, el = b.querySelector('.eta');
+    if (el.textContent !== etaText) el.textContent = etaText;
   }
+}
+// Seconds until the runner reaches the next trap of this kind ahead (toward the flag), or null if none is near.
+function etaOf(w, kind) {
+  const p = w.player, px = p.x + 5, dir = Math.sign(w.goal.x - px) || 1;
+  let best = null;
+  for (const t of w.traps) {
+    if (t.kind !== kind) continue;
+    const ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - px) * dir;
+    if (ahead < -TILE * 2 || ahead > TILE * 60) continue;
+    const s = Math.max(0, ahead) / PHYS.maxRun;
+    if (best == null || s < best) best = s;
+  }
+  return best;
 }
 
 // ---------- gadgets: the trapper's (left column) and the runner's (above the jump button / bottom left on PC)
