@@ -1,5 +1,6 @@
 // Gadgets end to end. Needs the site on :8080 and the relay broker (node tools/relay-broker.mjs).
 import { chromium } from 'playwright-core';
+import { LEVELS } from '../src/levels.js';
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
 const errs = [];
 const page = async o => { const p = await b.newPage(o); p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text())); return p; };
@@ -8,7 +9,10 @@ const st = p => p.evaluate(() => { const w = window.__td.run.world, q = w.player
 // 1. Same screen on PC: trapper keys + mouse aim, runner keys.
 const l = await page({ viewport: { width: 1280, height: 720 } });
 await l.goto('http://localhost:8080/'); await l.waitForTimeout(400);
-await l.click('text=Same screen'); await l.click('#levels button:has-text("Windy Works")'); await l.click('#startBtn'); await l.waitForTimeout(3700);
+// Each map deals its own gadgets; this part forces the classic set so the keys are known (7 bolt, 8 glue, 9 gust, 0 hex; Shift dash, Q shield, E jammer).
+await l.click('text=Same screen');
+await l.evaluate(lv => window.__td.startRun({ ...lv, loadout: { runner: ['dash', 'shield', 'jam', 'feather'], trapper: ['bolt', 'glue', 'gust', 'hex'] } }, 'a', 1), LEVELS.find(v => v.id === 'windy'));
+await l.waitForTimeout(3700);
 const scr = await l.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr + R.ox, y: (p.y - R.camY) * R.k / R.dpr + R.oy }; });
 await l.mouse.move(scr.x, scr.y); await l.keyboard.press('Digit7'); await l.waitForTimeout(200);
 await l.screenshot({ path: 'shots/50-bolt-warning.png' });

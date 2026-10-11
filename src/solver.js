@@ -9,7 +9,7 @@ for (const dir of [-1, 0, 1]) for (const jump of [0, 1, 2]) ACTIONS.push({ dir, 
 
 export function solve(level, maxExpand = 400000) {
   const w = new World(level);
-  w.gad.runner.feather.n = 0;
+  for (const id in w.gad.runner) w.gad.runner[id].n = 0;   // no gadgets at all
   const goal = { x: w.goal.x, y: w.goal.y };
   const key = p => [Math.round(p.x / 3), Math.round(p.y / 3), Math.round(p.vx / 45), Math.round(p.vy / 70), p.onGround ? 1 : 0].join(',');
   const h = p => Math.hypot(p.x - goal.x, (p.y - goal.y) * 1.3);

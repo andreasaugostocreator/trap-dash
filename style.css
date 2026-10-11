@@ -80,6 +80,7 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
 .seg button.on { background: var(--ink); color: #fff; }
 .randRow { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 16px; font-weight: 600; }
 .randRow .chip.on { background: #ffd84a; }
+.randWrap { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 18px; }
 .randRow .stars { color: #c99b10; }
 #firstRow { margin-top: 12px; font-weight: 600; font-size: 17px; }
 
@@ -254,6 +255,7 @@ input { -webkit-user-select: text; user-select: text; -webkit-touch-callout: def
   #lobby h3 { display: none; }
   #lobby .players { margin: 6px 0 4px; }
   #lobby .player { padding: 3px 8px; font-size: 16px; }
+  #lobby .levels { grid-template-columns: repeat(4, 1fr); }
   #lobby .levels button { padding: 4px 8px; font-size: 14px; }
   #lobby .randRow { margin-top: 6px; font-size: 14px; }
   #lobby #firstRow { margin-top: 4px; font-size: 15px; }

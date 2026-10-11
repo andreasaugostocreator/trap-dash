@@ -30,6 +30,12 @@ export const TRAPS = {
   trapdoor: { name: 'Trapdoor', family: 'floor',   warn: 0.12, active: 1.6, cd: 2.6 },
   wall:     { name: 'Wall',     family: 'floor',   warn: 0.1,  active: 1.6, cd: 2.4 },
   fan:      { name: 'Fan',      family: 'force',   warn: 0.15, active: 1.3, cd: 2.4, reach: 5, push: 2800, maxUp: 320 },
+  // newer kinds
+  saw:      { name: 'Saw',      family: 'zone',    warn: 0.15, active: 0,   cd: 2.0, speed: 190 },        // a blade runs along its rail and back
+  laser:    { name: 'Laser',    family: 'emitter', warn: 0.35, active: 0.3, cd: 2.2 },                     // aims, then a beam across the room
+  dropper:  { name: 'Bomb',     family: 'emitter', warn: 0.12, active: 0,   cd: 1.8, shot: { w: 8, h: 8, g: 1100 }, blast: 22, blastTime: 0.18 },
+  conveyor: { name: 'Belt',     family: 'force',   warn: 0.15, active: 2.0, cd: 2.6, carry: -105 },        // floor runs backwards
+  ice:      { name: 'Ice',      family: 'floor',   warn: 0.15, active: 3.0, cd: 3.2 },                     // floor turns slippery
 };
 export const TRAP_LOCK = 0.25;   // the trapper can't fire two traps closer together than this
 export const TIME_LIMIT = 100;
@@ -37,16 +43,35 @@ export const TIME_LIMIT = 100;
 // Gadgets: never deadly on their own. charges -1 = unlimited, cd = seconds between uses. Charges reset every run.
 // aim: the trapper picks a spot on the map. passive: used automatically (the air jump).
 export const GADGETS = {
+  // Each level hands out four of these to each side (see src/loadout.js). type: aim (pick a spot), now (instant), passive.
   trapper: {
-    bolt:  { name: 'Lightning', charges: 4,  cd: 4,  aim: true, warn: 0.45, stun: 1.2, width: 16 },
-    glue:  { name: 'Glue',      charges: -1, cd: 10, aim: true, life: 7, slow: 0.4 },
-    gust:  { name: 'Gust',      charges: 3,  cd: 8,  time: 1.4, push: 1050 },
-    hex:   { name: 'Hex',       charges: 2,  cd: 12, time: 2.6 },
+    bolt:   { name: 'Lightning', charges: 4,  cd: 4,  aim: true, warn: 0.45, stun: 1.2, width: 16 },
+    glue:   { name: 'Glue',      charges: -1, cd: 10, aim: true, life: 7, slow: 0.4 },
+    mine:   { name: 'Mine',      charges: 3,  cd: 4,  aim: true, life: 12, pop: 380, stun: 0.5 },
+    bat:    { name: 'Bat',       charges: 2,  cd: 8,  aim: true, life: 5, speed: 78, stun: 0.8 },
+    gust:   { name: 'Gust',      charges: 3,  cd: 8,  time: 1.4, push: 1050 },
+    hex:    { name: 'Hex',       charges: 2,  cd: 12, time: 2.6 },
+    frost:  { name: 'Frost',     charges: 2,  cd: 10, time: 3 },
+    fog:    { name: 'Fog',       charges: 2,  cd: 12, time: 4 },
+    anvil:  { name: 'Anvil',     charges: 2,  cd: 10, time: 3, grav: 1.5, jump: 0.82 },
+    moon:   { name: 'Moon',      charges: 2,  cd: 10, time: 3, grav: 0.45 },
+    rewind: { name: 'Rewind',    charges: 1,  cd: 0,  back: 2 },
+    squash: { name: 'Squash',    charges: 2,  cd: 10, time: 3, speed: 0.6 },
   },
   runner: {
     dash:    { name: 'Dash',     charges: 2,  cd: 6,  time: 0.12, speed: 250 },
     shield:  { name: 'Shield',   charges: 1,  cd: 0,  time: 2 },
     jam:     { name: 'Jammer',   charges: 1,  cd: 0,  time: 2 },
     feather: { name: 'Air jump', charges: 2,  cd: 0,  passive: true },
+    blink:   { name: 'Blink',    charges: 2,  cd: 6,  dist: 3 },
+    glider:  { name: 'Glider',   charges: 2,  cd: 6,  time: 4, fall: 55 },
+    boots:   { name: 'Boots',    charges: 2,  cd: 8,  time: 5, jump: 1.22 },
+    haste:   { name: 'Haste',    charges: 2,  cd: 8,  time: 3, speed: 1.35 },
+    slowmo:  { name: 'Slow-mo',  charges: 1,  cd: 0,  time: 2.5, rate: 0.45 },
+    flag:    { name: 'Flag',     charges: 1,  cd: 0 },
+    decoy:   { name: 'Decoy',    charges: 2,  cd: 8,  time: 2.5 },
+    phase:   { name: 'Phase',    charges: 1,  cd: 0,  time: 2 },
+    magnet:  { name: 'Anchor',   charges: 2,  cd: 8,  time: 3 },
+    peek:    { name: 'Radar',    charges: 2,  cd: 6,  time: 3 },
   },
 };

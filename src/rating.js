@@ -13,6 +13,12 @@ const JUMP_CLEAR = 0.06;          // time to get a few pixels off the floor, s
 const runEscape = L => (L + TURN * V) / (2 * V);
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
+// A floor trap next to a hole can carry you in.
+function pitAhead(world, t) {
+  for (const x of [t.x0 - 1, t.x1 + 1]) { let y = t.y; while (y < world.h && !world.solidAt(x, y)) y++; if (y >= world.h) return true; }
+  return false;
+}
+
 export function trapThreat(world, t, cpDist) {
   const C = TRAPS[t.kind], w = (t.x1 - t.x0 + 1) * TILE, L = w + PHYS.w;
   const out = { kind: t.kind, x: t.x0 };
@@ -22,7 +28,14 @@ export function trapThreat(world, t, cpDist) {
     if (t.kind === 'spikes') escape = JUMP_CLEAR;  // spikes are low: a hop gets you out
   }
   if (t.kind === 'crusher') window += Math.sqrt(2 * Math.max(TILE, t.drop) / C.fallG);
-  if (C.family === 'emitter') { window += 24 / C.shot.speed; escape = 0.12; exposure = 6 * TILE / V; }
+  if (t.kind === 'cannon' || t.kind === 'arrows') { window += 24 / C.shot.speed; escape = 0.12; exposure = 6 * TILE / V; }
+  if (t.kind === 'laser') { escape = 0.12; exposure = Math.abs(t.end - t.x0) * TILE / V; }   // long aim, hop the beam, but it covers the room
+  if (t.kind === 'dropper') {   // falls from the ceiling: the fall is warning, the blast is wide
+    let fall = 0; while (t.y + 1 + fall < world.h && !world.solidAt(t.x0, t.y + 1 + fall)) fall++;
+    window += Math.sqrt(2 * fall * TILE / C.shot.g); escape = runEscape(2 * C.blast + PHYS.w); exposure = (2 * C.blast + PHYS.w) / V;
+  }
+  if (t.kind === 'saw') { window += t.len / 2 / C.speed; escape = JUMP_CLEAR * 2; exposure = (t.len + TILE) / V; }
+  if (t.kind === 'conveyor' || t.kind === 'ice') lethal = pitAhead(world, t);   // only time, unless it slides you into a pit
   if (t.kind === 'fan') {   // pushes up: only deadly if something sharp waits above it
     lethal = false;
     for (let x = t.x0; x <= t.x1; x++) for (let y = t.y - 1; y >= t.y - C.reach - 1; y--) if (world.tile(x, y) === CEILSPIKE) lethal = true;

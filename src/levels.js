@@ -5,6 +5,8 @@
 //   P  pop-up spikes   T  trapdoor              X  crusher (falls down)    F  flame jet (shoots up)
 //   <  >  cannon facing left / right    {  }  arrow turret facing left / right
 //   U  pop-up wall (rises two tiles)     W  fan (blows upward)      v  ceiling spikes (always out)
+//   Z  saw rail (a blade runs along it)  K  k  laser facing right / left    D  bomb dropper (in a ceiling)
+//   Q  conveyor belt floor (runs back)   I  floor that freezes over
 function build(w, h, fn) {
   const g = Array.from({ length: h }, () => Array(w).fill('.'));
   const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < w && y < h) g[y][x] = c; };
@@ -71,6 +73,16 @@ export const LEVELS = [
       ground(45, 98, 14); row(47, 48, 13, 'P'); set(51, 13, 'U'); set(55, 13, 'U'); set(60, 13, '{');
       set(63, 13, 'C'); rect(66, 5, 72, 8); row(66, 72, 9, 'v'); row(68, 69, 14, 'W');
       set(77, 13, 'U'); row(81, 83, 13, 'P'); set(94, 13, 'G'); set(98, 13, '{');
+    }),
+  },
+  {
+    id: 'mill', name: 'Saw Mill', theme: 'day',
+    map: build(110, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(109, 0, 109, 17); rect(1, 0, 108, 2);
+      ground(1, 20, 14); set(3, 13, 'S'); row(8, 13, 13, 'Z'); row(16, 20, 14, 'Q');
+      ground(24, 45, 14); set(26, 13, 'C'); set(30, 2, 'D'); set(35, 2, 'D'); set(38, 13, '#'); set(44, 13, 'k');
+      ground(49, 70, 14); row(50, 55, 14, 'I'); row(56, 57, 13, '^'); set(61, 13, 'C'); row(63, 68, 13, 'Z');
+      ground(74, 108, 14); set(78, 2, 'D'); row(80, 85, 14, 'Q'); set(88, 13, '#'); set(95, 13, 'k'); set(104, 13, 'G');
     }),
   },
   {

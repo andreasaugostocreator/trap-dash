@@ -25,8 +25,14 @@ and jump in advance.
   in the open just knocks your jump off course. It can even help the runner across a gap if the trapper misfires.
 - *Floor that adds* (pop-up wall): it doesn't kill, it costs time and breaks rhythm. If it rises under you it bumps you up
   instead of trapping you.
-- Ideas for later in the same spirit: a conveyor (force, sideways), ice (changes friction), a gravity flip zone, a magnet
-  that pulls toward hazards, a fake checkpoint, a mirror zone that swaps controls, a "rewind" zone that sends you back 3 seconds.
+- Added since then, one per family:
+  - **Saw** (zone that moves): a blade runs along its rail and back. You hop it, but you must time the hop to where the blade is.
+  - **Laser** (emitter, instant): a long 0.35 s aim, then a beam across the whole room. Easy to read, but it covers everything.
+    Mounted at jump height it punishes *jumping*, the opposite of every other trap.
+  - **Bomb dropper** (emitter, falling): drops from the ceiling and blasts a wide area where it lands. The fall is the warning.
+  - **Conveyor belt** (force, sideways): the floor runs backwards for 2 s. Harmless on flat ground, deadly as the run-up to a gap.
+  - **Ice** (floor, friction): the floor turns slippery for 3 s. Harmless alone, deadly before spikes or an edge.
+- Still open: a gravity flip zone, a fake checkpoint, a mirror zone.
 
 ## 2. What makes a trap easy, medium or hard
 
@@ -116,6 +122,31 @@ Stunned in the air you keep your momentum, so a lightning bolt mid-jump doesn't 
 The interesting part is the counterplay: the runner saves the Jammer for the hardest trap, and the trapper baits the
 Shield with a cheap Glue before the real threat. Gadgets reset every run so both players get the same budget.
 
+## 4b. The big gadget pool and per-map loadouts
+
+There are now 12 gadgets per side, so nobody gets all of them: **each map deals 4 to each player** (`src/loadout.js`).
+The pools are split in two so both sides always have a mix:
+
+| Side | Group A (2 picked) | Group B (2 picked) |
+|---|---|---|
+| Runner | movement: Dash, Blink (teleport 3 tiles), Haste, Air jump, Spring boots, Glider | saves: Shield, Phase (traps pass through you), Jammer, Slow-mo, Pocket flag (checkpoint here), Decoy, Anchor (no push), Radar (see hidden mines, trap readiness) |
+| Trapper | aimed: Lightning, Glue, Mine (hidden, pops you up), Bat (chases you) | curses: Gust, Hex, Frost (ice feet), Fog (you only see near you), Anvil (heavy, low jumps), Moon (floaty), Rewind (back 2 s), Squash (small and slow) |
+
+How a map picks: each gadget has a weight from the map's features (how many pits, vertical or flat, longest stretch
+without checkpoints, projectile traps, zone traps, pushers, slippery floors, trap density). For example the Glider and
+Air jump score high on maps with many pits, Anchor where there are fans and belts, Radar and Fog where there are many
+traps, Anvil and Bat on vertical maps, Phase and Moon where things are shot at you, Rewind and the Pocket flag on long stretches. Then a
+little noise from a hash of the map's name or seed is added so similar maps don't all get the same set. The pick is
+**deterministic**, so both devices compute the same loadout without sending it. A level can also force one with a
+`loadout` field. These are meant as experiments: drop the ones you don't like from the pools in `loadout.js`.
+
+## 4c. Endless mode
+
+Lobby → **∞ Endless ★/★★/★★★**. Each stage is a fresh random level of that difficulty with its own checkpoints; reaching
+the flag immediately starts the next stage (the runner's device builds it and sends it over). There is no clock; the
+HUD shows the total time and falls. **Swap sides** in the II menu starts a new endless run with the other player
+running (online the guest asks, the host's device builds it).
+
 ## 5. Balance pass (after playtesting)
 
 The first numbers made the runner far too strong: the trapper reacted after the runner was already past.
@@ -154,3 +185,16 @@ pop-up wall, fan corridor under ceiling spikes).
 
 `node tools/gen.mjs` shows the spread. The raw plans already land on target about 100% (★), 50% (★★) and 60% (★★★)
 of the time; the accept step does the rest.
+
+### Smarter layouts (second version)
+
+- **Combo segments**: a trap placed where the terrain has already taken the runner's options away. A conveyor as the run-up
+  to a gap, ice right before a gap, a crusher over the landing spot, arrows shooting across a gap at jump height, a
+  trapdoor bridge under a low ceiling (no jumping over it), a saw on a one-tile bridge, a laser at jump height over
+  spikes, flames on the only platforms over a pit, a bomb over the take-off, a fan in a pit that throws you into ceiling
+  spikes. Each makes the runner commit, and that is exactly when a trap is hard to dodge.
+- **Intensity curve**: every section between checkpoints starts with an easy breather and ends with its hardest piece,
+  a combo on ★★ and ★★★. Deaths cluster right before a checkpoint, which feels fair and keeps the pressure up.
+- **Use the kinds it picked**: when choosing a trap segment, kinds not yet used in the level are preferred, so a ★★★ level
+  really uses all 6 of its trap kinds.
+- `node tools/segments.mjs` checks every segment, at every tier and floor height, can be passed by the solver.

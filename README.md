@@ -14,18 +14,18 @@ Six runners to pick from: Explorer, Knight, Astronaut, Ninja, Robot and Pirate. 
   such as phones on mobile data. GitHub Pages hosting is enough and no server of your own is needed.
 - **Same screen:** one runs on the keyboard (or the touch buttons on a tablet), the other clicks / taps the traps.
 - **Practice:** you run, a bot fires the traps. Best times are saved per level.
-- **6 levels rated ★ to ★★★** (Sunny Hills, Cloud Climb, Treetop Hop, Midnight Meadow, Windy Works, The Gauntlet),
-  plus **random levels** of the difficulty you pick.
-- **8 traps in 4 families:** spikes, flame, crusher (zone); cannon, arrows (emitter); trapdoor, pop-up wall (floor); fan (force).
-- **Gadgets** for both sides, never deadly on their own. Trapper: Lightning, Glue, Gust, Hex. Runner: Dash, Shield, Jammer, Air jump.
+- **7 levels rated ★ to ★★★** (Sunny Hills, Cloud Climb, Treetop Hop, Windy Works, Saw Mill, Midnight Meadow, The Gauntlet),
+  plus **random levels** of the difficulty you pick, and **∞ Endless**: new stages one after another with no clock; swap sides from the menu.
+- **13 traps in 4 families:** spikes, flame, crusher, saw (zone); cannon, arrows, laser, bomb dropper (emitter); trapdoor, pop-up wall, ice (floor); fan, conveyor belt (force).
+- **24 gadgets**, never deadly on their own. Each map deals 4 to each side, chosen from its traps and layout (`src/loadout.js`).
 - See [DESIGN.md](DESIGN.md) for the trap families, the difficulty model and how random levels are built.
 - Phone friendly (landscape is best), installable as a home-screen app, chiptune music and sound effects.
 
 ## Controls
 
 Runner: **← →** or **A D** to run, **Space / W / ↑** to jump (hold for higher). On a phone: the ◀ ▶ and JUMP buttons.
-Runner gadgets: **Shift** dash, **Q** shield, **E** jammer, jump again in mid-air for an air jump.
-Trapper: the trap bar or keys **1-6** fire the nearest trap of each kind; gadgets **7** lightning, **8** glue (aimed at the mouse), **9** gust, **0** hex. On a phone, tap a gadget, then tap the map.
+Runner gadgets: **Shift**, **Q**, **E**, **R** for the map's gadgets in order (an air jump is used by jumping in mid-air).
+Trapper: the trap bar or keys **1-6** fire the nearest trap of each kind; gadgets **7 8 9 0** (aimed ones at the mouse). On a phone, tap a gadget, then tap the map.
 **Esc** or the **II** button opens the menu.
 
 ## Play locally
@@ -57,7 +57,8 @@ Bump `VERSION` in `sw.js` on each release so phones pick up the update.
 `npm install` once, then:
 - `npm run solve`: checks every level can be finished with the real physics (search over inputs).
 - `node tools/rate.mjs -v`: star rating of each level with the threat of every trap. `node tools/gen.mjs`: random level stats.
-- `tools/gadget-test.mjs`, `tools/random-test.mjs`, `tools/trapbar-test.mjs`: browser tests (need the relay broker).
+- `tools/gadget-test.mjs`, `tools/random-test.mjs`, `tools/trapbar-test.mjs`, `tools/endless-test.mjs`, `tools/new-stuff-test.mjs`: browser tests (need the relay broker).
+- `node tools/segments.mjs`: checks every generator segment can be passed.
 - `node tools/broker.mjs` + `node tools/relay-broker.mjs` + `npm run shots`: plays through local, practice (phone sizes) and online mode
   (two browsers through local PeerJS and MQTT brokers; `Q='?nop2p&relay=ws://127.0.0.1:8883'` tests the relay alone) and saves screenshots to `shots/`.
 - `node tools/make-icons.mjs`: renders the app icons. `tools/sheet.html` shows every sprite.
