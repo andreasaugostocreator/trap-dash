@@ -1,8 +1,8 @@
 // Screens, the party flow and the game loop.
 // A match is played level by level: each player gets one run as the runner while the other works the traps,
 // then the faster runner wins the level. Online, the runner's device runs the world and streams it to the trapper.
-import { DT, TIME_LIMIT } from './config.js';
-import { CHARS, charOf, charFrame } from './sprites.js';
+import { DT, TIME_LIMIT, TILE, TRAPS } from './config.js';
+import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS } from './levels.js';
 import { Renderer } from './render.js';
@@ -271,6 +271,8 @@ addEventListener('keydown', e => {
   keys.add(e.code);
   if (run && ['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.code === 'Escape' && run) togglePause();
+  const n = /^(Digit|Numpad)([1-5])$/.exec(e.code);
+  if (n && run && run.trapperHere && run.kinds[+n[2] - 1]) fireKind(run.kinds[+n[2] - 1]);
 });
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
@@ -332,6 +334,61 @@ function fireTrap(id) {
   else { net.send({ t: 'act', id }); run.pending[id] = 0.35; sfx.click(); }
 }
 
+// ---------- the trap bar: one fixed button per kind of trap, aimed at the runner
+// Each button fires the trap of its kind that is on screen and closest to the runner (preferring traps ahead).
+const KIND_ORDER = ['spikes', 'trapdoor', 'cannon', 'crusher', 'flame'];
+function pickTarget(world, kind) {
+  const p = world.player, px = p.x + 5, py = p.y + 6, W = R.lo.width, H = R.lo.height;
+  let best = null, bestReady = null, bs = 1e9, brs = 1e9;
+  for (const t of world.traps) {
+    if (t.kind !== kind) continue;
+    const tx = (t.x0 + t.x1 + 1) * TILE / 2, ty = t.y * TILE + 8;
+    if (tx < R.camX - 24 || tx > R.camX + W + 24 || ty < R.camY - 40 || ty > R.camY + H + 40) continue;
+    const dx = tx - px;
+    let score = Math.abs(dx) + Math.abs(ty - py) * 0.6;
+    if (dx * (p.face || 1) < -28) score += 300;           // behind the runner: rarely useful
+    if (score < bs) { bs = score; best = t; }
+    const ready = t.state === 'idle' && t.cd <= 0;
+    if (ready && score < brs) { brs = score; bestReady = t; }
+  }
+  return bestReady || best;
+}
+function fireKind(kind) {
+  const t = run.targets[kind];
+  if (!t || run.phase !== 'play') { sfx.denied(); return; }
+  fireTrap(t.id);
+}
+function buildTrapBar() {
+  const bar = $('trapbar'); bar.innerHTML = '';
+  run.kinds = KIND_ORDER.filter(k => run.world.traps.some(t => t.kind === k));
+  run.targets = {};
+  run.kinds.forEach((k, i) => {
+    const b = document.createElement('button');
+    b.className = 'tbtn'; b.dataset.kind = k;
+    const ic = document.createElement('canvas'); ic.width = ic.height = 7; ic.className = 'pix';
+    ic.getContext('2d').drawImage(SPR.icon[k], 0, 0);
+    b.innerHTML = `<span class="cool"></span><span class="secs"></span>`;
+    b.prepend(ic);
+    const lab = document.createElement('small'); lab.textContent = (touchDevice ? '' : (i + 1) + ' ') + TRAPS[k].name; b.appendChild(lab);
+    b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireKind(k); });
+    bar.appendChild(b);
+  });
+  bar.classList.toggle('hidden', !run.trapperHere);
+}
+function updateTrapBar() {
+  const w = run.world;
+  for (const b of $('trapbar').children) {
+    const k = b.dataset.kind, t = pickTarget(w, k), C = TRAPS[k];
+    run.targets[k] = t;
+    const ready = t && t.state === 'idle' && t.cd <= 0, pend = t && run.pending[t.id] > 0;
+    const state = !t ? 'none' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
+    if (b.dataset.state !== state) b.dataset.state = state;
+    b.style.setProperty('--cd', t && !ready ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
+    const secs = t && !ready && t.cd > 0 ? Math.ceil(t.cd) : '';
+    if (b.lastChild.previousSibling.textContent != secs) b.lastChild.previousSibling.textContent = secs;
+  }
+}
+
 // ---------- a run
 function startRun(level, runner, n) {
   hidePanel();
@@ -344,16 +401,17 @@ function startRun(level, runner, n) {
     runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere,
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 7,
   };
-  R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
+  R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true, run.trapperHere);
   $('hud').classList.remove('hidden');
   const role = $('role');
   if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
   else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = LEVELS[level].name; }
   else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
   $('touch').classList.toggle('hidden', !(touchDevice && runnerHere));
-  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} taps the red trap buttons`
+  buildTrapBar();
+  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-5)'}`
     : runnerHere ? (touchDevice ? 'Reach the flag! The dials show when traps are recharging.' : 'Reach the flag! ← → to run, Space to jump. Dials show trap cooldowns.')
-      : 'Tap the red buttons to fire traps. Time it right!';
+      : (touchDevice ? 'Use the trap buttons at the bottom. Each fires the nearest trap of that kind.' : 'Press 1-5 or click the buttons at the bottom. Each fires the nearest trap of that kind.');
   $('hint').textContent = hint; $('hint').classList.remove('hidden');
   input.jumpQueued = false;
   startMusic();
@@ -374,7 +432,7 @@ function finishRun(res) {
   run.phase = 'end';
   if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
   runs.push(res);
-  $('touch').classList.add('hidden'); $('hint').classList.add('hidden');
+  $('touch').classList.add('hidden'); $('hint').classList.add('hidden'); $('trapbar').classList.add('hidden');
   setTimeout(() => showRunResult(res), res.finished ? 300 : 0);
 }
 
@@ -436,7 +494,7 @@ function showRunResult(res) {
 
 function endRunView() {
   run = null; hidePanel();
-  for (const id of ['hud', 'hint', 'count', 'touch', 'rotate']) $(id).classList.add('hidden');
+  for (const id of ['hud', 'hint', 'count', 'touch', 'rotate', 'trapbar']) $(id).classList.add('hidden');
 }
 
 function panel(html) {
@@ -521,8 +579,9 @@ function tick(dt, now) {
     }
     for (const ball of w.balls) ball.x += ball.vx * dt;
   }
-  R.follow(w, dt, run.trapperHere && !run.runnerHere);
-  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, debug: DEBUG });
+  R.follow(w, dt, run.trapperHere && !run.runnerHere, false, run.trapperHere);
+  if (run.trapperHere) { updateTrapBar(); const bar = $('trapbar').getBoundingClientRect(); R.bottomPad = Math.ceil((innerHeight - bar.top + 6) * R.dpr / R.k); }
+  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, debug: DEBUG });
   const left = TIME_LIMIT - w.time;
   $('timer').textContent = w.time.toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = w.player.deaths;

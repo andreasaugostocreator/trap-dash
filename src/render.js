@@ -41,14 +41,16 @@ export class Renderer {
     this.bgCache = {};
   }
 
-  follow(world, dt, wide, snap) {
+  // raise: keep the runner higher on screen (the trapper's bar covers the bottom).
+  follow(world, dt, wide, snap, raise) {
     this.setZoom(!!wide);
     const p = world.player, vw = this.lo.width, vh = this.lo.height;
     this.lookX = (this.lookX ?? 0) + ((p.face * 36 + p.vx * 0.25) - (this.lookX ?? 0)) * Math.min(1, dt * 3);
-    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * 0.55;
+    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * (raise ? 0.42 : 0.55);
     const W = world.w * TILE, H = world.h * TILE;
     tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
-    ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
+    const pad = raise ? (this.bottomPad || 0) : 0;   // room under the level for the trapper's bar
+    ty = vh >= H + pad ? H + pad - vh : Math.max(0, Math.min(H + pad - vh, ty));
     const k = snap ? 1 : Math.min(1, dt * 6);
     this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * (snap ? 1 : k * 0.8);
   }
@@ -87,6 +89,11 @@ export class Renderer {
     this.drawBackground(world, th, cx, cy);
     l.save(); l.translate(-cx, -cy);
     l.drawImage(this.levelCanvas(world, th), 0, 0);
+    const below = cy + this.lo.height - world.h * TILE;
+    if (below > 0) {   // under the level (only the trapper's camera goes here): solid earth
+      l.fillStyle = th.dirt[0]; l.fillRect(cx, world.h * TILE, this.lo.width, below);
+      l.fillStyle = th.dirt[1]; for (let x = Math.floor(cx / 4) * 4; x < cx + this.lo.width; x += 4) l.fillRect(x, world.h * TILE + ((x / 4) % 3), 2, 1);
+    }
     this.drawProps(world);
     for (const t of world.traps) this.drawTrap(t, th);
     for (const b of world.balls) {
@@ -381,6 +388,25 @@ export class Renderer {
     return { x, y, r: 7 };
   }
 
+  // Corner brackets around the trap each trap-bar button will fire, with its key number.
+  drawTargets(o) {
+    const l = this.l, on = Math.floor(this.t * 4) % 2 === 0;
+    o.kinds.forEach((k, i) => {
+      const t = o.targets[k]; if (!t) return;
+      const ready = t.state === 'idle' && t.cd <= 0;
+      let x = t.x0 * TILE - 2, y = t.y * TILE - 2, w = (t.x1 - t.x0 + 1) * TILE + 4, h = TILE + 4;
+      if (t.kind === 'crusher') y += Math.round(t.oy);
+      if (t.kind === 'spikes') { y += 6; h -= 6; }
+      if (t.kind === 'trapdoor') h = 10;
+      l.fillStyle = ready ? (on ? '#ffffff' : '#ffd84a') : '#8b93a6';
+      for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w - 1, y, -1, 1], [x, y + h - 1, 1, -1], [x + w - 1, y + h - 1, -1, -1]]) {
+        l.fillRect(Math.min(cx, cx + dx * 3), cy, 4, 1); l.fillRect(cx, Math.min(cy, cy + dy * 3), 1, 4);
+      }
+      l.fillStyle = '#1c1424'; l.fillRect(x - 1, y - 8, 6, 7);
+      drawDigits(l, i + 1, x + 1, y - 7, ready ? '#ffd84a' : '#8b93a6');
+    });
+  }
+
   dial(cx, cy, r, frac, bg, fg, ring) {
     const l = this.l;
     for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) {
@@ -395,6 +421,7 @@ export class Renderer {
 
   drawTrapButtons(world, o, mini) {
     const l = this.l, W = this.lo.width, H = this.lo.height;
+    if (o.targets) this.drawTargets(o);
     for (const t of world.traps) {
       const b = this.trapButton(world, t), C = TRAPS[t.kind], bx = Math.round(b.x), by = Math.round(b.y);
       if (bx < this.camX - 12 || bx > this.camX + W + 12 || by < this.camY - 12 || by > this.camY + H + 12) continue;

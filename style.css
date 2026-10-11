@@ -99,6 +99,16 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
 .touch .pad { display: flex; gap: 16px; }
 .touch .jump { width: 88px; height: 88px; font-family: 'Press Start 2P', monospace; font-size: 12px; background: rgba(232, 65, 79, .85); color: #fff; }
 .touch .jump.down { background: var(--pink); }
+.trapbar { position: fixed; left: 50%; bottom: max(14px, env(safe-area-inset-bottom)); transform: translateX(-50%); display: flex; gap: 8px; z-index: 2; }
+.tbtn { position: relative; width: 78px; height: 78px; padding: 6px 2px 4px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden; touch-action: none; background: #e8414f; color: #fff; }
+.tbtn canvas { width: 35px; height: 35px; position: relative; z-index: 1; }
+.tbtn small { font-size: 13px; position: relative; z-index: 1; white-space: nowrap; }
+.tbtn .cool { position: absolute; left: 0; right: 0; top: 0; height: calc(var(--cd, 0) * 100%); background: rgba(28, 20, 36, .55); pointer-events: none; }
+.tbtn .secs { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-family: 'Press Start 2P', monospace; font-size: 20px; z-index: 2; text-shadow: var(--outline); pointer-events: none; }
+.tbtn[data-state="cool"] { background: #5d6475; }
+.tbtn[data-state="lock"] { background: #ff9a3c; }
+.tbtn[data-state="sent"] { background: #fff; color: var(--ink); }
+.tbtn[data-state="none"] { background: #3b3f52; opacity: .45; }
 .rotate { position: fixed; top: calc(max(10px, env(safe-area-inset-top)) + 100px); left: 50%; transform: translateX(-50%); background: var(--paper); box-shadow: var(--frame); padding: 4px 10px; font-weight: 600; font-size: 15px; pointer-events: none; white-space: nowrap; }
 
 .result { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
@@ -121,6 +131,7 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
   .swatch { width: 42px; height: 47px; } .swatch canvas { width: 36px; height: 41px; }
   .touch button { width: 62px; height: 62px; }
   .touch .jump { width: 78px; height: 78px; }
+  .tbtn { width: 66px; height: 66px; } .tbtn canvas { width: 28px; height: 28px; } .tbtn small { font-size: 11px; }
   .count { font-size: 56px; }
   .players { margin: 6px 0 2px; }
   h3 { margin: 6px 0 4px; }
