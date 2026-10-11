@@ -72,9 +72,14 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
 .levels button { font-size: 16px; padding: 7px 10px; text-align: left; display: flex; justify-content: space-between; gap: 6px; }
 .levels button.on { background: #ffd84a; }
 .levels button small { color: var(--muted); font-weight: 600; }
+.levels button .stars { color: #c99b10; letter-spacing: 1px; white-space: nowrap; }
+.levels button { flex-direction: column; align-items: flex-start; gap: 2px; }
 .seg { display: inline-flex; }
 .seg button { padding: 4px 12px; font-size: 16px; margin: var(--px) 0; }
 .seg button.on { background: var(--ink); color: #fff; }
+.randRow { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; margin-top: 8px; font-size: 16px; font-weight: 600; }
+.randRow .chip.on { background: #ffd84a; }
+.randRow .stars { color: #c99b10; }
 #firstRow { margin-top: 12px; font-weight: 600; font-size: 17px; }
 
 .hud { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; align-items: flex-start; padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); pointer-events: none; font-weight: 700; }

@@ -8,6 +8,12 @@ import { LEVELS } from './levels.js';
 import { Renderer } from './render.js';
 import { Net, cleanCode } from './net.js';
 import { Bot } from './bot.js';
+import { rateLevel } from './rating.js';
+import { generate } from './gen.js';
+const levelOf = ref => (typeof ref === 'number' ? LEVELS[ref] : ref);   // a level index, or a generated level object
+const STARS = new Map();   // level id -> 1..3
+const starsOf = L => { if (L.stars) return L.stars; if (!STARS.has(L.id)) STARS.set(L.id, rateLevel(L).stars); return STARS.get(L.id); };
+const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 
 const $ = id => document.getElementById(id);
@@ -73,9 +79,11 @@ $('howBtn').onclick = () => panel(`
   <h2>How to play</h2>
   <ul class="help">
     <li><b>The runner</b> dashes from the start to the checkered flag. Move with <b>← →</b> or <b>A D</b>, jump with <b>Space</b>, <b>W</b> or <b>↑</b> (hold for higher). On a phone, use the buttons.</li>
-    <li><b>The trapper</b> taps or clicks the red buttons to fire traps: pop-up spikes, trapdoors, cannons, crushers and flame jets.</li>
+    <li><b>The trapper</b> uses the trap bar (or keys 1-6) to fire the nearest trap of each kind: spikes, trapdoors, pop-up walls, cannons, arrows, crushers, flames and fans.</li>
     <li>Every trap has a <b>cooldown</b> (the dial fills up), and traps can't be fired back to back. The runner sees the dials too, so dash while they're recharging!</li>
+    <li><b>Gadgets</b> never kill on their own. The trapper has Lightning (aim it, stuns), Glue (aim it, slows), Gust (pushes back) and Hex (swaps left and right). The runner has Dash, Shield (blocks one hit), Jammer (traps stop for 3 s) and Air jumps. Small numbers show how many uses are left this run.</li>
     <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
+    <li>Levels have ★ to ★★★ difficulty. 🎲 builds a random level of the difficulty you pick.</li>
   </ul>
   <div class="buttons"><button class="big pink" data-close>Got it</button></div>`);
 
@@ -228,11 +236,25 @@ function openLobby() {
   LEVELS.forEach((L, i) => {
     const b = document.createElement('button');
     b.className = i === lobby.level ? 'on' : '';
-    b.innerHTML = `<span>${i + 1}. ${esc(L.name)}</span>` + (practice && best[L.id] ? `<small>${best[L.id].toFixed(1)}s</small>` : '');
+    b.innerHTML = `<span>${i + 1}. ${esc(L.name)}</span><small class="stars">${starText(starsOf(L))}${practice && best[L.id] ? ' · ' + best[L.id].toFixed(1) + 's' : ''}</small>`;
     b.disabled = online && !isHost;
     b.onclick = () => { lobby.level = i; sfx.click(); syncLobby(); openLobby(); };
     lv.appendChild(b);
   });
+  // Random levels: pick a difficulty, the host's device builds one and shares it.
+  const rr = $('randRow'); rr.innerHTML = '';
+  const cur = typeof lobby.level === 'object' ? lobby.level : null;
+  const lab = document.createElement('span');
+  lab.innerHTML = cur ? `🎲 <b>${esc(cur.name)}</b> <span class="stars">${starText(cur.stars)}</span>` : '🎲 Random level:';
+  rr.appendChild(lab);
+  for (const n of [1, 2, 3]) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (cur && cur.stars === n ? ' on' : ''); b.textContent = starText(n);
+    b.title = ['Easy', 'Medium', 'Hard'][n - 1] + ' random level';
+    b.disabled = online && !isHost;
+    b.onclick = () => { sfx.click(); lobby.level = randomLevel(n); syncLobby(); openLobby(); };
+    rr.appendChild(b);
+  }
 
   $('firstRow').classList.toggle('hidden', practice);
   const seg = $('firstSeg'); seg.innerHTML = '';
@@ -257,6 +279,9 @@ $('shareBtn').onclick = async () => {
     else { await navigator.clipboard.writeText(url); toast('Link copied!'); }
   } catch { /* cancelled */ }
 };
+
+function randomLevel(stars) { return generate((Math.random() * 1e9) >>> 0, stars); }
+const nextOf = ref => (typeof ref === 'number' ? (ref + 1) % LEVELS.length : randomLevel(ref.stars));
 
 function hostStart(level, runner, n) {
   if (mode === 'online') net.send({ t: 'start', level, runner, n });
@@ -418,7 +443,8 @@ function gadgetButton(id, side, onPress) {
   b.innerHTML = '<span class="cool"></span><span class="secs"></span><i class="badge"></i>';
   b.prepend(ic);
   const lab = document.createElement('small');
-  lab.textContent = (touchDevice ? '' : (side === 'trapper' ? T_KEY : R_KEY)[id] + ' ') + GADGETS[side][id].name;
+  const key = (side === 'trapper' ? T_KEY : R_KEY)[id];
+  lab.textContent = (touchDevice || !key ? '' : key + ' ') + GADGETS[side][id].name;
   b.appendChild(lab);
   if (onPress) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); unlockAudio(); if (run) onPress(id); });
   return b;
@@ -469,7 +495,7 @@ function useRunnerGadget(id) {
 function startRun(level, runner, n) {
   hidePanel();
   show(null);
-  const world = new World(LEVELS[level]);
+  const world = new World(levelOf(level));
   const online = mode === 'online';
   const runnerHere = !online || runner === mySide();
   run = {
@@ -481,7 +507,7 @@ function startRun(level, runner, n) {
   $('hud').classList.remove('hidden');
   const role = $('role');
   if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
-  else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = LEVELS[level].name; }
+  else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = levelOf(level).name; }
   else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
   $('touch').classList.toggle('hidden', !(touchDevice && runnerHere));
   buildTrapBar();
@@ -528,19 +554,19 @@ const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x
 
 function showRunResult(res) {
   if (!run) return;
-  const name = players[res.runner].name, L = LEVELS[run.level];
+  const name = players[res.runner].name, L = levelOf(run.level);
   const controls = mode !== 'online' || isHost;
   if (mode === 'practice') {
-    const best = store.get('best', {}), prev = best[L.id];
+    const best = store.get('best', {}), prev = L.random ? null : best[L.id];
     const record = res.finished && (!prev || res.time < prev);
-    if (record) { best[L.id] = res.time; store.set('best', best); }
+    if (record && !L.random) { best[L.id] = res.time; store.set('best', best); }
     panel(`<div class="big-emoji">${res.finished ? '🏁' : '⏰'}</div><h2>${res.finished ? 'You made it!' : 'Out of time'}</h2>
       <div class="result">${line(res, false)}</div>
       <p>${record ? 'New best time!' : prev ? `Best: ${prev.toFixed(1)}s` : ''}</p>
       <div class="buttons"><button class="big pink" id="again">Try again</button>
       <div class="row"><button class="mid" id="nextLv">Next level</button><button class="mid" id="toLobby">Levels</button></div></div>`);
     $('again').onclick = () => { sfx.click(); startRun(run.level, 'a', 1); };
-    $('nextLv').onclick = () => { sfx.click(); lobby.level = (run.level + 1) % LEVELS.length; startRun(lobby.level, 'a', 1); };
+    $('nextLv').onclick = () => { sfx.click(); lobby.level = nextOf(run.level); startRun(lobby.level, 'a', 1); };
     $('toLobby').onclick = () => { sfx.click(); endRunView(); openLobby(); };
     return;
   }
@@ -557,11 +583,11 @@ function showRunResult(res) {
   const tie = r1 && r2 && !better(r1, r2) && !better(r2, r1);
   const win = tie ? null : better(r1, r2) ? r1 : r2;
   if (win && !run.scored) { score[win.runner]++; run.scored = true; }
-  const nextLevel = (run.level + 1) % LEVELS.length;
+  const nextLevel = controls ? nextOf(run.level) : null;
   panel(`<div class="big-emoji">${tie ? '🤝' : '🏆'}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
     <div class="result">${[r1, r2].map(r => line(r, r === win)).join('')}</div>
     <p>Score: ${esc(players.a.name)} <b>${score.a}</b> – <b>${score.b}</b> ${esc(players.b.name)}</p>
-    <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(LEVELS[nextLevel].name)}</button>
+    <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(nextLevel.name || levelOf(nextLevel).name)}</button>
       <div class="row"><button class="mid" id="again">Rematch</button><button class="mid" id="toLobby">Lobby</button></div>` : `<p class="status">Waiting for the host…</p>`}</div>`);
   if (!controls) return;
   const firstNext = other(r1.runner);   // whoever ran second this time runs first next time

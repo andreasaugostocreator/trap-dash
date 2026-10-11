@@ -44,16 +44,16 @@ if (what === 'all' || what === 'local') {
   await wait(p, 380); await p.screenshot({ path: 'shots/06-crusher.png' });
   await p.evaluate(() => { const w = window.__td.run.world; w.player.x = 64 * 16; w.player.y = 12 * 16 - 13; window.__td.fireTrap(w.traps.find(t => t.kind === 'flame').id); });
   await wait(p, 500); await p.screenshot({ path: 'shots/07-flame.png' });
-  await p.evaluate(() => { const w = window.__td.run.world; w.player.x = 96 * 16; w.player.y = 13 * 16 - 13; });
+  await p.evaluate(() => { const w = window.__td.run.world; w.player.dead = false; w.player.x = 96 * 16; w.player.y = 13 * 16 - 13; });
   await p.keyboard.down('ArrowRight'); await wait(p, 1800); await p.keyboard.up('ArrowRight');
   await p.screenshot({ path: 'shots/08-run1-result.png' });
   await p.click('#go2'); await wait(p, 3600);
-  await p.evaluate(() => { const w = window.__td.run.world; w.time = 40; w.player.x = 96 * 16; w.player.y = 13 * 16 - 13; });
+  await p.evaluate(() => { const w = window.__td.run.world; w.time = 40; w.player.dead = false; w.player.x = 96 * 16; w.player.y = 13 * 16 - 13; });
   await p.keyboard.down('ArrowRight'); await wait(p, 1800); await p.keyboard.up('ArrowRight');
   await p.screenshot({ path: 'shots/09-level-result.png' });
   console.log('score', JSON.stringify(await p.evaluate(() => window.__td.score)));
   await p.click('#nextLv'); await wait(p, 4000); await p.screenshot({ path: 'shots/10-level2.png' });
-  for (const [i, x, y] of [[2, 60, 13], [3, 10, 40], [4, 60, 9]]) {
+  for (const [i, x, y] of [[3, 60, 13], [1, 10, 40], [5, 60, 9]]) {
     await p.evaluate(i => { window.__td.startRun(i, 'a', 1); }, i); await wait(p, 3800);
     await p.evaluate(([x, y]) => { const w = window.__td.run.world; w.player.x = x * 16; w.player.y = y * 16 - 13; }, [x, y]);
     await wait(p, 700); await p.screenshot({ path: `shots/11-level${i + 1}.png` });
@@ -94,7 +94,7 @@ if (what === 'all' || what === 'online') {
   await host.waitForFunction(() => window.__td.players.b, null, { timeout: 8000 });
   await wait(host, 400);
   await host.screenshot({ path: 'shots/30-host-lobby.png' }); await guest.screenshot({ path: 'shots/31-guest-lobby.png' });
-  await host.click('#levels button:nth-child(3)'); await wait(host, 300);
+  await host.click('#levels button:has-text("Midnight Meadow")'); await wait(host, 300);
   await host.click('#startBtn'); await wait(host, 3800);
   await host.keyboard.down('ArrowRight'); await wait(host, 700);
   // guest is the trapper: drop the first crusher with a real tap

@@ -11,7 +11,7 @@ await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/
 await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');
 await g.tap('text=Join a party'); await g.fill('#code', await h.textContent('#roomCode')); await g.tap('#joinGo');
 await h.waitForFunction(() => window.__td.players.b);
-await h.click('#levels button:nth-child(3)'); await h.click('#startBtn'); await h.waitForTimeout(3800);
+await h.click('#levels button:has-text("Midnight Meadow")'); await h.click('#startBtn'); await h.waitForTimeout(3800);
 await h.keyboard.down('ArrowRight'); await h.waitForTimeout(500);
 const before = await g.evaluate(() => window.__td.run.world.traps.filter(t => t.kind === 'crusher').map(t => t.state).join());
 await g.tap('.tbtn[data-kind="crusher"]'); await g.waitForTimeout(350);

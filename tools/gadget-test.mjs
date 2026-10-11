@@ -8,7 +8,7 @@ const st = p => p.evaluate(() => { const w = window.__td.run.world, q = w.player
 // 1. Same screen on PC: trapper keys + mouse aim, runner keys.
 const l = await page({ viewport: { width: 1280, height: 720 } });
 await l.goto('http://localhost:8080/'); await l.waitForTimeout(400);
-await l.click('text=Same screen'); await l.click('#levels button:nth-child(6)'); await l.click('#startBtn'); await l.waitForTimeout(3700);
+await l.click('text=Same screen'); await l.click('#levels button:has-text("Windy Works")'); await l.click('#startBtn'); await l.waitForTimeout(3700);
 const scr = await l.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr, y: (p.y - R.camY) * R.k / R.dpr }; });
 await l.mouse.move(scr.x, scr.y); await l.keyboard.press('Digit7'); await l.waitForTimeout(200);
 await l.screenshot({ path: 'shots/50-bolt-warning.png' });
@@ -38,7 +38,7 @@ await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/
 await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');
 await g.tap('text=Join a party'); await g.fill('#code', await h.textContent('#roomCode')); await g.tap('#joinGo');
 await h.waitForFunction(() => window.__td.players.b);
-await h.click('#levels button:nth-child(6)'); await h.click('#startBtn'); await h.waitForTimeout(3800);
+await h.click('#levels button:has-text("Windy Works")'); await h.click('#startBtn'); await h.waitForTimeout(3800);
 await g.tap('.gbtn[data-id="bolt"]'); await g.waitForTimeout(150);
 await h.keyboard.down('ArrowRight'); await h.waitForTimeout(900); await h.keyboard.up('ArrowRight'); await h.waitForTimeout(150);
 const gp = await g.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr, y: (p.y - R.camY) * R.k / R.dpr }; });

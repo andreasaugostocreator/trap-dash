@@ -30,6 +30,22 @@ export const LEVELS = [
     }),
   },
   {
+    id: 'clouds', name: 'Cloud Climb', theme: 'sky',
+    map: build(40, 60, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 59); rect(39, 0, 39, 59);
+      ground(1, 38, 56); set(4, 55, 'S');
+      row(8, 13, 53, '='); row(16, 22, 50, '#'); row(18, 20, 49, 'P');
+      row(25, 30, 47, '='); row(31, 37, 44, '#'); set(0, 43, '>');
+      row(24, 29, 41, '='); row(14, 20, 38, '#'); set(18, 38, 'F'); set(15, 37, 'C');
+      row(6, 11, 35, '='); row(1, 5, 32, '#'); set(3, 32, 'B');
+      row(4, 12, 26, '#'); rect(7, 18, 10, 19); row(8, 9, 20, 'X');
+      row(15, 20, 23, '='); row(23, 28, 20, 'T');
+      row(31, 37, 17, '#'); set(39, 16, '<'); set(34, 16, 'C');
+      row(24, 29, 14, '='); row(15, 21, 11, '#'); row(16, 18, 10, 'P');
+      row(6, 12, 8, '='); row(1, 4, 5, '#'); set(2, 4, 'G');
+    }),
+  },
+  {
     id: 'treetops', name: 'Treetop Hop', theme: 'sunset',
     map: build(120, 20, ({ set, rect, ground, row }) => {
       rect(0, 0, 0, 19); rect(119, 0, 119, 19);
@@ -58,19 +74,16 @@ export const LEVELS = [
     }),
   },
   {
-    id: 'clouds', name: 'Cloud Climb', theme: 'sky',
-    map: build(40, 60, ({ set, rect, ground, row }) => {
-      rect(0, 0, 0, 59); rect(39, 0, 39, 59);
-      ground(1, 38, 56); set(4, 55, 'S');
-      row(8, 13, 53, '='); row(16, 22, 50, '#'); row(18, 20, 49, 'P');
-      row(25, 30, 47, '='); row(31, 37, 44, '#'); set(0, 43, '>');
-      row(24, 29, 41, '='); row(14, 20, 38, '#'); set(18, 38, 'F'); set(15, 37, 'C');
-      row(6, 11, 35, '='); row(1, 5, 32, '#'); set(3, 32, 'B');
-      row(4, 12, 26, '#'); rect(7, 18, 10, 19); row(8, 9, 20, 'X');
-      row(15, 20, 23, '='); row(23, 28, 20, 'T');
-      row(31, 37, 17, '#'); set(39, 16, '<'); set(34, 16, 'C');
-      row(24, 29, 14, '='); row(15, 21, 11, '#'); row(16, 18, 10, 'P');
-      row(6, 12, 8, '='); row(1, 4, 5, '#'); set(2, 4, 'G');
+    id: 'windy', name: 'Windy Works', theme: 'sunset',
+    map: build(100, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(99, 0, 99, 17);
+      ground(1, 40, 14); set(3, 13, 'S'); set(11, 13, 'U'); set(16, 13, '{');
+      rect(20, 5, 29, 8); row(20, 29, 9, 'v'); row(23, 25, 14, 'W');
+      set(32, 13, 'C'); row(36, 37, 13, 'P');
+      row(41, 44, 14, 'T');
+      ground(45, 98, 14); row(47, 48, 13, 'P'); set(51, 13, 'U'); set(55, 13, 'U'); set(60, 13, '{');
+      set(63, 13, 'C'); rect(66, 5, 72, 8); row(66, 72, 9, 'v'); row(68, 69, 14, 'W');
+      set(77, 13, 'U'); row(81, 83, 13, 'P'); set(94, 13, 'G'); set(98, 13, '{');
     }),
   },
   {
@@ -89,19 +102,6 @@ export const LEVELS = [
       ground(105, 130, 16); rect(109, 0, 112, 8); row(110, 111, 9, 'X');
       set(116, 16, 'F'); set(120, 16, 'F'); set(124, 15, '^'); set(127, 15, 'C');
       row(131, 135, 16, 'T'); ground(136, 148, 16); set(144, 15, 'G'); set(148, 15, '<');
-    }),
-  },
-  {
-    id: 'windy', name: 'Windy Works', theme: 'sunset',
-    map: build(100, 18, ({ set, rect, ground, row }) => {
-      rect(0, 0, 0, 17); rect(99, 0, 99, 17);
-      ground(1, 40, 14); set(3, 13, 'S'); set(11, 13, 'U'); set(16, 13, '{');
-      rect(20, 5, 29, 8); row(20, 29, 9, 'v'); row(23, 25, 14, 'W');
-      set(32, 13, 'C'); row(36, 37, 13, 'P');
-      row(41, 44, 14, 'T');
-      ground(45, 98, 14); row(47, 48, 13, 'P'); set(51, 13, 'U'); set(55, 13, 'U'); set(60, 13, '{');
-      set(63, 13, 'C'); rect(66, 5, 72, 8); row(66, 72, 9, 'v'); row(68, 69, 14, 'W');
-      set(77, 13, 'U'); row(81, 83, 13, 'P'); set(94, 13, 'G'); set(98, 13, '{');
     }),
   },
 ];

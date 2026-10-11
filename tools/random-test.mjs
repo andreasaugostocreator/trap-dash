@@ -1,0 +1,27 @@
+// Random levels in the lobby: local play and online (the level travels to the guest). Needs :8080 and the relay broker.
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
+const errs = [];
+const page = async o => { const p = await b.newPage(o); p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text())); return p; };
+const l = await page({ viewport: { width: 1280, height: 720 } });
+await l.goto('http://localhost:8080/'); await l.waitForTimeout(400);
+await l.click('text=Same screen'); await l.click('#randRow button:nth-of-type(3)'); await l.waitForTimeout(300);
+await l.screenshot({ path: 'shots/60-lobby-random.png' });
+console.log('lobby shows:', await l.textContent('#randRow'));
+await l.click('#startBtn'); await l.waitForTimeout(3800);
+await l.keyboard.down('ArrowRight'); await l.waitForTimeout(1500); await l.keyboard.up('ArrowRight');
+await l.screenshot({ path: 'shots/61-random-play.png' });
+console.log('local run:', await l.evaluate(() => { const r = window.__td.run; return `${r.world.level.name} ${r.world.w}x${r.world.h} x=${Math.round(r.world.player.x)}`; }));
+const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const h = await page({ viewport: { width: 1280, height: 720 } }), g = await page({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(400);
+await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');
+await g.tap('text=Join a party'); await g.fill('#code', await h.textContent('#roomCode')); await g.tap('#joinGo');
+await h.waitForFunction(() => window.__td.players.b);
+await h.click('#randRow button:nth-of-type(2)'); await h.waitForTimeout(500);
+console.log('guest lobby sees:', await g.textContent('#randRow'));
+await h.click('#startBtn'); await h.waitForTimeout(3900);
+const same = await Promise.all([h, g].map(p => p.evaluate(() => window.__td.run.world.level.map.join('|'))));
+console.log('same map on both devices:', same[0] === same[1], 'length', same[0].length);
+console.log(errs.length ? 'ERRORS\n' + [...new Set(errs)].join('\n') : 'no errors');
+await b.close();
