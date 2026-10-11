@@ -328,7 +328,7 @@ for (const ev of ['touchend', 'touchcancel']) addEventListener(ev, e => { if (!e
 addEventListener('blur', releaseAll);
 document.addEventListener('visibilitychange', releaseAll);
 // Sliding a thumb from ◀ to ▶ should switch direction without lifting.
-$('touch').addEventListener('pointermove', e => {
+$('arrows').addEventListener('pointermove', e => {
   if (!touchHeld.left.has(e.pointerId) && !touchHeld.right.has(e.pointerId)) return;
   const r = $('tRight').getBoundingClientRect(), onRight = e.clientX >= r.left - 7;
   const to = onRight ? 'right' : 'left', from = onRight ? 'left' : 'right';
@@ -454,9 +454,6 @@ function buildGadgets() {
   gb.innerHTML = ''; rb.innerHTML = '';
   if (run.trapperHere) for (const id of T_GAD) gb.appendChild(gadgetButton(id, 'trapper', id => useTrapperGadget(id)));
   if (run.runnerHere) { for (const id of R_GAD) rb.appendChild(gadgetButton(id, 'runner', useRunnerGadget)); rb.appendChild(gadgetButton('feather', 'runner', null)); }
-  gb.classList.toggle('hidden', !run.trapperHere);
-  rb.classList.toggle('hidden', !run.runnerHere);
-  rb.classList.toggle('touchy', touchDevice);
 }
 function updateGadgets() {
   const w = run.world;
@@ -491,6 +488,29 @@ function useRunnerGadget(id) {
   if (!run.world.useGadget('runner', id)) sfx.denied();
 }
 
+// ---------- where the controls go. The bottom panel holds whoever plays on this device; on a shared touch screen
+// the trapper gets a panel at the top. The game view is whatever space is left, so nothing covers it.
+function layoutControls() {
+  const parts = $('parts');
+  for (const id of ['arrows', 'tJump', 'trapbar', 'gadbar', 'rgad']) parts.appendChild($(id));
+  for (const id of ['padL', 'padM', 'padR', 'padTL', 'padTM', 'padTR']) $(id).innerHTML = '';
+  const bottom = { L: [], M: [], R: [] }, top = { L: [], M: [], R: [] };
+  if (run.runnerHere && touchDevice) { bottom.L.push('arrows'); bottom.M.push('rgad'); bottom.R.push('tJump'); }
+  else if (run.runnerHere) bottom.L.push('rgad');
+  if (run.trapperHere) {
+    const where = run.runnerHere && touchDevice ? top : bottom;
+    where.M.push('trapbar'); where.R.push('gadbar');
+  }
+  const fill = (spec, prefix) => { let any = false; for (const k of ['L', 'M', 'R']) for (const id of spec[k]) { $(prefix + k).appendChild($(id)); any = true; } return any; };
+  const hasBottom = fill(bottom, 'pad'), hasTop = fill(top, 'padT');
+  $('pad').classList.toggle('hidden', !hasBottom);
+  $('padTop').classList.toggle('hidden', !hasTop);
+  document.body.classList.add('playing');
+  document.body.classList.toggle('dualpad', hasTop);
+  document.body.classList.toggle('nopad', !hasBottom);
+  R.resize();
+}
+
 // ---------- a run
 function startRun(level, runner, n) {
   hidePanel();
@@ -501,21 +521,21 @@ function startRun(level, runner, n) {
   run = {
     level, runner, n, world, phase: 'count', countT: 3.2, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
     runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere,
-    bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 7,
+    bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5,
   };
-  R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true, run.trapperHere);
+  R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
   $('hud').classList.remove('hidden');
   const role = $('role');
   if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
   else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = levelOf(level).name; }
   else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
-  $('touch').classList.toggle('hidden', !(touchDevice && runnerHere));
   buildTrapBar();
   buildGadgets();
+  layoutControls();
   const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-6, gadgets 7-0)'}`
-    : runnerHere ? (touchDevice ? 'Reach the flag! Your gadgets are above the jump button.' : 'Reach the flag! ← → run, Space jump. Shift dash, Q shield, E jammer.')
-      : (touchDevice ? 'Trap buttons at the bottom, gadgets on the left.' : 'Keys 1-6 fire traps, 7-0 gadgets (aimed at your mouse). Or click the buttons.');
-  $('hint').textContent = hint; $('hint').classList.remove('hidden');
+    : runnerHere ? (touchDevice ? 'Reach the flag! Gadgets are next to JUMP.' : 'Reach the flag! ← → run, Space jump. Shift dash, Q shield, E jammer.')
+      : (touchDevice ? 'Red buttons fire the nearest trap. Purple gadgets go anywhere.' : 'Keys 1-6 fire traps, 7-0 gadgets (aimed at your mouse). Or click the buttons.');
+  $('hint').textContent = hint + (touchDevice && innerHeight > innerWidth ? ' (Tip: turn your phone sideways for a wider view.)' : ''); $('hint').classList.remove('hidden');
   input.jumpQueued = false;
   startMusic();
 }
@@ -535,7 +555,7 @@ function finishRun(res) {
   run.phase = 'end';
   if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
   runs.push(res);
-  for (const id of ['touch', 'hint', 'trapbar', 'gadbar', 'rgad']) $(id).classList.add('hidden');
+  for (const id of ['hint', 'pad', 'padTop']) $(id).classList.add('hidden');
   run.aim = null;
   setTimeout(() => showRunResult(res), res.finished ? 300 : 0);
 }
@@ -598,7 +618,8 @@ function showRunResult(res) {
 
 function endRunView() {
   run = null; hidePanel();
-  for (const id of ['hud', 'hint', 'count', 'touch', 'rotate', 'trapbar', 'gadbar', 'rgad']) $(id).classList.add('hidden');
+  for (const id of ['hud', 'hint', 'count', 'rotate', 'pad', 'padTop']) $(id).classList.add('hidden');
+  document.body.classList.remove('playing', 'dualpad');
 }
 
 function panel(html) {
@@ -633,11 +654,11 @@ function frame(now) {
 function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 
 function tick(dt, now) {
-  if (canvas.width !== Math.round(innerWidth * Math.min(devicePixelRatio || 1, 3)) || canvas.height !== Math.round(innerHeight * Math.min(devicePixelRatio || 1, 3))) R.resize();
+  const dpr = Math.min(devicePixelRatio || 1, 3);
+  if (canvas.width !== Math.round(canvas.clientWidth * dpr) || canvas.height !== Math.round(canvas.clientHeight * dpr)) R.resize();
   if (!run) { drawAttract(dt); return; }
   const w = run.world;
   readInput();
-  $('rotate').classList.toggle('hidden', !(touchDevice && innerHeight > innerWidth && run.phase !== 'end'));
   // countdown (both devices count on their own; the trapper also switches to 'play' when the first moving snapshot lands)
   if (run.phase === 'count' && !run.paused) {
     run.countT -= dt;
@@ -683,9 +704,9 @@ function tick(dt, now) {
     }
     for (const shot of w.shots) shot.x += shot.vx * dt;
   }
-  R.follow(w, dt, run.trapperHere && !run.runnerHere, false, run.trapperHere);
+  R.follow(w, dt, run.trapperHere && !run.runnerHere);
   updateGadgets();
-  if (run.trapperHere) { updateTrapBar(); const bar = $('trapbar').getBoundingClientRect(); R.bottomPad = Math.ceil((innerHeight - bar.top + 6) * R.dpr / R.k); }
+  if (run.trapperHere) updateTrapBar();
   R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, debug: DEBUG });
   const left = TIME_LIMIT - w.time;
   $('timer').textContent = w.time.toFixed(1); $('timer').classList.toggle('low', left < 15);

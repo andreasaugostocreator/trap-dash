@@ -164,3 +164,56 @@ input.code { font-family: 'Press Start 2P', monospace; font-size: 30px; width: 2
   #lobby .buttons { flex-direction: row; }
   #lobby .buttons button { flex: 1; width: auto; }
 }
+
+/* ---------- In-game layout: top bar, game view, control panel(s). Nothing floats over the map. */
+:root { --hudH: calc(46px + env(safe-area-inset-top)); --padH: calc(96px + env(safe-area-inset-bottom)); --padTopH: 84px; --btn: 64px; }
+body.playing canvas#game { top: var(--hudH); bottom: auto; width: 100%; height: calc(100% - var(--hudH) - var(--padH)); }
+body.playing.nopad canvas#game { height: calc(100% - var(--hudH)); }
+body.playing.dualpad canvas#game { top: calc(var(--hudH) + var(--padTopH)); height: calc(100% - var(--hudH) - var(--padTopH) - var(--padH)); }
+.hud { height: var(--hudH); align-items: center; padding-top: env(safe-area-inset-top); background: #1c1424; box-shadow: 0 3px 0 #000; z-index: 3; }
+.hud .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.hudLeft { min-width: 0; }
+.timer { padding-top: 0; }
+.hint { top: calc(var(--hudH) + 8px); z-index: 3; }
+body.dualpad .hint { top: calc(var(--hudH) + var(--padTopH) + 8px); }
+.rotate { top: calc(var(--hudH) + 52px); }
+.pad { position: fixed; left: 0; right: 0; bottom: 0; height: var(--padH); z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 0 max(12px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(12px, env(safe-area-inset-left));
+  background: #241a30; box-shadow: 0 -3px 0 #000, inset 0 3px 0 #33264a; }
+.pad.top { top: var(--hudH); bottom: auto; height: var(--padTopH); padding-bottom: 0; box-shadow: 0 3px 0 #000; }
+.padSec { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.padSec.mid { flex: 1; justify-content: center; }
+.padSec:empty { display: none; }
+#parts { display: none; }
+/* the pieces placed into the panels */
+.arrows { display: flex; gap: 10px; }
+.arrows button, #tJump { position: static; touch-action: none; margin: 3px; }
+.arrows button { width: calc(var(--btn) + 12px); height: var(--btn); font-size: 24px; background: #f4ead7; }
+#tJump { width: calc(var(--btn) + 36px); height: var(--btn); font-family: 'Press Start 2P', monospace; font-size: 12px; background: var(--pink); color: #fff; }
+.arrows button.down { background: #fff; }
+#tJump.down { background: #ff6b7a; }
+.trapbar, .gadbar, .rgad { position: static; transform: none; display: flex; flex-direction: row; gap: 6px; }
+.pad .tbtn, .pad .gbtn { width: var(--btn); height: var(--btn); flex: 0 1 var(--btn); min-width: 44px; padding: 4px 1px 3px; }
+.pad .tbtn canvas, .pad .gbtn canvas { width: 28px; height: 28px; }
+.pad .tbtn small, .pad .gbtn small { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.pad .tbtn .secs { font-size: 18px; }
+.gadbar { padding-left: 10px; border-left: 3px solid #33264a; }
+@media (max-height: 500px) {
+  :root { --hudH: calc(40px + env(safe-area-inset-top)); --padH: calc(80px + env(safe-area-inset-bottom)); --padTopH: 72px; --btn: 58px; }
+  .pad .tbtn canvas, .pad .gbtn canvas { width: 24px; height: 24px; }
+  .pad .tbtn small, .pad .gbtn small { font-size: 10px; }
+  .timer { font-size: 16px; } .who { font-size: 15px; } .role { font-size: 10px; padding: 4px 7px; }
+}
+@media (max-width: 700px) { :root { --btn: 52px; } .pad { gap: 6px; } .trapbar, .gadbar, .rgad { gap: 4px; } }
+
+/* Portrait phones: the panel gets two rows. */
+@media (orientation: portrait) and (max-width: 600px) {
+  :root { --padH: calc(164px + env(safe-area-inset-bottom)); --padTopH: 150px; --btn: 54px; }
+  .pad { flex-wrap: wrap; align-content: center; row-gap: 8px; padding-top: 6px; }
+  .pad.top { padding-top: 6px; }
+  .padSec.mid { order: -1; flex: 0 0 100%; }
+  #padL:empty + .mid + #padR, #padTL:empty + .mid + #padTR { margin: 0 auto; }
+  .gadbar { border-left: 0; padding-left: 0; }
+  .arrows button { width: 74px; }
+  #tJump { width: 110px; }
+}

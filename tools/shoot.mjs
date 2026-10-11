@@ -31,7 +31,7 @@ if (what === 'all' || what === 'local') {
   await p.keyboard.down('Space'); await wait(p, 300); await p.keyboard.up('Space');
   await wait(p, 300);
   // fire the first spike trap by clicking its button on screen
-  const btn = await p.evaluate(() => { const r = window.__td.run, R = window.__td.R, t = r.world.traps.find(t => t.kind === 'spikes'); const b = R.trapButton(r.world, t); return { x: (b.x - R.camX) * R.k / R.dpr, y: (b.y - R.camY) * R.k / R.dpr }; });
+  const btn = await p.evaluate(() => { const r = window.__td.run, R = window.__td.R, t = r.world.traps.find(t => t.kind === 'spikes'); const b = R.trapButton(r.world, t); return { x: (b.x - R.camX) * R.k / R.dpr + R.ox, y: (b.y - R.camY) * R.k / R.dpr + R.oy }; });
   await p.mouse.click(btn.x, btn.y); await wait(p, 330);
   await p.screenshot({ path: 'shots/05-local-spikes.png' });
   console.log('local', JSON.stringify(await state(p)));
@@ -98,7 +98,7 @@ if (what === 'all' || what === 'online') {
   await host.click('#startBtn'); await wait(host, 3800);
   await host.keyboard.down('ArrowRight'); await wait(host, 700);
   // guest is the trapper: drop the first crusher with a real tap
-  const btn = await guest.evaluate(() => { const r = window.__td.run, R = window.__td.R, t = r.world.traps.find(t => t.kind === 'crusher'); const b = R.trapButton(r.world, t); return { x: (b.x - R.camX) * R.k / R.dpr, y: (b.y - R.camY) * R.k / R.dpr }; });
+  const btn = await guest.evaluate(() => { const r = window.__td.run, R = window.__td.R, t = r.world.traps.find(t => t.kind === 'crusher'); const b = R.trapButton(r.world, t); return { x: (b.x - R.camX) * R.k / R.dpr + R.ox, y: (b.y - R.camY) * R.k / R.dpr + R.oy }; });
   await guest.touchscreen.tap(btn.x, btn.y); await wait(guest, 350);
   await host.screenshot({ path: 'shots/32-host-running.png' }); await guest.screenshot({ path: 'shots/33-guest-trapping.png' });
   console.log('host', JSON.stringify(await state(host)));

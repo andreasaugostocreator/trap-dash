@@ -9,7 +9,7 @@ const st = p => p.evaluate(() => { const w = window.__td.run.world, q = w.player
 const l = await page({ viewport: { width: 1280, height: 720 } });
 await l.goto('http://localhost:8080/'); await l.waitForTimeout(400);
 await l.click('text=Same screen'); await l.click('#levels button:has-text("Windy Works")'); await l.click('#startBtn'); await l.waitForTimeout(3700);
-const scr = await l.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr, y: (p.y - R.camY) * R.k / R.dpr }; });
+const scr = await l.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr + R.ox, y: (p.y - R.camY) * R.k / R.dpr + R.oy }; });
 await l.mouse.move(scr.x, scr.y); await l.keyboard.press('Digit7'); await l.waitForTimeout(200);
 await l.screenshot({ path: 'shots/50-bolt-warning.png' });
 await l.waitForTimeout(600);
@@ -41,7 +41,7 @@ await h.waitForFunction(() => window.__td.players.b);
 await h.click('#levels button:has-text("Windy Works")'); await h.click('#startBtn'); await h.waitForTimeout(3800);
 await g.tap('.gbtn[data-id="bolt"]'); await g.waitForTimeout(150);
 await h.keyboard.down('ArrowRight'); await h.waitForTimeout(900); await h.keyboard.up('ArrowRight'); await h.waitForTimeout(150);
-const gp = await g.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr, y: (p.y - R.camY) * R.k / R.dpr }; });
+const gp = await g.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr + R.ox, y: (p.y - R.camY) * R.k / R.dpr + R.oy }; });
 await g.touchscreen.tap(gp.x, gp.y); await g.waitForTimeout(250);
 await g.screenshot({ path: 'shots/53-phone-trapper-gadgets.png' });
 await h.waitForTimeout(700);

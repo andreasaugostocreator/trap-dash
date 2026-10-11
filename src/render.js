@@ -22,9 +22,9 @@ export class Renderer {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    this.dpr = dpr; this.vw = window.innerWidth; this.vh = window.innerHeight;
+    const r = this.c.getBoundingClientRect();   // the canvas fills the space the control panels leave
+    this.dpr = dpr; this.vw = r.width || window.innerWidth; this.vh = r.height || window.innerHeight; this.ox = r.left; this.oy = r.top;
     this.c.width = Math.round(this.vw * dpr); this.c.height = Math.round(this.vh * dpr);
-    this.c.style.width = this.vw + 'px'; this.c.style.height = this.vh + 'px';
     this.wide = null;
   }
 
@@ -33,7 +33,9 @@ export class Renderer {
     if (this.wide === wide) return;
     this.wide = wide;
     const W = this.c.width, H = this.c.height;
-    let k = Math.round(H / (TILE * (wide ? 17 : 15)));
+    // Short views (phones) show fewer, bigger tiles: about one tile per 22 CSS px of height, 10 to 15 tiles.
+    const tiles = Math.max(10, Math.min(15, this.vh / 22)) + (wide ? 2 : 0);
+    let k = Math.round(H / (TILE * tiles));
     k = Math.max(1, Math.min(k, Math.floor(W / (TILE * 13))));
     this.k = k;
     this.lo.width = Math.ceil(W / k); this.lo.height = Math.ceil(H / k);
@@ -41,23 +43,22 @@ export class Renderer {
     this.bgCache = {};
   }
 
-  // raise: keep the runner higher on screen (the trapper's bar covers the bottom).
-  follow(world, dt, wide, snap, raise) {
+  follow(world, dt, wide, snap) {
     this.setZoom(!!wide);
+    if (!this.lo.width) return;
     const p = world.player, vw = this.lo.width, vh = this.lo.height;
     this.lookX = (this.lookX ?? 0) + ((p.face * 36 + p.vx * 0.25) - (this.lookX ?? 0)) * Math.min(1, dt * 3);
-    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * (raise ? 0.42 : 0.55);
+    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * 0.55;
     const W = world.w * TILE, H = world.h * TILE;
     tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
-    const pad = raise ? (this.bottomPad || 0) : 0;   // room under the level for the trapper's bar
-    ty = vh >= H + pad ? H + pad - vh : Math.max(0, Math.min(H + pad - vh, ty));
+    ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
     const k = snap ? 1 : Math.min(1, dt * 6);
     this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * (snap ? 1 : k * 0.8);
   }
 
   get camX() { return Math.round(this.cam.x); }
   get camY() { return Math.round(this.cam.y); }
-  toWorld(cx, cy) { return { x: cx * this.dpr / this.k + this.camX, y: cy * this.dpr / this.k + this.camY }; }
+  toWorld(cx, cy) { return { x: (cx - (this.ox || 0)) * this.dpr / this.k + this.camX, y: (cy - (this.oy || 0)) * this.dpr / this.k + this.camY }; }
 
   // ---------- events -> particles
   onEvent([k, x, y, extra], ch) {
@@ -113,7 +114,7 @@ export class Renderer {
     this.drawBolts(world);
     if (o.aim) this.drawAim(world, o.aim);
     this.drawParticles(dt);
-    this.drawTrapButtons(world, o, !o.trapper);
+    this.drawTrapButtons(world, o, true);
     if (o.debug) { l.strokeStyle = 'red'; l.lineWidth = 1; for (const d of world.dangers()) l.strokeRect(Math.round(d.x) + 0.5, Math.round(d.y) + 0.5, d.w - 1, d.h - 1); }
     l.restore();
     if (this.flash > 0) { this.flash -= dt; l.fillStyle = '#ffffff55'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
