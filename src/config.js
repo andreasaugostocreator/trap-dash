@@ -6,7 +6,9 @@ export const PHYS = {
   w: 10, h: 13,            // player hitbox
   maxRun: 132,
   accelGround: 1700, accelAir: 1150, friction: 2000,
-  gravity: 1500, gravityCut: 3200, maxFall: 430,
+  gravity: 1500, gravityCut: 3200, maxFall: 290,
+  fallGravity: 900,        // gentler on the way down so landings aren't a sudden drop
+  apexGravity: 0.55,       // a little hang time at the top of a held jump
   jumpV: 410, springV: 640,
   coyote: 0.09, buffer: 0.12,
   respawn: 0.75,

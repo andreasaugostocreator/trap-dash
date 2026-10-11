@@ -143,7 +143,9 @@ export class World {
       this.emit('jump', p.x + 5, p.y + PHYS.h);
     }
     if (p.vy >= 0) p.sprung = false;
-    const g = p.vy < 0 && !p.sprung && !(input.jump && p.wasJump) ? PHYS.gravityCut : PHYS.gravity;
+    let g = p.vy < 0 && !p.sprung && !(input.jump && p.wasJump) ? PHYS.gravityCut : PHYS.gravity;
+    if (p.vy >= 0) g = PHYS.fallGravity;
+    if (Math.abs(p.vy) < 50 && input.jump && p.wasJump) g *= PHYS.apexGravity;
     p.vy = Math.min(PHYS.maxFall, p.vy + g * dt);
     const wasGround = p.onGround, fallV = p.vy;
     this.movePlayer(dt);
