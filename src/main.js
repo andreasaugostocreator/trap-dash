@@ -329,6 +329,10 @@ for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => relea
 for (const ev of ['touchend', 'touchcancel']) addEventListener(ev, e => { if (!e.touches.length) releaseAll(); });
 addEventListener('blur', releaseAll);
 document.addEventListener('visibilitychange', releaseAll);
+// iOS shows its text magnifier (a glass bubble) and selection handles when a finger rests on something. The controls
+// work from pointer events, so the panels and the game view can swallow the touch itself and iOS never starts that.
+for (const el of [$('pad'), $('padTop'), canvas]) for (const ev of ['touchstart', 'touchmove', 'touchend']) el.addEventListener(ev, e => { if (e.cancelable) e.preventDefault(); }, { passive: false });
+addEventListener('contextmenu', e => { if (run) e.preventDefault(); });
 // Forgiving touch: a tap in a control panel that misses every button goes to the nearest one, if it's within
 // about a fingertip (56 px). The press is handed on as that button's own pointerdown, so holding and sliding still work.
 const NEAR = 56;
