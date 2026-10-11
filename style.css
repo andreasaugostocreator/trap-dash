@@ -11,6 +11,7 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #1c1424; color: var(--ink); overscroll-behavior: none; }
 body { -webkit-user-select: none; user-select: none; touch-action: none; }
 canvas { position: fixed; inset: 0; display: block; image-rendering: pixelated; }
+canvas#game { width: 100%; height: 100%; }   /* explicit, or it would take its own pixel size and keep growing */
 canvas.pix { position: static; image-rendering: pixelated; }
 .hidden { display: none !important; }
 
@@ -228,3 +229,58 @@ body.dualpad .hint { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 html, body, button, canvas, .pad, .hud, .card { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 input { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
 .pad, .pad *, canvas { touch-action: none; }
+
+/* Short landscape screens (phones on their side): menus use the width instead of scrolling. */
+@media (max-height: 500px) and (orientation: landscape) {
+  .screen { padding: max(8px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+  .card.wide { width: min(860px, 100%); }
+  .titleCard { display: grid; grid-template-columns: 1fr 1fr; grid-template-areas: "logo btns" "me btns" "me chips"; column-gap: 22px; align-items: center; padding: 12px 18px; }
+  .titleCard .logo { grid-area: logo; margin: 0; font-size: clamp(22px, 4.4vw, 34px); }
+  .titleCard .tag { display: none; }
+  .titleCard .me { grid-area: me; gap: 6px; }
+  .titleCard .buttons { grid-area: btns; margin: 0; gap: 8px; align-self: center; }
+  .titleCard .row.small { grid-area: chips; margin: 0; gap: 6px; }
+  .titleCard .row.small .chip { font-size: 13px; padding: 3px 8px; }
+  .titleCard label { font-size: 15px; }
+  .titleCard input { font-size: 16px; width: 150px; padding: 4px 8px; }
+  .titleCard .swatch { width: 40px; height: 44px; } .titleCard .swatch canvas { width: 34px; height: 39px; }
+  .titleCard button.big { font-size: 13px; padding: 11px 8px; }
+  .titleCard button.mid { font-size: 15px; padding: 7px 8px; }
+  /* lobby: players next to each other, levels in 3 columns, start + leave side by side */
+  #lobby .card { padding: 10px 16px; }
+  #lobby h2 { font-size: 15px; margin: 0; }
+  #lobby .roomCode b { font-size: 20px; }
+  #lobby .roomCode { padding: 4px 10px; gap: 4px; }
+  #lobby h3 { display: none; }
+  #lobby .players { margin: 6px 0 4px; }
+  #lobby .player { padding: 3px 8px; font-size: 16px; }
+  #lobby .levels button { padding: 4px 8px; font-size: 14px; }
+  #lobby .randRow { margin-top: 6px; font-size: 14px; }
+  #lobby #firstRow { margin-top: 4px; font-size: 15px; }
+  #lobby .buttons { margin: 8px 0 0; }
+  #lobby button.big { padding: 9px; }
+  .help { font-size: 15px; } .help li { margin: 4px 0; }
+}
+
+/* Portrait phones: a compact lobby. */
+@media (orientation: portrait) and (max-width: 600px) {
+  #lobby .card { padding: 12px 14px; }
+  #lobby h2 { font-size: 15px; }
+  #lobby .status { font-size: 14px; margin: 2px 0; }
+  #lobby h3 { display: none; }
+  #lobby .players { margin: 8px 0 4px; gap: 8px; }
+  #lobby .player { padding: 3px 6px; font-size: 15px; gap: 6px; }
+  #lobby .levels { grid-template-columns: 1fr 1fr; gap: 6px; }
+  #lobby .levels button { padding: 5px 7px; font-size: 13px; }
+  #lobby .randRow { font-size: 14px; margin-top: 6px; }
+  #lobby #firstRow { margin-top: 6px; font-size: 14px; }
+  #lobby .buttons { flex-direction: row; margin: 10px 0 0; }
+  #lobby .buttons button { flex: 1; width: auto; }
+  #lobby button.big { font-size: 12px; padding: 10px 6px; }
+  .titleCard { padding: 12px 14px; }
+}
+@media (max-height: 400px) and (orientation: landscape) {
+  #lobby .status { display: none; }
+  #lobby .levels button small { display: inline; }
+  #lobby .levels button { flex-direction: row; align-items: center; justify-content: space-between; }
+}
