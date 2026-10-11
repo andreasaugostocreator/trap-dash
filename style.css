@@ -217,3 +217,7 @@ body.dualpad .hint { top: calc(var(--hudH) + var(--padTopH) + 8px); }
   .arrows button { width: 74px; }
   #tJump { width: 110px; }
 }
+
+/* Bigger tap area for the pause button in the top bar. */
+#pauseBtn { position: relative; }
+#pauseBtn::after { content: ''; position: absolute; inset: -10px -12px; }

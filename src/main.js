@@ -319,7 +319,7 @@ const release = id => { for (const k in touchHeld) touchHeld[k].delete(id); touc
 const releaseAll = () => { for (const k in touchHeld) touchHeld[k].clear(); touchLooks(); };
 for (const k in TOUCH_BTN) {
   const el = $(TOUCH_BTN[k]);
-  el.addEventListener('pointerdown', e => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); if (k === 'jump' && !touchHeld.jump.size) input.jumpQueued = true; touchHeld[k].add(e.pointerId); touchLooks(); unlockAudio(); });
+  el.addEventListener('pointerdown', e => { e.preventDefault(); try { el.setPointerCapture?.(e.pointerId); } catch { /* forwarded tap */ } if (k === 'jump' && !touchHeld.jump.size) input.jumpQueued = true; touchHeld[k].add(e.pointerId); touchLooks(); unlockAudio(); });
   for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, e => release(e.pointerId));
 }
 for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => release(e.pointerId));
@@ -327,6 +327,23 @@ for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => relea
 for (const ev of ['touchend', 'touchcancel']) addEventListener(ev, e => { if (!e.touches.length) releaseAll(); });
 addEventListener('blur', releaseAll);
 document.addEventListener('visibilitychange', releaseAll);
+// Forgiving touch: a tap in a control panel that misses every button goes to the nearest one, if it's within
+// about a fingertip (56 px). The press is handed on as that button's own pointerdown, so holding and sliding still work.
+const NEAR = 56;
+function pressNearest(e, pads) {
+  let best = null, bd = NEAR;
+  for (const pad of pads) for (const b of pad.querySelectorAll('button')) {
+    const r = b.getBoundingClientRect();
+    if (!r.width || b.disabled) continue;
+    const d = Math.hypot(Math.max(r.left - e.clientX, 0, e.clientX - r.right), Math.max(r.top - e.clientY, 0, e.clientY - r.bottom));
+    if (d < bd) { bd = d; best = b; }
+  }
+  if (!best) return false;
+  e.preventDefault();
+  best.dispatchEvent(new PointerEvent('pointerdown', { pointerId: e.pointerId, pointerType: e.pointerType, isPrimary: e.isPrimary, clientX: e.clientX, clientY: e.clientY, bubbles: true, cancelable: true }));
+  return true;
+}
+for (const pad of [$('pad'), $('padTop')]) pad.addEventListener('pointerdown', e => { if (!e.target.closest('button')) pressNearest(e, [pad]); });
 // Sliding a thumb from ◀ to ▶ should switch direction without lifting.
 $('arrows').addEventListener('pointermove', e => {
   if (!touchHeld.left.has(e.pointerId) && !touchHeld.right.has(e.pointerId)) return;
@@ -356,6 +373,7 @@ let pointer = null;   // last mouse position over the game, for aiming gadgets w
 canvas.addEventListener('pointerleave', () => { pointer = null; });
 canvas.addEventListener('pointerdown', e => {
   unlockAudio();
+  if (run && !run.trapperHere && e.pointerType !== 'mouse') { pressNearest(e, [$('pad')]); return; }   // the runner never taps the map: a near miss above the panel still counts
   if (!run || !run.trapperHere || run.phase !== 'play') return;
   if (run.aim) { useTrapperGadget(run.aim.id, R.toWorld(e.clientX, e.clientY)); return; }
   const id = trapAt(e.clientX, e.clientY);
