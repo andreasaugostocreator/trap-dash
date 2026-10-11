@@ -84,7 +84,7 @@ if (what === 'all' || what === 'practice') {
 }
 
 if (what === 'all' || what === 'online') {
-  const q = '?peerhost=127.0.0.1&peerport=9000';
+  const q = process.env.Q || '?peerhost=127.0.0.1&peerport=9000&relay=ws://127.0.0.1:8883';
   const host = await open(BASE + q), guest = await open(BASE + q, { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
   await host.click('text=Host a party');
   await host.waitForFunction(() => document.getElementById('roomCode').textContent !== '----', null, { timeout: 8000 });

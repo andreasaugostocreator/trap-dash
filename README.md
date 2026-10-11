@@ -9,8 +9,9 @@ Full 2D pixel art: the world is drawn 1:1 on a small canvas and scaled up by who
 Six runners to pick from: Explorer, Knight, Astronaut, Ninja, Robot and Pirate. Plain HTML + JavaScript modules, no build step.
 
 - **Online party:** *Host a party* gives a 4-letter room code (or a share link). Your friend picks *Join a party*.
-  The two browsers connect directly over WebRTC using [PeerJS](https://peerjs.com) and its free public broker,
-  so GitHub Pages hosting is enough and no server is needed.
+  The game tries two links at once and uses whichever works: a direct WebRTC link ([PeerJS](https://peerjs.com)),
+  and a relay through a free public MQTT broker (EMQX, HiveMQ as backup) for networks that block direct links,
+  such as phones on mobile data. GitHub Pages hosting is enough and no server of your own is needed.
 - **Same screen:** one runs on the keyboard (or the touch buttons on a tablet), the other clicks / taps the traps.
 - **Practice:** you run, a bot fires the traps. Best times are saved per level.
 - **5 levels:** Sunny Hills, Treetop Hop, Midnight Meadow, Cloud Climb (vertical) and The Gauntlet.
@@ -49,6 +50,6 @@ Bump `VERSION` in `sw.js` on each release so phones pick up the update.
 
 `npm install` once, then:
 - `npm run solve`: checks every level can be finished with the real physics (search over inputs).
-- `node tools/broker.mjs` + `npm run shots`: plays through local, practice (phone sizes) and online mode
-  (two browsers through a local PeerJS broker) and saves screenshots to `shots/`.
+- `node tools/broker.mjs` + `node tools/relay-broker.mjs` + `npm run shots`: plays through local, practice (phone sizes) and online mode
+  (two browsers through local PeerJS and MQTT brokers; `Q='?nop2p&relay=ws://127.0.0.1:8883'` tests the relay alone) and saves screenshots to `shots/`.
 - `node tools/make-icons.mjs`: renders the app icons. `tools/sheet.html` shows every sprite.

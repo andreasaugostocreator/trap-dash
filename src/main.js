@@ -102,7 +102,6 @@ function nav(where) {
 
 // ---------- online
 async function hostParty() {
-  if (!window.Peer) return toast('Online play needs an internet connection.');
   mode = 'online'; isHost = true; score = { a: 0, b: 0 };
   players = { a: { name: me.name, char: me.char }, b: null };
   roomCode = '';
@@ -126,7 +125,6 @@ $('joinGo').onclick = async () => {
   unlockAudio();
   const code = cleanCode($('code').value), st = $('joinStatus');
   if (code.length !== 4) { st.textContent = 'The code has 4 letters.'; st.className = 'status err'; return; }
-  if (!window.Peer) { st.textContent = 'Online play needs an internet connection.'; st.className = 'status err'; return; }
   st.textContent = 'Connecting…'; st.className = 'status'; $('joinGo').disabled = true;
   mode = 'online'; isHost = false; roomCode = code; score = { a: 0, b: 0 };
   try {
@@ -137,7 +135,7 @@ $('joinGo').onclick = async () => {
   } catch (e) {
     console.warn(e);
     net.close(); mode = null;
-    st.textContent = e && e.type === 'peer-unavailable' ? 'No party with that code. Check the letters?' : 'Could not connect. Try again?';
+    st.textContent = e && e.type === 'peer-unavailable' ? 'No party with that code. Check the letters?' : e && e.type === 'full' ? 'That party already has two players.' : 'Could not reach the party. Is the host still on the lobby screen?';
     st.className = 'status err';
   }
   $('joinGo').disabled = false;
@@ -176,6 +174,7 @@ function friendLeft() {
   if (mode !== 'online') return;
   if (isHost) {
     const n = players.b ? players.b.name : 'Your friend';
+    net.dropGuest();
     players.b = null; score = { a: 0, b: 0 };
     endRunView(); openLobby(); toast(n + ' left the party.');
   } else {
@@ -200,7 +199,8 @@ function openLobby() {
   $('roomBox').classList.toggle('hidden', !online || !roomCode);
   $('roomCode').textContent = roomCode || '----';
   const st = $('lobbyStatus'); st.className = 'status';
-  if (online) st.textContent = !players.b || !players.a ? (isHost ? (roomCode ? 'Send your friend the code or the link.' : 'Opening a room…') : 'Waiting for the host…') : isHost ? 'Pick a level and start!' : 'The host picks the level.';
+  if (online) st.textContent = !players.b || !players.a ? (isHost ? (roomCode ? 'Send your friend the code or the link.' : 'Opening a room…') : 'Waiting for the host…')
+    : (isHost ? 'Pick a level and start!' : 'The host picks the level.') + (net.link === 'direct' ? ' (direct link)' : ' (relay link)');
   else if (practice) st.textContent = 'You run, a bot fires the traps.';
   else st.textContent = 'One runs on the keyboard (or the touch buttons), the other clicks the traps.';
 

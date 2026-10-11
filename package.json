@@ -8,9 +8,11 @@
     "shots": "node tools/shoot.mjs"
   },
   "devDependencies": {
+    "aedes": "^0.51.3",
     "peer": "^1.0.2",
     "peerjs": "^1.5.4",
-    "playwright-core": "^1.48.2"
+    "playwright-core": "^1.48.2",
+    "ws": "^8.18.0"
   },
   "type": "module",
   "private": true
