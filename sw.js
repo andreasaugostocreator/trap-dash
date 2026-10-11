@@ -1,5 +1,5 @@
 // Offline play: network first (so updates show up straight away), the cache when offline. Bump VERSION on each release.
-const VERSION = 'trap-dash-v4';
+const VERSION = 'trap-dash-v5';
 const FILES = ['./', './index.html', './style.css', './manifest.webmanifest', './lib/peerjs.min.js',
   './src/main.js', './src/config.js', './src/sim.js', './src/levels.js', './src/render.js', './src/audio.js', './src/net.js', './src/bot.js', './src/sprites.js', './src/relay.js',
   './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];

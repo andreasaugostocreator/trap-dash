@@ -275,18 +275,27 @@ addEventListener('keydown', e => {
 addEventListener('keyup', e => keys.delete(e.code));
 addEventListener('blur', () => keys.clear());
 const touchHeld = { left: new Set(), right: new Set(), jump: new Set() };
-for (const [id, k] of [['tLeft', 'left'], ['tRight', 'right'], ['tJump', 'jump']]) {
-  const el = $(id);
-  el.addEventListener('pointerdown', e => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); if (k === 'jump' && !touchHeld.jump.size) input.jumpQueued = true; touchHeld[k].add(e.pointerId); el.classList.add('down'); unlockAudio(); });
-  const up = e => { touchHeld[k].delete(e.pointerId); if (!touchHeld[k].size) el.classList.remove('down'); };
-  el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up); el.addEventListener('lostpointercapture', up);
+const TOUCH_BTN = { left: 'tLeft', right: 'tRight', jump: 'tJump' };
+const touchLooks = () => { for (const k in TOUCH_BTN) $(TOUCH_BTN[k]).classList.toggle('down', touchHeld[k].size > 0); };
+// A finger may have slid from one button to another, so a release clears it from every button.
+const release = id => { for (const k in touchHeld) touchHeld[k].delete(id); touchLooks(); };
+const releaseAll = () => { for (const k in touchHeld) touchHeld[k].clear(); touchLooks(); };
+for (const k in TOUCH_BTN) {
+  const el = $(TOUCH_BTN[k]);
+  el.addEventListener('pointerdown', e => { e.preventDefault(); el.setPointerCapture?.(e.pointerId); if (k === 'jump' && !touchHeld.jump.size) input.jumpQueued = true; touchHeld[k].add(e.pointerId); touchLooks(); unlockAudio(); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(ev, e => release(e.pointerId));
 }
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => release(e.pointerId));
+// Safety net: when no finger is on the screen at all, nothing can be held.
+for (const ev of ['touchend', 'touchcancel']) addEventListener(ev, e => { if (!e.touches.length) releaseAll(); });
+addEventListener('blur', releaseAll);
+document.addEventListener('visibilitychange', releaseAll);
 // Sliding a thumb from ◀ to ▶ should switch direction without lifting.
 $('touch').addEventListener('pointermove', e => {
   if (!touchHeld.left.has(e.pointerId) && !touchHeld.right.has(e.pointerId)) return;
   const r = $('tRight').getBoundingClientRect(), onRight = e.clientX >= r.left - 7;
   const to = onRight ? 'right' : 'left', from = onRight ? 'left' : 'right';
-  if (touchHeld[from].delete(e.pointerId)) { touchHeld[to].add(e.pointerId); $('tLeft').classList.toggle('down', touchHeld.left.size > 0); $('tRight').classList.toggle('down', touchHeld.right.size > 0); }
+  if (touchHeld[from].delete(e.pointerId)) { touchHeld[to].add(e.pointerId); touchLooks(); }
 });
 function readInput() {
   input.left = keys.has('ArrowLeft') || keys.has('KeyA') || touchHeld.left.size > 0;
