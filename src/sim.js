@@ -117,13 +117,17 @@ export class World {
   // hold: for traps that act while held (the flame), keep going until release(); otherwise a short burst.
   trigger(id, lead = 0, hold = false) {
     const t = this.traps[id];
-    if (!t || t.state !== 'idle' || t.cd > 0 || this.lock > 0 || this.jam > 0 || this.player.finished) return false;
-    const C = TRAPS[t.kind];
+    if (!t || t.state !== 'idle' || t.cd > 0 || (this.lock > 0 && !this.chained(t)) || this.jam > 0 || this.player.finished) return false;
+    const C = TRAPS[t.kind], chained = this.chained(t);
     t.state = 'warn'; t.t = Math.min(lead, C.warn * 0.6); t.cd = C.hold ? 99 : C.cd; this.lock = TRAP_LOCK;
+    if (chained) t.t = Math.max(t.t, C.warn - C.chainWarn);
+    if (C.chain) { this.chainKind = t.kind; this.chainT = C.chain; }
     if (C.hold) t.holding = hold;
     this.emit('warn', (t.x0 + t.x1 + 1) * TILE / 2, t.y * TILE, t.kind);
     return true;
   }
+  // Flames chain: right after one fires, the next one along needs no lock and almost no warning, so a row can't be outrun.
+  chained(t) { return !!TRAPS[t.kind].chain && this.chainKind === t.kind && this.chainT > 0; }
   release(id) { const t = this.traps[id]; if (t) t.holding = false; }
   endBurn(t) { const C = TRAPS[t.kind]; t.cd = C.cdBase + C.cdPerSec * t.t; t.state = 'idle'; t.t = 0; t.holding = false; }
 
@@ -133,7 +137,8 @@ export class World {
     // Slow-mo (a runner gadget) slows traps, projectiles and the trapper's gadgets, not the runner.
     const dt = this.slowmo > 0 ? realDt * GADGETS.runner.slowmo.rate : realDt;
     this.slowmo = Math.max(0, this.slowmo - realDt);
-    this.lock = Math.max(0, this.lock - dt); this.jam = Math.max(0, this.jam - realDt);
+    this.lock = Math.max(0, this.lock - dt); this.jam = Math.max(0, this.jam - realDt); this.chainT = Math.max(0, (this.chainT || 0) - dt);
+    for (const t of this.traps) if (t.state === 'active' && TRAPS[t.kind].chain) { this.chainKind = t.kind; this.chainT = TRAPS[t.kind].chain; }
     const p = this.player, P = { x: p.x, y: p.y, w: PHYS.w, h: PHYS.h };
     for (const t of this.traps) {
       const C = TRAPS[t.kind], cx = (t.x0 + t.x1 + 1) * TILE / 2;
@@ -465,7 +470,7 @@ export class World {
     const gad = side => this.loadout[side].map(id => [this.gad[side][id].n, r1(this.gad[side][id].cd)]);
     const round = o => { const out = {}; for (const k in o) out[k] = typeof o[k] === 'number' ? r1(o[k]) : o[k]; return out; };
     return {
-      t: 'snap', tm: r1(this.time), d: p.deaths, lk: r1(this.lock), jm: r1(this.jam), sm: r1(this.slowmo),
+      t: 'snap', tm: r1(this.time), d: p.deaths, lk: r1(this.lock), jm: r1(this.jam), ck: this.chainT > 0 ? [this.chainKind, r1(this.chainT)] : 0, sm: r1(this.slowmo),
       p: [r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.face, (p.onGround ? 1 : 0) | (p.dead ? 2 : 0) | (p.finished ? 4 : 0) | (p.slow ? 8 : 0) | (p.lifted ? 16 : 0) | (p.icy ? 32 : 0), r1(p.carry)],
       st: STATUS.map(k => r1(p[k])),
       tr: this.traps.map(t => [STATES.indexOf(t.state), r1(t.t), r1(t.cd), r1(t.oy)]),
@@ -479,7 +484,7 @@ export class World {
   }
   applySnap(s) {
     const p = this.player;
-    this.time = s.tm; p.deaths = s.d; this.lock = s.lk; this.jam = s.jm || 0; this.slowmo = s.sm || 0;
+    this.time = s.tm; p.deaths = s.d; this.lock = s.lk; this.jam = s.jm || 0; [this.chainKind, this.chainT] = s.ck || [null, 0]; this.slowmo = s.sm || 0;
     [p.x, p.y, p.vx, p.vy, p.face] = s.p;
     const f = s.p[5];
     p.onGround = !!(f & 1); p.dead = !!(f & 2); p.finished = !!(f & 4); p.slow = !!(f & 8); p.lifted = !!(f & 16); p.icy = !!(f & 32); p.carry = s.p[6] || 0;

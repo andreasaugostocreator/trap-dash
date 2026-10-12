@@ -209,3 +209,10 @@ Playtesting: the runner and the trapper saw each trap at the same moment, so the
   runner gets there (red = ready).
 - Each trap button shows **in 3s** / **now**: when the runner reaches the next trap of that kind. A kind that isn't on
   screen yet stays dimmed but shows its countdown, so the trapper can plan which trap and gadget to use.
+
+### Flames chain
+
+A row of flames could be outrun: after the first one fired, the 0.25 s lock plus the next flame's warning gave the runner
+time to clear the next one too. Now, for 1 s after a flame fires (and the whole time one is burning), any other flame
+skips the lock and lights after 0.03 s instead of 0.12 s. The first flame still warns normally, so it stays fair; the rest
+of the row follows the runner. Other trap kinds still wait out the lock.

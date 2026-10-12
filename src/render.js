@@ -779,7 +779,7 @@ export class Renderer {
         else if (world.player.radar > 0 && !o.trapper && Math.floor(this.t * 6) % 2) { l.fillStyle = '#ff5d5d'; l.fillRect(bx - 1, by - 5, 2, 6); l.fillRect(bx - 1, by + 3, 2, 2); }
         continue;
       }
-      const hover = o.hover === t.id, pend = o.pending && o.pending[t.id] > 0, blocked = ready && world.lock > 0;
+      const hover = o.hover === t.id, pend = o.pending && o.pending[t.id] > 0, blocked = ready && world.lock > 0 && !world.chained(t);
       const pulse = ready && !blocked && Math.floor(this.t * 3) % 2 === 0, r = hover ? 8 : 7;
       if (ready) this.dial(bx, by + 1, r, 0, '#1c1424', '#1c1424', '#1c1424');
       this.dial(bx, by, r, frac, ready ? (blocked ? '#ff9a3c' : '#e8414f') : '#3b3f52', '#8b93a6', pend || pulse ? '#ffffff' : '#1c1424');

@@ -23,7 +23,8 @@ export const PHYS = {
 export const TRAPS = {
   spikes:   { name: 'Spikes',   family: 'zone',    warn: 0.12, active: 0.6, cd: 1.6 },
   // flame: burns while the trapper holds it (a tap = minBurn), up to `tank` seconds; cooldown = cdBase + cdPerSec × burn time
-  flame:    { name: 'Flame',    family: 'zone',    warn: 0.12, active: 2.0, cd: 1.0, reach: 3, hold: true, minBurn: 0.35, tank: 2.0, cdBase: 0.4, cdPerSec: 0.6 },
+  flame:    { name: 'Flame',    family: 'zone',    warn: 0.12, active: 2.0, cd: 1.0, reach: 3, hold: true, minBurn: 0.35, tank: 2.0, cdBase: 0.4, cdPerSec: 0.6,
+              chain: 1.0, chainWarn: 0.03 },   // for 1 s after a flame fires (or while one burns), the next flame skips the lock and fires almost at once
   crusher:  { name: 'Crusher',  family: 'zone',    warn: 0.08, active: 0,   cd: 1.6, slam: 520, fallG: 5000, rest: 0.25, rise: 150, impact: 0.12 },
   cannon:   { name: 'Cannon',   family: 'emitter', warn: 0.1,  active: 0,   cd: 1.2, shot: { speed: 230, w: 8, h: 8 } },
   arrows:   { name: 'Arrows',   family: 'emitter', warn: 0.06, active: 0,   cd: 0.8, shot: { speed: 320, w: 10, h: 3 } },

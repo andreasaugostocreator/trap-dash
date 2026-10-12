@@ -473,7 +473,7 @@ canvas.addEventListener('pointermove', e => {
 // holdKey: what will let go of it (a pointer id or a key code). Traps that burn while held (the flame) stop on release.
 function fireTrap(id, holdKey) {
   const w = run.world, t = w.traps[id];
-  const ready = t.state === 'idle' && t.cd <= 0 && w.lock <= 0 && !(run.pending[id] > 0);
+  const ready = t.state === 'idle' && t.cd <= 0 && (w.lock <= 0 || w.chained(t)) && !(run.pending[id] > 0);
   if (!ready) { sfx.denied(); return; }
   const hold = holdKey !== undefined && !!TRAPS[t.kind].hold;
   if (hold) run.held.set(holdKey, id);
@@ -536,7 +536,7 @@ function updateTrapBar() {
     const ready = t && t.state === 'idle' && t.cd <= 0, pend = t && run.pending[t.id] > 0;
     const burning = t && TRAPS[k].hold && t.state === 'active';
     const eta = etaOf(w, k);
-    const state = !t ? (eta != null ? 'soon' : 'none') : w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 ? 'lock' : 'ready') : 'cool';
+    const state = !t ? (eta != null ? 'soon' : 'none') : w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 && !w.chained(t) ? 'lock' : 'ready') : 'cool';
     if (b.dataset.state !== state) b.dataset.state = state;
     b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : t && !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
     const secs = t && !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
