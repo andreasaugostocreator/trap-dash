@@ -425,3 +425,16 @@ button.mid .bicon, button.chip .bicon { filter: brightness(.12); }
 @keyframes confettiFall { to { transform: translate(var(--dx), 110vh) rotate(720deg); } }
 body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 @media (max-height: 500px) { .trophy { font-size: 40px; } .champ canvas { width: 40px; height: 45px; } .matchScore { font-size: 15px; margin: 2px 0; } }
+
+/* ---------- achievements */
+.achv { position: fixed; right: 12px; top: calc(var(--hudH, 46px) + 10px); z-index: 30; display: flex; align-items: center; gap: 10px; background: linear-gradient(#3a2c52, #251b33); color: #fff;
+  padding: 8px 14px 8px 10px; box-shadow: 0 0 0 3px #ffd84a, 0 0 0 6px var(--ink), 0 8px 0 rgba(0, 0, 0, .4); transform: translateX(130%); pointer-events: none; }
+.achv.show { animation: achIn 3s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes achIn { 0% { transform: translateX(130%); } 12%, 88% { transform: translateX(0); } 100% { transform: translateX(130%); } }
+.achv small { display: block; color: #ffd84a; font-family: 'Press Start 2P', monospace; font-size: 8px; margin-bottom: 3px; }
+.achv b { font-size: 17px; }
+.achIcon { font-size: 26px; line-height: 1; }
+.trophies { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; text-align: left; margin: 6px 0; }
+.tro { display: flex; gap: 8px; align-items: center; background: #efe3cc; padding: 5px 8px; box-shadow: 0 0 0 2px var(--ink); opacity: .55; }
+.tro.got { background: #fff6c8; opacity: 1; box-shadow: 0 0 0 2px var(--ink), inset 0 -3px 0 #ffd84a; }
+.tro b { display: block; font-size: 15px; } .tro small { color: var(--muted); font-size: 13px; }

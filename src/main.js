@@ -17,6 +17,7 @@ const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { TrapScore, titleFor } from './score.js';
+import { ACHIEVEMENTS, unlock, has, count as achCount, bump } from './achievements.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -105,7 +106,7 @@ $('setBtn').onclick = () => { sfx.click(); openSettings(hidePanel); };
 function openSettings(back) {
   const rows = [
     ['Sound', () => !audio.muted, v => setMuted(!v)],
-    ['Music', () => audio.music, v => { setMusic(v); if (v && run) startMusic(); }],
+    ['Music', () => audio.music, v => { setMusic(v); if (v && run) startMusic(run.endless ? 'endless' : run.world.level.theme); }],
     ['Vibration' + (canVibrate ? '' : ' <small>(not on this device)</small>'), () => settings.vibrate, v => { settings.vibrate = v; buzz(40); }],
     ['Ghost of the last run', () => settings.ghost, v => { settings.ghost = v; }],
     ['Level preview', () => settings.preview, v => { settings.preview = v; }],
@@ -681,7 +682,9 @@ function startRun(level, runner, n, endless = null) {
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5, endless,
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
-  run.score = new TrapScore();
+  run.score = new TrapScore(); run.closes = 0;
+  if (endless && endless.stage >= 5) achieve('endless5');
+  if (endless && endless.stage >= 10) achieve('endless10');
   run.trail = [];
   run.ghost = settings.ghost && lastGhost && !endless && lastGhost.key === levelKey(level) ? lastGhost : null;
   run.preview = settings.preview && !(endless && endless.stage > 1);
@@ -703,7 +706,7 @@ function startRun(level, runner, n, endless = null) {
   $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + (touchDevice && innerHeight > innerWidth ? ' (Tip: turn your phone sideways for a wider view.)' : ''); $('hint').classList.remove('hidden');
   if (run.preview) { run.phase = 'preview'; run.previewT = PREVIEW; showPreview(); $('hint').classList.add('hidden'); }
   input.jumpQueued = false;
-  startMusic();
+  startMusic(endless ? 'endless' : levelOf(level).theme);
 }
 
 // Every game event passes through here on both devices: particles, sound, vibration, the trapper's score.
@@ -713,12 +716,47 @@ function gameEvent(e) {
   if (k === 'die') buzz(run.runnerHere ? [60, 40, 90] : 25);
   if ((k === 'stun' || k === 'block') && run.runnerHere) buzz(35);
   if (k === 'catch') onCatch(extra);
+  if (k === 'block' && run.runnerHere) achieve('shield_save');
 }
-R.onClose = () => { if (run && run.runnerHere) buzz(12); };
+R.onClose = () => { sfx.whoosh(); if (run && run.runnerHere) { buzz(12); if (++run.closes >= 5) achieve('close5'); } };
+
+// ---------- achievements: a banner slides in when one unlocks
+const achQueue = [];
+function achieve(id) {
+  const def = unlock(id);
+  if (!def) return;
+  achQueue.push(def);
+  if (achQueue.length === 1) showAch();
+}
+function showAch() {
+  const def = achQueue[0];
+  if (!def) return;
+  const el = $('achv');
+  el.innerHTML = `<span class="achIcon">${def.icon}</span><div><small>Achievement unlocked!</small><b>${esc(def.name)}</b></div>`;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  sfx.achieve();
+  setTimeout(() => { el.classList.remove('show'); achQueue.shift(); setTimeout(showAch, 300); }, 3000);
+}
+function openTrophies() {
+  panel(`<h2>Trophies</h2><p class="status">${achCount()} of ${ACHIEVEMENTS.length} unlocked</p>
+    <div class="trophies">${ACHIEVEMENTS.map(a => `<div class="tro${has(a.id) ? ' got' : ''}"><span class="achIcon">${has(a.id) ? a.icon : '🔒'}</span><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></div>`).join('')}</div>
+    <div class="buttons"><button class="big pink" id="troDone">Back</button></div>`);
+  $('panelCard').classList.add('wide');
+  $('troDone').onclick = () => { sfx.click(); hidePanel(); };
+}
+$('troBtn').onclick = () => { sfx.click(); openTrophies(); };
 
 // ---------- the trapper's score: a big gold popup for every catch, combos stack up
 function onCatch(credit) {
   const r = run.score.catch(credit, run.world.time), mine = run.trapperHere;
+  if (mine && run.bot == null) {
+    achieve('first_catch');
+    if (credit === 'assist') achieve('assist');
+    if (r.streak >= 3) achieve('combo');
+    if (run.score.catches >= 5) achieve('catch5');
+    if (run.score.kinds.size >= 4) achieve('variety');
+    if (run.score.pts >= 900) achieve('trap_master');
+  }
   const pop = $('catchPop');
   pop.className = 'catchPop' + (mine ? ' mine' : '') + (r.streak > 1 ? ' combo' : '');
   pop.innerHTML = `<b>+${r.gain}</b>${r.lines.map(t => `<small>${t}</small>`).join('')}`;
@@ -778,6 +816,15 @@ function finishRun(res) {
   if (run.phase === 'end') return;
   run.phase = 'end';
   if (run.simOwner && run.trail.length && !run.endless) res.trail = run.trail;
+  if (run.runnerHere && res.finished) {
+    const L = levelOf(run.level);
+    achieve('first_flag');
+    if (res.deaths === 0) achieve('flawless');
+    if (L.id === 'hills' && res.time < 15) achieve('speedster');
+    if (L.id === 'gauntlet') achieve('gauntlet');
+    if (L.random && L.stars === 3) achieve('daredevil');
+    if (run.ghost && res.time < run.ghost.trail.length / 30) achieve('ghostbuster');
+  }
   if (res.trail) lastGhost = { key: levelKey(run.level), trail: res.trail, charObj: charOf(players[res.runner].char) };
   if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
   runs.push(res);
@@ -840,6 +887,7 @@ function showRunResult(res) {
   const tie = r1 && r2 && !better(r1, r2) && !better(r2, r1);
   const win = tie ? null : better(r1, r2) ? r1 : r2;
   if (win && !run.scored) { score[win.runner]++; run.scored = true; }
+  if (!run.counted) { run.counted = true; if (bump('levels') >= 10) achieve('rivals'); }
   if (lobby.bo3 && win && score[win.runner] >= 2) return trophyScreen(win.runner, r1, r2);
   const nextLevel = controls ? nextOf(run.level) : null;
   panel(`<div class="big-emoji">${tie ? '🤝' : '🏆'}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
@@ -859,6 +907,7 @@ function showRunResult(res) {
 function trophyScreen(winner, r1, r2) {
   const controls = mode !== 'online' || isHost, loser = other(winner);
   sfx.goal(); buzz([60, 40, 60, 40, 120]);
+  if (mode !== 'online' || winner === mySide()) achieve('champion');
   panel(`<div class="trophy">🏆</div><h2>${esc(players[winner].name)} wins the match!</h2>
     <div class="champ" data-portrait="${players[winner].char}"></div>
     <p class="matchScore"><b>${score[winner]}</b> – <b>${score[loser]}</b></p>
@@ -887,7 +936,7 @@ function endRunView() {
 }
 
 function panel(html) {
-  $('panelCard').innerHTML = html; $('panel').classList.remove('hidden');
+  $('panelCard').innerHTML = html; $('panel').classList.remove('hidden'); $('panelCard').classList.remove('wide');
   for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(el.dataset.portrait));
 }
 function hidePanel() { $('panel').classList.add('hidden'); }
@@ -976,6 +1025,11 @@ function tick(dt, now) {
     for (const shot of w.shots) shot.x += shot.vx * dt;
   }
   if (run.phase !== 'preview') R.follow(w, dt, run.trapperHere && !run.runnerHere);
+  // footsteps while running, and now and then a bird (by day) or a cricket (at night)
+  const pl = w.player;
+  if (pl.onGround && !pl.dead && Math.abs(pl.vx) > 40 && run.phase === 'play') { run.stepAcc = (run.stepAcc || 0) + Math.abs(pl.vx) * dt; if (run.stepAcc > 30) { run.stepAcc = 0; run.stepAlt = !run.stepAlt; sfx.step(run.stepAlt); } }
+  run.ambT = (run.ambT ?? 3) - dt;
+  if (run.ambT <= 0) { run.ambT = 3 + Math.random() * 6; const th = w.level.theme; (th === 'night' || th === 'dusk' || th === 'haunted' ? sfx.cricket : th === 'lava' || th === 'ice' ? sfx.drip : sfx.chirp)(); }
   updateGadgets();
   if (run.trapperHere) updateTrapBar();
   R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });

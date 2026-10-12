@@ -94,6 +94,12 @@ export const sfx = {
     tone(base * 2, 0.35, { vol: 0.07, delay: 0.21, type: 'triangle' });
     noise(0.12, { vol: 0.12, freq: 6000, delay: 0.02 });
   },
+  achieve: () => [659, 784, 988, 1319].forEach((f, i) => tone(f, 0.16, { vol: 0.09, delay: i * 0.08, type: 'triangle' })),
+  step: (alt) => noise(0.035, { vol: 0.06, freq: alt ? 900 : 700, q: 2 }),
+  whoosh: () => noise(0.3, { vol: 0.16, freq: 1800, q: 0.7 }),
+  chirp: () => { const f = 2400 + Math.random() * 900; [0, 0.09, 0.18].slice(0, 2 + Math.floor(Math.random() * 2)).forEach(d => tone(f, 0.06, { slide: 500, vol: 0.025, delay: d, type: 'sine' })); },
+  cricket: () => [0, 0.05, 0.1, 0.15].forEach(d => tone(4200, 0.03, { vol: 0.012, delay: d, type: 'square' })),
+  drip: () => tone(1400 + Math.random() * 400, 0.12, { slide: -700, vol: 0.04, type: 'sine' }),
   click: () => tone(880, 0.05, { vol: 0.07, type: 'triangle' }),
   count: () => tone(660, 0.12, { vol: 0.12, type: 'square' }),
   go: () => tone(990, 0.3, { vol: 0.14, type: 'square' }),
@@ -108,24 +114,41 @@ export function playEvent([k, , , extra]) {
   if (sfx[k]) sfx[k]();
 }
 
-// A short loop: bass + plucky lead, 8 bars, in C major-ish. Scheduled a bar ahead.
-const BASS = [48, 48, 55, 55, 53, 53, 50, 55];
-const LEAD = [
-  [72, 0, 76, 0, 79, 0, 76, 74], [72, 0, 74, 76, 74, 0, 72, 0], [71, 0, 74, 0, 79, 0, 77, 76], [74, 0, 72, 0, 71, 72, 74, 0],
-  [77, 0, 76, 0, 74, 0, 72, 0], [76, 0, 74, 0, 72, 0, 69, 0], [71, 72, 74, 0, 76, 0, 74, 72], [71, 0, 67, 0, 71, 0, 74, 0],
-];
+// Music: one short loop per world. Each song is a chord progression, a scale and a motif; the lead line is built
+// from the motif over each chord, so every world has its own tune and mood. Scheduled a bar ahead.
+const MAJ = [0, 2, 4, 5, 7, 9, 11], MIN = [0, 2, 3, 5, 7, 8, 10], DOR = [0, 2, 3, 5, 7, 9, 10], PHR = [0, 1, 3, 5, 7, 8, 10];
+const SONGS = {
+  day:     { bpm: 132, root: 60, scale: MAJ, prog: [0, 0, 4, 4, 3, 3, 1, 4], motif: [[0, -1, 2, -1, 4, -1, 2, 1], [0, -1, 1, 2, 1, -1, 0, -1]], lead: 'square', bass: 'triangle' },
+  sunset:  { bpm: 112, root: 65, scale: MAJ, prog: [0, 5, 3, 4, 0, 5, 1, 4], motif: [[4, -1, -1, 2, 1, -1, 0, -1], [2, -1, 4, -1, 5, 4, 2, -1]], lead: 'triangle', bass: 'triangle', swing: 0.12 },
+  night:   { bpm: 100, root: 57, scale: MIN, prog: [0, 0, 5, 5, 3, 3, 4, 4], motif: [[0, 2, 4, 7, 4, 2, 0, -1], [-1, 4, -1, 2, 1, -1, 0, -1]], lead: 'triangle', bass: 'sine', soft: true },
+  sky:     { bpm: 144, root: 67, scale: MAJ, prog: [0, 3, 4, 0, 5, 3, 1, 4], motif: [[0, 2, 4, 2, 7, 4, 2, 4], [5, 4, 2, -1, 4, 2, 0, -1]], lead: 'square', bass: 'triangle' },
+  dusk:    { bpm: 116, root: 62, scale: DOR, prog: [0, 0, 6, 6, 3, 3, 4, 4], motif: [[0, -1, 2, 3, -1, 2, 0, -1], [4, -1, 3, -1, 2, 1, 0, -1]], lead: 'square', bass: 'sawtooth', soft: true },
+  lava:    { bpm: 150, root: 52, scale: PHR, prog: [0, 0, 1, 0, 0, 0, 6, 1], motif: [[0, 0, 3, 0, 4, 3, 1, 0], [0, -1, 0, 1, 3, 1, 0, -1]], lead: 'sawtooth', bass: 'sawtooth' },
+  ice:     { bpm: 108, root: 64, scale: MAJ, prog: [0, 3, 5, 4, 0, 3, 1, 4], motif: [[7, -1, 4, -1, 2, -1, 4, -1], [9, 7, -1, 4, -1, 2, -1, -1]], lead: 'sine', bass: 'triangle', bell: true },
+  pirate:  { bpm: 168, root: 62, scale: MIN, prog: [0, 0, 6, 6, 5, 5, 4, 4], motif: [[0, 2, 4, 4, 2, 0, 4, 2], [5, 4, 2, 1, 0, -1, 0, -1]], lead: 'square', bass: 'triangle', swing: 0.18 },
+  haunted: { bpm: 92, root: 59, scale: MIN, prog: [0, 1, 0, 1, 5, 4, 0, 4], motif: [[0, -1, 1, 0, -1, 4, 3, -1], [7, -1, 6, -1, 5, -1, 4, -1]], lead: 'sawtooth', bass: 'sine', soft: true },
+  endless: { bpm: 156, root: 60, scale: MIN, prog: [0, 5, 2, 6, 0, 5, 3, 4], motif: [[0, 4, 2, 4, 0, 4, 2, 4], [5, 4, 2, 4, 1, 2, 0, -1]], lead: 'square', bass: 'sawtooth' },
+};
 const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
-export function startMusic() {
-  if (!ac || !audio.music || musicTimer) return;
-  const beat = 60 / 132 / 2; let bar = 0, next = ac.currentTime + 0.1;
+const note = (S, deg) => S.root + S.scale[((deg % 7) + 7) % 7] + 12 * Math.floor(deg / 7);
+let playing = null;
+export function startMusic(song = 'day') {
+  if (!ac || !audio.music) return;
+  if (musicTimer && playing === song) return;
+  stopMusic(); playing = song;
+  const S = SONGS[song] || SONGS.day, beat = 60 / S.bpm / 2; let bar = 0, next = ac.currentTime + 0.1;
   const sched = () => {
     while (next < ac.currentTime + 0.6) {
-      const b = bar % 8;
+      const b = bar % 8, chord = S.prog[b], motif = S.motif[b % 2];
       for (let i = 0; i < 8; i++) {
-        const d = next + i * beat - ac.currentTime;
-        if (i % 2 === 0) tone(mtof(BASS[b] - 12 + (i === 4 ? 7 : 0)), beat * 1.6, { type: 'triangle', vol: 0.5, delay: d, out: musicGain });
-        const n = LEAD[b][i]; if (n) tone(mtof(n), beat * 0.9, { type: 'square', vol: 0.12, delay: d, out: musicGain });
-        if (i % 4 === 2) noiseHat(d);
+        const d = next + i * beat + (i % 2 ? (S.swing || 0) * beat : 0) - ac.currentTime;
+        if (i % 2 === 0) tone(mtof(note(S, chord) - 24 + (i === 4 ? 7 : 0)), beat * 1.6, { type: S.bass, vol: S.bass === 'sawtooth' ? 0.18 : 0.45, delay: d, out: musicGain });
+        const m = motif[i];
+        if (m >= 0) {
+          tone(mtof(note(S, chord + m)), beat * (S.bell ? 2.2 : 0.9), { type: S.lead, vol: S.soft ? 0.08 : S.lead === 'sawtooth' ? 0.06 : 0.11, delay: d, out: musicGain });
+          if (S.bell) tone(mtof(note(S, chord + m) + 12), beat * 1.4, { type: 'sine', vol: 0.04, delay: d, out: musicGain });
+        }
+        if (i % 4 === 2 || (S.bpm > 140 && i % 2 === 1)) noiseHat(d);
       }
       next += beat * 8; bar++;
     }
@@ -133,4 +156,4 @@ export function startMusic() {
   const noiseHat = d => { const t = ac.currentTime + d, n = 800, buf = ac.createBuffer(1, n, ac.sampleRate), x = buf.getChannelData(0); for (let i = 0; i < n; i++) x[i] = (Math.random() * 2 - 1) * (1 - i / n); const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(); s.buffer = buf; f.type = 'highpass'; f.frequency.value = 6000; g.gain.value = 0.25; s.connect(f); f.connect(g); g.connect(musicGain); s.start(t); };
   sched(); musicTimer = setInterval(sched, 200);
 }
-export function stopMusic() { clearInterval(musicTimer); musicTimer = null; }
+export function stopMusic() { clearInterval(musicTimer); musicTimer = null; playing = null; }
