@@ -353,6 +353,8 @@ export class World {
     p.icy = p.frost > 0 || !!this.standingOn('ice');
     const belt = p.anchor > 0 ? null : this.standingOn('conveyor');
     p.carry = belt ? TRAPS.conveyor.carry : 0;
+    // Wind carries you like a belt does, whatever you press: running into it crawls, jumps fall short.
+    if (p.gust > 0 && !(p.anchor > 0)) p.carry += p.gustDir * (p.onGround ? G.trapper.gust.wind : G.trapper.gust.windAir);
     const maxRun = PHYS.maxRun * (p.slow ? G.trapper.glue.slow : 1) * (p.haste > 0 ? G.runner.haste.speed : 1) * (p.squash > 0 ? G.trapper.squash.speed : 1);
     const grip = p.icy ? 0.3 : 1;                 // ice: weak acceleration, almost no friction
     const dir = (R ? 1 : 0) - (L ? 1 : 0);
@@ -368,7 +370,6 @@ export class World {
       const f = (p.onGround ? PHYS.friction * (p.icy ? 0.06 : 1) : PHYS.friction * 0.45) * dt;
       p.vx = Math.abs(p.vx) <= f ? 0 : p.vx - Math.sign(p.vx) * f;
     }
-    if (p.gust > 0 && !(p.anchor > 0)) { p.vx += p.gustDir * G.trapper.gust.push * dt * (p.onGround ? 1 : 0.35); p.vx = Math.max(-PHYS.maxRun * 1.15, Math.min(PHYS.maxRun * 1.15, p.vx)); }
     p.coyote = p.onGround ? PHYS.coyote : p.coyote - dt;
     p.buffer = input.jumpPressed && !stunned ? PHYS.buffer : p.buffer - dt;
     const jv = PHYS.jumpV * (p.slow ? 0.78 : 1) * (p.boots > 0 ? G.runner.boots.jump : 1) * (p.heavy > 0 ? G.trapper.anvil.jump : 1) * (p.squash > 0 ? 0.85 : 1);

@@ -605,7 +605,7 @@ export class Renderer {
       for (let a = 0; a < TAU; a += 0.12) { l.fillStyle = (a * 10 | 0) % 3 ? '#8fe8ff' : '#ffffff'; l.fillRect(X + Math.round(Math.cos(a) * 11), Y - 8 + Math.round(Math.sin(a) * 11), 1, 1); }
     }
     if (p.slow && Math.random() < 0.3) this.parts.push({ x: X + (Math.random() - 0.5) * 10, y: Y - 1, vx: 0, vy: 15, life: 0.3, size: 1, color: '#7bd65a', g: 0 });
-    if (p.gust > 0 && Math.random() < 0.6) this.parts.push({ x: X - p.gustDir * 30 + (Math.random() - 0.5) * 10, y: Y - 4 - Math.random() * 14, vx: p.gustDir * 220, vy: 0, life: 0.25, size: 1, color: '#ffffffcc', g: 0 });
+    if (p.gust > 0) for (let n = 0; n < 2; n++) this.parts.push({ x: X - p.gustDir * (20 + Math.random() * 40), y: Y + 4 - Math.random() * 26, vx: p.gustDir * 220, vy: 0, life: 0.25, size: 1, color: '#ffffffcc', g: 0 });
     if (p.lifted && Math.random() < 0.5) this.parts.push({ x: X + (Math.random() - 0.5) * 12, y: Y + 4, vx: 0, vy: -160, life: 0.2, size: 1, color: '#ffffffaa', g: 0 });
   }
 

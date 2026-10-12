@@ -109,7 +109,7 @@ Stunned in the air you keep your momentum, so a lightning bolt mid-jump doesn't 
 |---|---|---|
 | Lightning | 4 per run, 4 s cooldown, aimed | a cloud and column warn for 0.45 s, then a 1.2 s stun |
 | Glue | unlimited, 10 s cooldown, aimed | a 3-tile puddle on the floor for 7 s: 40% speed, lower jumps |
-| Gust | 3 per run, 8 s cooldown | 1.4 s of wind against the way you're facing |
+| Gust | 3 per run, 8 s cooldown | 1.8 s of wind against the way you're facing: it carries you back at 95 px/s (100 in the air), so running into it crawls and jumps fall short |
 | Hex | 2 per run, 12 s cooldown | left and right swap for 2.6 s |
 
 | Runner | Uses | Effect |

@@ -43,7 +43,6 @@ export class Bot {
     const ready = world.loadout.trapper.filter(id => { const g = world.gad.trapper[id]; return g.n !== 0 && !(g.cd > 0); });
     if (!ready.length) return;
     const id = ready[Math.floor(Math.random() * ready.length)], def = GADGETS.trapper[id];
-    if (id === 'gust' && !p.onGround) return;
     if (id === 'hex' && Math.abs(p.vx) < 60) return;
     const lead = (def.warn || 0.3) * (0.6 + Math.random() * 0.6);
     if (id === 'bolt') world.useGadget('trapper', id, cx + p.vx * lead, cy);
