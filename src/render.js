@@ -68,8 +68,18 @@ export class Renderer {
     const P = (n, f) => { for (let i = 0; i < n; i++) this.parts.push(f(i)); };
     const dust = (n, sp = 40, col = '#ffffffdd') => P(n, () => ({ x, y: y - 1, vx: (Math.random() - 0.5) * sp * 2, vy: -Math.random() * sp * 0.5, life: 0.3 + Math.random() * 0.25, size: Math.random() < 0.3 ? 2 : 1, color: col, g: 40 }));
     const pal = ch.pal || {};
-    if (k === 'jump') dust(5, 30);
-    if (k === 'land') dust(3 + Math.round(extra * 6), 50);
+    if (k === 'jump') { dust(5, 30); this.sq = { x: 0.78, y: 1.25 }; }
+    if (k === 'land') { dust(3 + Math.round(extra * 6), 50); this.sq = { x: 1 + 0.35 * extra, y: 1 - 0.3 * extra }; }
+    if (k === 'airjump') this.sq = { x: 0.8, y: 1.2 };
+    if (k === 'spring') { this.sq = { x: 0.7, y: 1.35 }; this.say(x, y - 10, 'BOING!', '#7bd65a'); }
+    if (k === 'cp') this.say(x, y - 30, 'CHECKPOINT!', '#7bd65a');
+    if (k === 'goal') this.say(x, y - 40, 'GOAL!', '#ffd84a', 1.6);
+    if (k === 'die') this.closeAt = null;
+    if (k === 'die') this.say(x, y - 14, ['CAUGHT!', 'OUCH!', 'GOTCHA!', 'BONK!'][Math.floor(Math.random() * 4)], '#ff5d6a');
+    if (k === 'block') this.say(x, y - 18, 'BLOCKED!', '#8fe8ff');
+    if (k === 'stun') this.say(x, y - 14, 'ZAP!', '#ffd84a');
+    if (k === 'pop') this.say(x, y - 10, 'POP!', '#ff9a3c');
+    if (k === 'gadget' && extra && GADGETS.trapper[extra] && !GADGETS.trapper[extra].aim) this.say(x, y - 20, GADGETS.trapper[extra].name.toUpperCase() + '!', '#c58bff');
     if (k === 'die') {
       this.shake = 0.3;
       const cols = [pal.A, pal.a, pal.B, ch.ui, '#ffffff'].filter(Boolean);
@@ -95,6 +105,7 @@ export class Renderer {
     const dt = o.dt;
     this.t += dt; this.shake = Math.max(0, this.shake - dt);
     const th = THEMES[world.level.theme] || THEMES.day;
+    this.curWorld = world; this.levelH = world.h;
     const l = this.l, s = this.shake > 0 ? this.shake * 12 : 0;
     const cx = this.camX + Math.round((Math.random() - 0.5) * s), cy = this.camY + Math.round((Math.random() - 0.5) * s);
     this.drawBackground(world, th, cx, cy);
@@ -105,6 +116,7 @@ export class Renderer {
       l.fillStyle = th.dirt[0]; l.fillRect(cx, world.h * TILE, this.lo.width, below);
       l.fillStyle = th.dirt[1]; for (let x = Math.floor(cx / 4) * 4; x < cx + this.lo.width; x += 4) l.fillRect(x, world.h * TILE + ((x / 4) % 3), 2, 1);
     }
+    this.drawWater(world, cx);
     this.drawAmbient(world, cx, cy);
     this.drawProps(world);
     for (const t of world.traps) this.drawTrap(t, th);
@@ -126,12 +138,21 @@ export class Renderer {
     this.drawBolts(world);
     if (o.aim) this.drawAim(world, o.aim);
     this.drawParticles(dt);
+    this.drawAlerts(world);
+    this.nearMiss(world);
+    this.drawTexts(dt);
     this.drawTrapButtons(world, o, true);
     if (o.debug) { l.strokeStyle = 'red'; l.lineWidth = 1; for (const d of world.dangers()) l.strokeRect(Math.round(d.x) + 0.5, Math.round(d.y) + 0.5, d.w - 1, d.h - 1); }
     l.restore();
     if (this.flash > 0) { this.flash -= dt; l.fillStyle = '#ffffff55'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (world.slowmo > 0) { l.fillStyle = '#5ab4ff22'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (o.runnerView && world.player.fog > 0) this.drawFog(world, cx, cy);
+    l.drawImage(this.bg('vignette', () => {
+      const c = canvasOf(this.lo.width, this.lo.height), v = c.getContext('2d'), W = c.width, H = c.height;
+      const g = v.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.45, W / 2, H * 0.45, Math.max(W, H) * 0.75);
+      g.addColorStop(0, 'rgba(28,20,36,0)'); g.addColorStop(1, 'rgba(28,20,36,0.28)'); v.fillStyle = g; v.fillRect(0, 0, W, H);
+      return c;
+    }), 0, 0);
     if (o.trapper) this.drawUpcoming(world, cx, cy);
     const ctx = this.ctx; ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.lo, 0, 0, this.lo.width * this.k, this.lo.height * this.k);
@@ -169,6 +190,15 @@ export class Renderer {
         }
         return c;
       }), Math.round(W * 0.78 - cx * 0.02), Math.round(H * 0.1));
+    }
+    if (theme === 'day' || theme === 'sunset' || theme === 'sky') {   // soft sun rays
+      l.save(); l.globalAlpha = 0.07 + 0.02 * Math.sin(this.t * 0.7);
+      l.fillStyle = theme === 'sunset' ? '#fff0b0' : '#ffffff';
+      for (let i = 0; i < 4; i++) {
+        const x0 = W * (0.1 + i * 0.22) - (cx * 0.03) % 60;
+        l.beginPath(); l.moveTo(x0, 0); l.lineTo(x0 + 18 + i * 6, 0); l.lineTo(x0 + 18 + i * 6 + H * 0.6, H); l.lineTo(x0 + H * 0.6 - 10, H); l.closePath(); l.fill();
+      }
+      l.restore();
     }
     for (let i = 0; i < 6; i++) {
       const cl = this.cloudSprite(th, i % 3), span = W + cl.width + 40;
@@ -570,6 +600,7 @@ export class Renderer {
     }
   }
 
+  solidBelow(x, ty) { const w = this.curWorld; return w && w.solidAt(Math.floor(x / TILE), ty); }
   drawPlayer(p, ch, dt) {
     let frame = 'idle', bob = 0;
     if (!p.onGround) frame = p.vy < 0 ? 'jump' : 'fall';
@@ -579,7 +610,17 @@ export class Renderer {
     if (p.dash > 0 || Math.abs(p.vx) > PHYS.maxRun * 1.3) for (let i = 1; i <= 2; i++) { l.globalAlpha = 0.35 / i; l.drawImage(charFrame(ch, frame, p.face, bob), X - 6 - p.face * i * 6, Y - 16); l.globalAlpha = 1; }
     if (p.inv > 0 && Math.floor(this.t * 20) % 2) return;
     if (p.phase > 0) l.globalAlpha = 0.45 + 0.2 * Math.sin(this.t * 20);
+    // squash and stretch: stretched on take-off, squashed on landing, easing back
+    const sq = this.sq || (this.sq = { x: 1, y: 1 }), ease = Math.min(1, dt * 12);
+    sq.x += (1 - sq.x) * ease; sq.y += (1 - sq.y) * ease;
+    if (!p.onGround) {   // a soft shadow on the floor below
+      let gy = Math.floor((p.y + PHYS.h) / TILE);
+      while (gy < this.levelH && !this.solidBelow(X, gy)) gy++;
+      const dist = gy * TILE - Y;
+      if (gy < this.levelH && dist < 90) { const w = Math.max(3, 9 - Math.round(dist / 14)); l.fillStyle = 'rgba(28,20,36,0.3)'; l.fillRect(X - Math.floor(w / 2), gy * TILE - 1, w, 1); l.fillRect(X - Math.floor(w / 2) + 1, gy * TILE - 2, w - 2, 1); }
+    }
     if (p.squash > 0) l.drawImage(charFrame(ch, frame, p.face, bob), X - 7, Y - 11, 14, 11);   // squashed flat
+    else if (Math.abs(sq.x - 1) > 0.04) { const w = Math.round(12 * sq.x), h = Math.round(16 * sq.y); l.drawImage(charFrame(ch, frame, p.face, bob), X - Math.round(w / 2), Y - h, w, h); }
     else l.drawImage(charFrame(ch, frame, p.face, bob), X - 6, Y - 16);
     l.globalAlpha = 1;
     if (p.glide > 0 && !p.onGround && p.vy > 0) {   // umbrella
@@ -679,6 +720,68 @@ export class Renderer {
     if (aim.id === 'bolt') { const w = GADGETS.trapper.bolt.width; for (let yy = this.camY; yy < this.camY + this.lo.height; yy += 6) { l.fillRect(x - w / 2, yy, 1, 3); l.fillRect(x + w / 2, yy, 1, 3); } }
     if (aim.id === 'glue') { const f = world.floorBelow(x, y); if (f) { l.fillRect(f.x0, f.y - 3, f.x1 - f.x0, 1); l.fillRect(f.x0, f.y - 3, 1, 3); l.fillRect(f.x1 - 1, f.y - 3, 1, 3); } }
     l.fillRect(x - 5, y, 4, 1); l.fillRect(x + 2, y, 4, 1); l.fillRect(x, y - 5, 1, 4); l.fillRect(x, y + 2, 1, 4);
+  }
+
+  // Floating words: CHECKPOINT!, CAUGHT!, CLOSE! ... in the pixel font with a dark outline, rising and fading.
+  say(x, y, text, color, life = 1.1) {
+    if (!this.texts) this.texts = [];
+    this.texts.push({ x, y, text, color, life, max: life });
+    if (this.texts.length > 8) this.texts.shift();
+  }
+  drawTexts(dt) {
+    const l = this.l;
+    if (!this.texts || !this.texts.length) return;
+    l.font = '8px "Press Start 2P", monospace'; l.textAlign = 'center'; l.textBaseline = 'middle';
+    for (let i = this.texts.length - 1; i >= 0; i--) {
+      const q = this.texts[i];
+      q.life -= dt; if (q.life <= 0) { this.texts.splice(i, 1); continue; }
+      const age = q.max - q.life, pop = age < 0.12 ? 0.6 + age / 0.12 * 0.6 : age < 0.2 ? 1.2 - (age - 0.12) / 0.08 * 0.2 : 1;
+      const X = Math.round(q.x), Y = Math.round(q.y - age * 14);
+      l.globalAlpha = Math.min(1, q.life / 0.3);
+      l.save(); l.translate(X, Y); l.scale(pop, pop);
+      l.fillStyle = '#1c1424';
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1], [0, 2], [1, 2], [-1, 2]]) l.fillText(q.text, dx, dy);
+      l.fillStyle = q.color; l.fillText(q.text, 0, 0);
+      l.restore(); l.globalAlpha = 1;
+    }
+  }
+  // A trap went off right next to the runner and missed: CLOSE!
+  nearMiss(world) {
+    const p = world.player;
+    if (p.dead || p.finished) { this.closeAt = null; return; }
+    this.nm = this.nm || {};
+    for (const d of world.dangers()) {
+      const gx = Math.max(d.x - (p.x + PHYS.w), p.x - (d.x + d.w), 0), gy = Math.max(d.y - (p.y + PHYS.h), p.y - (d.y + d.h), 0);
+      const gap = Math.max(gx, gy), key = Math.round(d.x / 16) + ',' + Math.round(d.y / 16);
+      if (gap > 0 && gap < 7 && !(this.t - (this.nm[key] ?? -9) < 1.5)) { this.nm[key] = this.t; this.closeAt = this.t; }
+    }
+    // only a miss if the runner is still standing a moment later
+    if (this.closeAt != null && this.t - this.closeAt > 0.25) { this.closeAt = null; this.say(p.x + 5, p.y - 12, 'CLOSE!', '#ffffff', 0.8); }
+  }
+  // "!" over a trap the moment it is fired
+  drawAlerts(world) {
+    const l = this.l;
+    for (const t of world.traps) {
+      if (!(t.state === 'warn' || (t.state === 'active' && t.t < 0.2))) continue;
+      const ceiling = t.kind === 'crusher' || t.kind === 'dropper';
+      const X = Math.round((t.x0 + t.x1 + 1) * TILE / 2) - 3, Y = ceiling ? t.y * TILE + 18 + (t.oy || 0) : t.y * TILE - 22 - (t.kind === 'wall' ? 16 : 0);
+      const b = Math.floor(this.t * 16) % 2;
+      l.fillStyle = '#1c1424'; l.fillRect(X - 1, Y - 1 - b, 9, 12); l.fillRect(X + 2, Y + 11 - b, 3, 2);
+      l.fillStyle = '#ffffff'; l.fillRect(X, Y - b, 7, 10); l.fillRect(X + 3, Y + 10 - b, 1, 1);
+      l.fillStyle = '#e8414f'; l.fillRect(X + 2, Y + 1 - b, 3, 5); l.fillRect(X + 3, Y + 7 - b, 1, 2); l.fillRect(X + 2, Y + 7 - b, 3, 2);
+    }
+  }
+  // Pits end in water (or a sea of cloud on the sky level), gently waving.
+  drawWater(world, cx) {
+    const l = this.l, W = this.lo.width, base = world.h * TILE, theme = world.level.theme;
+    const C = { day: ['#2f74d0', '#5aa2ff', '#bfe3ff'], sunset: ['#b4506e', '#e07a8a', '#ffd0b0'], night: ['#1b2550', '#2e3f86', '#7f95e6'], dusk: ['#3d2260', '#6a3f8e', '#f2a6c4'], sky: ['#e6f3ff', '#ffffff', '#ffffff'] }[theme] || ['#2f74d0', '#5aa2ff', '#bfe3ff'];
+    for (let x = Math.max(0, Math.floor(cx)); x < Math.min(world.w * TILE, cx + W); x++) {
+      if (this.groundTop(world, x) < base) continue;
+      const wave = Math.round(Math.sin(x / 7 + this.t * 2) * 1.5 + Math.sin(x / 3 - this.t * 3) * 0.6), top = base - 9 + wave;
+      l.fillStyle = C[0]; l.fillRect(x, top, 1, base - top);
+      l.fillStyle = C[1]; l.fillRect(x, top, 1, 2);
+      if ((x + Math.floor(this.t * 6)) % 11 === 0) { l.fillStyle = C[2]; l.fillRect(x, top, 1, 1); }
+    }
   }
 
   drawParticles(dt) {

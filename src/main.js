@@ -805,7 +805,7 @@ function tick(dt, now) {
     const n = Math.ceil(run.countT);
     if (n !== run.lastCount && n <= 3) {
       run.lastCount = n; const c = $('count'); c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
-      c.textContent = n > 0 ? n : 'GO!'; (n > 0 ? sfx.count : sfx.go)();
+      c.textContent = n > 0 ? n : 'GO!'; c.dataset.n = n > 0 ? n : 'go'; (n > 0 ? sfx.count : sfx.go)();
     }
     if (run.countT <= 0) { run.phase = 'play'; input.jumpQueued = false; setTimeout(() => $('count').classList.add('hidden'), 450); }
   }
