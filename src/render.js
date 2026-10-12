@@ -59,6 +59,32 @@ export class Renderer {
     this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * (snap ? 1 : k * 0.8);
   }
 
+  // Point the camera at a spot (the level preview fly-over).
+  pan(world, x, y, wide) {
+    this.setZoom(!!wide);
+    const vw = this.lo.width, vh = this.lo.height, W = world.w * TILE, H = world.h * TILE;
+    let tx = x - vw / 2, ty = y - vh * 0.55;
+    tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
+    ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
+    this.cam.x = tx; this.cam.y = ty; this.lookX = 0;
+  }
+
+  // The last run of this level, replayed as a see-through runner with its name over it.
+  drawGhost(world, g) {
+    const tr = g.trail, n = tr.length / 3, f = world.time * 10, i = Math.min(n - 1, Math.floor(f)), j = Math.min(n - 1, i + 1), u = f - Math.floor(f);
+    if (n < 2 || i < 0) return;
+    if (tr[i * 3 + 2] & 4) return;   // it was dead here
+    const x = tr[i * 3] + (tr[j * 3] - tr[i * 3]) * u, y = tr[i * 3 + 1] + (tr[j * 3 + 1] - tr[i * 3 + 1]) * u, fl = tr[i * 3 + 2];
+    const moving = Math.abs(tr[j * 3] - tr[i * 3]) > 0.5, face = fl & 1 ? 1 : -1;
+    const frame = !(fl & 2) ? (tr[j * 3 + 1] < tr[i * 3 + 1] ? 'jump' : 'fall') : moving ? ['run0', 'run1', 'run2', 'run1'][Math.floor(this.t * 10) % 4] : 'idle';
+    if (!g.colors) g.colors = g.charObj;
+    const l = this.l, X = Math.round(x + PHYS.w / 2), Y = Math.round(y + PHYS.h);
+    l.globalAlpha = 0.38; l.drawImage(charFrame(g.colors, frame, face, 0), X - 6, Y - 16); l.globalAlpha = 0.75;
+    l.font = '8px "Press Start 2P", monospace'; l.textAlign = 'center'; l.textBaseline = 'middle';
+    l.fillStyle = '#1c1424'; l.fillText('GHOST', X + 1, Y - 21); l.fillStyle = '#ffffff'; l.fillText('GHOST', X, Y - 22);
+    l.globalAlpha = 1;
+  }
+
   get camX() { return Math.round(this.cam.x); }
   get camY() { return Math.round(this.cam.y); }
   toWorld(cx, cy) { return { x: (cx - (this.ox || 0)) * this.dpr / this.k + this.camX, y: (cy - (this.oy || 0)) * this.dpr / this.k + this.camY }; }
@@ -106,7 +132,7 @@ export class Renderer {
     this.t += dt; this.shake = Math.max(0, this.shake - dt);
     const th = THEMES[world.level.theme] || THEMES.day;
     this.curWorld = world; this.levelH = world.h;
-    const l = this.l, s = this.shake > 0 ? this.shake * 12 : 0;
+    const l = this.l, s = this.shake > 0 && this.shakeOn !== false ? this.shake * 12 : 0;
     const cx = this.camX + Math.round((Math.random() - 0.5) * s), cy = this.camY + Math.round((Math.random() - 0.5) * s);
     this.drawBackground(world, th, cx, cy);
     l.save(); l.translate(-cx, -cy);
@@ -133,6 +159,7 @@ export class Renderer {
       l.drawImage(charFrame(o.colors, ['run0', 'run1', 'run2', 'run1'][Math.floor(this.t * 12) % 4], d.face, 0), Math.round(d.x + PHYS.w / 2 - 6), Math.round(d.y + PHYS.h - 16));
       l.globalAlpha = 1;
     }
+    if (o.ghost) this.drawGhost(world, o.ghost);
     if (!world.player.dead) this.drawPlayer(world.player, o.colors, dt);
     this.drawCreatures(world);
     this.drawBolts(world);
@@ -756,7 +783,7 @@ export class Renderer {
       if (gap > 0 && gap < 7 && !(this.t - (this.nm[key] ?? -9) < 1.5)) { this.nm[key] = this.t; this.closeAt = this.t; }
     }
     // only a miss if the runner is still standing a moment later
-    if (this.closeAt != null && this.t - this.closeAt > 0.25) { this.closeAt = null; this.say(p.x + 5, p.y - 12, 'CLOSE!', '#ffffff', 0.8); }
+    if (this.closeAt != null && this.t - this.closeAt > 0.25) { this.closeAt = null; this.say(p.x + 5, p.y - 12, 'CLOSE!', '#ffffff', 0.8); if (this.onClose) this.onClose(); }
   }
   // "!" over a trap the moment it is fired
   drawAlerts(world) {

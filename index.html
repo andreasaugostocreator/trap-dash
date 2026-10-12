@@ -41,8 +41,7 @@
     </div>
     <div class="row small">
       <button class="chip" id="howBtn">How to play</button>
-      <button class="chip" id="soundBtn">Sound: on</button>
-      <button class="chip" id="musicBtn">Music: on</button>
+      <button class="chip" id="setBtn">⚙ Settings</button>
     </div>
   </div>
 </section>
@@ -75,7 +74,7 @@
     <h3>Level</h3>
     <div class="levels" id="levels"></div>
     <div class="randWrap"><div class="randRow" id="randRow"></div><div class="randRow" id="endRow"></div></div>
-    <div class="row" id="firstRow"><span>Runs first:</span> <div class="seg" id="firstSeg"></div></div>
+    <div class="row" id="firstRow"><span>Runs first:</span> <div class="seg" id="firstSeg"></div><span class="matchLab">Match:</span> <div class="seg" id="matchSeg"></div></div>
     <div class="buttons">
       <button class="big pink" id="startBtn">Start!</button>
       <button class="mid" id="leaveBtn">Leave</button>
@@ -87,10 +86,12 @@
 <div class="hud hidden" id="hud">
   <div class="hudLeft"><span class="role" id="role">RUN</span><span class="who" id="who"></span></div>
   <div class="timer" id="timer">0.0</div>
-  <div class="hudRight"><span class="deaths" id="deaths">0</span><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
+  <div class="hudRight"><span class="tscore" id="tscore">0</span><span class="deaths" id="deaths">0</span><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
 </div>
 <div class="hint hidden" id="hint"></div>
 <div class="count hidden" id="count">3</div>
+<div class="catchPop" id="catchPop"></div>
+<div class="preview hidden" id="preview"></div>
 <!-- Control panels: the game view sits between the top bar and these, so no button ever covers the map. -->
 <div class="pad top hidden" id="padTop"><div class="padSec" id="padTL"></div><div class="padSec mid" id="padTM"></div><div class="padSec" id="padTR"></div></div>
 <div class="pad hidden" id="pad"><div class="padSec" id="padL"></div><div class="padSec mid" id="padM"></div><div class="padSec" id="padR"></div></div>

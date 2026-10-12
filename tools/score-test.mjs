@@ -1,0 +1,26 @@
+// Trapper score: catches, combo, popup, HUD; and the settings panel. Needs the site on :8080.
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
+const errs = [];
+const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
+p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://localhost:8080/'); await p.waitForTimeout(500);
+await p.click('#setBtn'); await p.waitForTimeout(200); await p.screenshot({ path: 'shots/98-settings.png' });
+await p.click('.tog >> nth=5'); const shake = await p.evaluate(() => window.__td.R.shakeOn); await p.click('.tog >> nth=5'); await p.click('#setDone');
+console.log('shake toggled off then on:', shake === false);
+await p.click('text=Same screen'); await p.click('#startBtn'); await p.waitForTimeout(3600);
+const kill = kind => p.evaluate(k => { const w = window.__td.run.world, t = w.traps.find(t => t.kind === k); w.lock = 0; t.cd = 0; t.state = 'idle';
+  w.player.x = (t.x0 + t.x1) * 8 - 4; w.player.y = t.y * 16 - 12; w.player.inv = 0; w.player.dead = false; w.trigger(t.id); }, kind);
+await kill('spikes'); await p.waitForTimeout(500);
+console.log('after one catch:', await p.textContent('#tscore'));
+await p.waitForTimeout(1200); await kill('spikes'); await p.waitForTimeout(250);
+await p.screenshot({ path: 'shots/98-combo.png' });
+console.log('after a combo catch:', await p.textContent('#tscore'), '|', await p.textContent('#catchPop'));
+await p.waitForTimeout(1500);
+await p.evaluate(() => { const w = window.__td.run.world; w.pressT = -99; w.player.x = 41 * 16; w.player.y = 40 * 16; });
+await p.waitForTimeout(800);
+console.log('a fall with no trapper action gives nothing:', await p.textContent('#tscore'));
+await p.click('#pauseBtn'); await p.click('#pSet'); await p.waitForTimeout(150); await p.click('#setDone'); await p.waitForTimeout(150);
+console.log('settings from pause returns to pause menu:', await p.isVisible('#resume'));
+console.log(errs.length ? 'ERRORS\n' + errs.join('\n') : 'no errors');
+await b.close();

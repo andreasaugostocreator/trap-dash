@@ -370,3 +370,58 @@ button.mid .bicon, button.chip .bicon { filter: brightness(.12); }
 @keyframes winHop { 50% { transform: translateY(-4px); } }
 .big-emoji { animation: countPop .6s cubic-bezier(.2, 1.6, .4, 1) both; display: inline-block; }
 @media (max-height: 500px) { .timer { font-size: 13px; padding: 4px 9px 3px; } .timer::before, .deaths::before { width: 14px; height: 14px; } }
+
+/* ---------- trapper score: HUD counter and the big catch popup */
+.tscore { font-family: 'Press Start 2P', monospace; font-size: 13px; color: #ffd84a; text-shadow: 0 2px 0 var(--ink); display: inline-flex; align-items: center; gap: 5px; }
+.tscore::before { content: '★'; font-family: 'Pixelify Sans', sans-serif; font-size: 18px; }
+.tscore.bump { animation: tsBump .5s cubic-bezier(.2, 1.8, .4, 1); }
+@keyframes tsBump { 0% { transform: scale(1); } 30% { transform: scale(1.8); color: #fff; } 100% { transform: scale(1); } }
+.catchPop { position: fixed; left: 50%; top: 30%; transform: translate(-50%, -50%) scale(0); z-index: 6; pointer-events: none; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; }
+.catchPop b { font-family: 'Press Start 2P', monospace; font-size: 40px; color: #ffd84a; background: linear-gradient(#fff6c8, #ffd84a 45%, #ff9a3c); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  filter: drop-shadow(3px 0 0 var(--ink)) drop-shadow(-3px 0 0 var(--ink)) drop-shadow(0 3px 0 var(--ink)) drop-shadow(0 -3px 0 var(--ink)) drop-shadow(0 6px 0 rgba(28, 20, 36, .6)); }
+.catchPop small { font-family: 'Press Start 2P', monospace; font-size: 12px; color: #fff; background: var(--pink); padding: 5px 8px 4px; box-shadow: 0 0 0 3px var(--ink); }
+.catchPop small + small { background: #7a4bd1; }
+.catchPop:not(.mine) b { font-size: 26px; filter: drop-shadow(2px 0 0 var(--ink)) drop-shadow(-2px 0 0 var(--ink)) drop-shadow(0 2px 0 var(--ink)) drop-shadow(0 -2px 0 var(--ink)); }
+.catchPop.show { animation: catchIn 1.3s cubic-bezier(.2, 1.5, .4, 1) both; }
+.catchPop.combo.show b { animation: comboShake .12s steps(2) 4; }
+@keyframes catchIn { 0% { transform: translate(-50%, -50%) scale(0) rotate(-12deg); opacity: 0; } 15% { transform: translate(-50%, -50%) scale(1.25) rotate(4deg); opacity: 1; }
+  25% { transform: translate(-50%, -50%) scale(1) rotate(0); } 80% { transform: translate(-50%, -60%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -75%) scale(.9); opacity: 0; } }
+@keyframes comboShake { 50% { transform: translateX(4px) rotate(-3deg); } }
+@media (max-height: 500px) { .catchPop b { font-size: 30px; } .catchPop small { font-size: 10px; } .tscore { font-size: 11px; } }
+.trapKing { background: #fff8e6; margin: 8px var(--px); padding: 6px 10px; box-shadow: 0 0 0 3px var(--ink); text-align: left; }
+.tkTitle { font-weight: 700; color: var(--muted); font-size: 14px; }
+.tkRow { display: flex; align-items: baseline; gap: 8px; padding: 2px 0; }
+.tkRow span { font-weight: 700; } .tkRow small { color: var(--muted); flex: 1; }
+.tkRow b { font-family: 'Press Start 2P', monospace; font-size: 13px; color: #b8860b; }
+.tkRow.king b { color: #e8414f; }
+.pb { font-family: 'Press Start 2P', monospace; font-size: 11px; color: #e8414f; text-align: center; margin-top: 4px; animation: winHop .5s steps(2) infinite; }
+/* ---------- settings */
+.settings { display: flex; flex-direction: column; gap: 4px; margin: 6px 0; text-align: left; }
+.setRow { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 600; font-size: 17px; }
+.setRow small { color: var(--muted); font-size: 13px; }
+.tog { min-width: 64px; } .tog.on { background: #7bd65a; }
+
+/* ---------- level preview banner */
+.preview { position: fixed; left: 50%; top: calc(var(--hudH) + 10px); transform: translateX(-50%); z-index: 4; background: var(--parch, #f6e7c8); padding: 8px 14px 6px; text-align: center;
+  box-shadow: 0 0 0 3px var(--ink), 0 8px 0 rgba(28, 20, 36, .4); border: 5px solid #a8673a; max-width: calc(100vw - 24px); animation: pvIn .4s cubic-bezier(.2, 1.4, .4, 1) both; cursor: pointer; }
+@keyframes pvIn { from { transform: translate(-50%, -30px); opacity: 0; } to { transform: translateX(-50%); opacity: 1; } }
+.pvName { font-family: 'Press Start 2P', monospace; font-size: 15px; margin-bottom: 6px; }
+.pvName .stars { color: #e0a50e; font-family: 'Pixelify Sans', sans-serif; font-size: 18px; }
+.pvRow { display: flex; align-items: center; gap: 6px; justify-content: center; flex-wrap: wrap; margin: 3px 0; }
+.pvSide { font-family: 'Press Start 2P', monospace; font-size: 9px; color: #fff; padding: 4px 6px 3px; box-shadow: 0 0 0 2px var(--ink); min-width: 74px; }
+.pvSide.run { background: var(--pink); } .pvSide.trap { background: #7a4bd1; }
+.pvGad { display: inline-flex; align-items: center; gap: 3px; font-weight: 700; font-size: 14px; background: #fff; padding: 2px 6px 2px 3px; box-shadow: 0 0 0 2px var(--ink); }
+.pvGad canvas { position: static; width: 16px; height: 16px; background: #2a1f3d; }
+.preview small { color: var(--muted); font-size: 12px; }
+@media (max-height: 500px) { .pvName { font-size: 12px; margin-bottom: 3px; } .pvGad { font-size: 12px; } .preview { padding: 5px 10px 4px; border-width: 4px; } .preview small { display: none; } }
+/* ---------- best of 3 */
+.matchLab { margin-left: 10px; }
+.trophy { font-size: 64px; line-height: 1; animation: countPop .7s cubic-bezier(.2, 1.6, .4, 1) both, trophyGlow 1.2s ease-in-out infinite alternate; filter: drop-shadow(0 0 10px #ffd84a); }
+@keyframes trophyGlow { to { filter: drop-shadow(0 0 22px #ffd84a); transform: scale(1.06); } }
+.champ { display: flex; justify-content: center; } .champ canvas { width: 64px; height: 72px; animation: winHop .45s steps(2) infinite; }
+.matchScore { font-family: 'Press Start 2P', monospace; font-size: 20px; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 20; overflow: hidden; }
+.confetti i { position: absolute; top: -12px; width: 8px; height: 8px; animation: confettiFall linear both; }
+@keyframes confettiFall { to { transform: translate(var(--dx), 110vh) rotate(720deg); } }
+body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
+@media (max-height: 500px) { .trophy { font-size: 40px; } .champ canvas { width: 40px; height: 45px; } .matchScore { font-size: 15px; margin: 2px 0; } }

@@ -15,6 +15,8 @@ const STARS = new Map();   // level id -> 1..3
 const starsOf = L => { if (L.stars) return L.stars; if (!STARS.has(L.id)) STARS.set(L.id, rateLevel(L).stars); return STARS.get(L.id); };
 const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
+import { settings, saveSettings, buzz, canVibrate } from './settings.js';
+import { TrapScore, titleFor } from './score.js';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -96,11 +98,25 @@ function buildTitle() {
     box.appendChild(b);
   }
   $('charName').textContent = charOf(me.char).name;
-  $('soundBtn').textContent = 'Sound: ' + (audio.muted ? 'off' : 'on');
-  $('musicBtn').textContent = 'Music: ' + (audio.music ? 'on' : 'off');
 }
-$('soundBtn').onclick = () => { setMuted(!audio.muted); buildTitle(); };
-$('musicBtn').onclick = () => { setMusic(!audio.music); if (audio.music) startMusic(); buildTitle(); };
+$('setBtn').onclick = () => { sfx.click(); openSettings(hidePanel); };
+
+// ---------- settings
+function openSettings(back) {
+  const rows = [
+    ['Sound', () => !audio.muted, v => setMuted(!v)],
+    ['Music', () => audio.music, v => { setMusic(v); if (v && run) startMusic(); }],
+    ['Vibration' + (canVibrate ? '' : ' <small>(not on this device)</small>'), () => settings.vibrate, v => { settings.vibrate = v; buzz(40); }],
+    ['Ghost of the last run', () => settings.ghost, v => { settings.ghost = v; }],
+    ['Level preview', () => settings.preview, v => { settings.preview = v; }],
+    ['Screen shake', () => settings.shake, v => { settings.shake = v; R.shakeOn = v; }],
+  ];
+  panel(`<h2>Settings</h2><div class="settings">${rows.map(([label, get], i) => `<div class="setRow"><span>${label}</span><button class="chip tog${get() ? ' on' : ''}" data-i="${i}">${get() ? 'On' : 'Off'}</button></div>`).join('')}</div>
+    <div class="buttons"><button class="big pink" id="setDone">Done</button></div>`);
+  for (const b of $('panelCard').querySelectorAll('.tog')) b.onclick = () => { const r = rows[+b.dataset.i]; r[2](!r[1]()); saveSettings(); sfx.click(); openSettings(back); };
+  $('setDone').onclick = () => { sfx.click(); back(); };
+}
+R.shakeOn = settings.shake;
 $('howBtn').onclick = () => panel(`
   <h2>How to play</h2>
   <ul class="help">
@@ -315,6 +331,14 @@ function openLobby() {
   }
 
   $('firstRow').classList.toggle('hidden', practice);
+  const ms = $('matchSeg'); ms.innerHTML = '';
+  for (const [v, label] of [[false, '1 level'], [true, 'Best of 3']]) {
+    const b = document.createElement('button');
+    b.textContent = label; b.className = !!lobby.bo3 === v ? 'on' : '';
+    b.disabled = online && !isHost;
+    b.onclick = () => { lobby.bo3 = v; sfx.click(); syncLobby(); openLobby(); };
+    ms.appendChild(b);
+  }
   const seg = $('firstSeg'); seg.innerHTML = '';
   for (const s of ['a', 'b']) {
     const b = document.createElement('button');
@@ -327,7 +351,7 @@ function openLobby() {
   $('startBtn').textContent = online && !isHost ? 'Waiting for the host…' : 'Start!';
 }
 
-$('startBtn').onclick = () => { unlockAudio(); sfx.click(); runs = []; hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
+$('startBtn').onclick = () => { unlockAudio(); sfx.click(); runs = []; if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); } hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
 $('leaveBtn').onclick = () => { sfx.click(); nav('title'); };
 $('shareBtn').onclick = async () => {
   const url = `${location.origin}${location.pathname}?join=${roomCode}`;
@@ -349,7 +373,8 @@ function startEndless(stars, runner) {
 }
 function nextStage() {   // only on the runner's device, which owns the simulation
   const e = run.endless, w = run.world;
-  const ne = { ...e, stage: e.stage + 1, total: e.total + w.time, deaths: e.deaths + w.player.deaths };
+  const ne = { ...e, stage: e.stage + 1, total: e.total + w.time, deaths: e.deaths + w.player.deaths,
+    score: { pts: run.score.pts, catches: run.score.catches, bestStreak: run.score.bestStreak } };
   const level = endlessLevel(ne);
   if (mode === 'online') net.send({ t: 'stage', level, runner: run.runner, endless: ne });
   startRun(level, run.runner, 0, ne);
@@ -651,11 +676,16 @@ function startRun(level, runner, n, endless = null) {
   const online = mode === 'online';
   const runnerHere = !online || runner === mySide();
   run = {
-    level, runner, n, world, phase: 'count', countT: 3.2, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
+    level, runner, n, world, phase: 'count', countT: 3.2, previewT: 0, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
     runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere, held: new Map(),
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5, endless,
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
+  run.score = new TrapScore();
+  run.trail = [];
+  run.ghost = settings.ghost && lastGhost && !endless && lastGhost.key === levelKey(level) ? lastGhost : null;
+  run.preview = settings.preview && !(endless && endless.stage > 1);
+  if (endless && endless.score) Object.assign(run.score, endless.score, { kinds: new Set(), lastT: -99, streak: 0 });
   R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
   $('hud').classList.remove('hidden');
   const role = $('role');
@@ -666,27 +696,89 @@ function startRun(level, runner, n, endless = null) {
   buildTrapBar();
   buildGadgets();
   layoutControls();
+  updateTrapScore(false);
   const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-6, gadgets 7-0)'}`
     : runnerHere ? (touchDevice ? `Reach the flag! Your gadgets: ${gadNames('runner')}.` : `Reach the flag! ← → run, Space jump. ${runnerKeyed().map((id, i) => R_KEYS[i] + ' ' + GADGETS.runner[id].name.toLowerCase()).join(', ')}.`)
       : (touchDevice ? `Red buttons fire the nearest trap (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-6 fire traps, 7-0 gadgets (${gadNames('trapper')}), aimed at your mouse.`);
   $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + (touchDevice && innerHeight > innerWidth ? ' (Tip: turn your phone sideways for a wider view.)' : ''); $('hint').classList.remove('hidden');
+  if (run.preview) { run.phase = 'preview'; run.previewT = PREVIEW; showPreview(); $('hint').classList.add('hidden'); }
   input.jumpQueued = false;
   startMusic();
 }
 
+// Every game event passes through here on both devices: particles, sound, vibration, the trapper's score.
+function gameEvent(e) {
+  const [k, x, y, extra] = e;
+  R.onEvent(e, run.colors); playEvent(e);
+  if (k === 'die') buzz(run.runnerHere ? [60, 40, 90] : 25);
+  if ((k === 'stun' || k === 'block') && run.runnerHere) buzz(35);
+  if (k === 'catch') onCatch(extra);
+}
+R.onClose = () => { if (run && run.runnerHere) buzz(12); };
+
+// ---------- the trapper's score: a big gold popup for every catch, combos stack up
+function onCatch(credit) {
+  const r = run.score.catch(credit, run.world.time), mine = run.trapperHere;
+  const pop = $('catchPop');
+  pop.className = 'catchPop' + (mine ? ' mine' : '') + (r.streak > 1 ? ' combo' : '');
+  pop.innerHTML = `<b>+${r.gain}</b>${r.lines.map(t => `<small>${t}</small>`).join('')}`;
+  void pop.offsetWidth; pop.classList.add('show');
+  clearTimeout(pop.hideT); pop.hideT = setTimeout(() => pop.classList.remove('show'), 1300);
+  updateTrapScore(true);
+  if (mine) { sfx.kaching(r.streak); buzz(r.streak > 1 ? [30, 30, 30, 30, 60] : [40, 30, 50]); R.flash = 0.08; }
+}
+function updateTrapScore(bump) {
+  const el = $('tscore'), s = run.score;
+  el.textContent = s.pts;
+  el.title = run.trapperHere ? 'Your trap score' : 'Trapper score';
+  if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+
+// ---------- level preview: the camera flies to the flag and back while a banner shows the level and the gadgets
+const PREVIEW = 3.4;
+function showPreview() {
+  const L = levelOf(run.level), lo = run.world.loadout, el = $('preview');
+  const icons = side => lo[side].map(id => `<span class="pvGad"><canvas class="pix" width="7" height="7" data-icon="${id}"></canvas>${esc(GADGETS[side][id].name)}</span>`).join('');
+  const stars = L.stars || starsOf(L);
+  el.innerHTML = `<div class="pvName">${esc(run.endless ? '∞ ' + L.name : L.name)} <span class="stars">${starText(stars)}</span></div>
+    <div class="pvRow"><b class="pvSide run">RUNNER</b>${icons('runner')}</div>
+    <div class="pvRow"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
+    <small>${touchDevice ? 'Tap' : 'Click or press a key'} to skip</small>`;
+  for (const c of el.querySelectorAll('canvas[data-icon]')) c.getContext('2d').drawImage(SPR.icon[c.dataset.icon], 0, 0);
+  el.classList.remove('hidden');
+}
+function endPreview() {
+  if (!run || run.phase !== 'preview') return;
+  run.phase = 'count'; run.previewT = 0; $('preview').classList.add('hidden'); $('hint').classList.remove('hidden'); run.hintT = 5;
+  R.follow(run.world, 0, run.trapperHere && !run.runnerHere, true);
+}
+$('preview').addEventListener('pointerdown', e => { e.preventDefault(); endPreview(); });
+addEventListener('keydown', e => { if (run && run.phase === 'preview' && !e.repeat) endPreview(); });
+function panPreview(dt) {
+  run.previewT -= dt;
+  if (run.previewT <= 0) return endPreview();
+  const w = run.world, u = 1 - run.previewT / PREVIEW, ease = v => v * v * (3 - 2 * v);
+  const k = u < 0.55 ? ease(u / 0.55) : u < 0.7 ? 1 : 1 - ease((u - 0.7) / 0.3);
+  R.pan(w, w.start.x + (w.goal.x - w.start.x) * k, w.start.y + (w.goal.y - w.start.y) * k, run.trapperHere && !run.runnerHere);
+}
+
 function receiveSnap(m) {
   const w = run.world;
-  if (run.phase === 'count' && m.tm > 0) { run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); }
+  if ((run.phase === 'count' || run.phase === 'preview') && m.tm > 0) { if (run.phase === 'preview') endPreview(); run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); }
   w.applySnap(m);
   run.snaps.push({ at: performance.now(), x: m.p[0], y: m.p[1], dead: !!(m.p[5] & 2) });
   if (run.snaps.length > 12) run.snaps.shift();
-  for (const e of m.ev) { R.onEvent(e, run.colors); playEvent(e); }
+  for (const e of m.ev) gameEvent(e);
   for (const id in run.pending) if (w.traps[id].state !== 'idle' || w.traps[id].cd > 0) run.pending[id] = 0;
 }
 
+let lastGhost = null;
+const levelKey = ref => typeof ref === 'number' ? 'L' + ref : ref && ref.id;
 function finishRun(res) {
   if (run.phase === 'end') return;
   run.phase = 'end';
+  if (run.simOwner && run.trail.length && !run.endless) res.trail = run.trail;
+  if (res.trail) lastGhost = { key: levelKey(run.level), trail: res.trail, charObj: charOf(players[res.runner].char) };
   if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
   runs.push(res);
   for (const id of ['hint', 'pad', 'padTop']) $(id).classList.add('hidden');
@@ -696,7 +788,7 @@ function finishRun(res) {
 
 function resultOf(world, runner) {
   const p = world.player, span = Math.max(1, world.goal.x - world.start.x);
-  return { runner, time: Math.round(world.time * 10) / 10, deaths: p.deaths, finished: p.finished,
+  return { runner, time: Math.round(world.time * 10) / 10, deaths: p.deaths, finished: p.finished, tp: run.score.pts, tc: run.score.catches, ts: run.score.bestStreak,
     progress: p.finished ? 100 : Math.max(0, Math.min(99, Math.round((p.best - world.start.x) / span * 100))) };
 }
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
@@ -704,6 +796,17 @@ function line(r, win) {
   const p = players[r.runner];
   return `<div class="line${win ? ' win' : ''}" data-portrait="${p.char}"><div><b>${esc(p.name)}${win ? ' 👑' : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
 }
+// Who trapped best this level: the trapper of each run is the other player.
+function trapKing(r1, r2) {
+  if (!r1 || !r2 || r1.tp == null) return '';
+  const a = { who: other(r1.runner), pts: r1.tp || 0, c: r1.tc || 0 }, b = { who: other(r2.runner), pts: r2.tp || 0, c: r2.tc || 0 };
+  const k = a.pts === b.pts ? null : a.pts > b.pts ? a : b;
+  const best = store.get('bestTrap', 0), mine = [a, b].find(t => t.who === mySideOrA());
+  let pb = '';
+  if (mine && mine.pts > best && mode === 'online') { store.set('bestTrap', mine.pts); pb = '<div class="pb">New personal best!</div>'; }
+  return `<div class="trapKing"><div class="tkTitle">🪤 Trap points</div>${[a, b].map(t => `<div class="tkRow${t === k ? ' king' : ''}"><span>${esc(players[t.who].name)}${t === k ? ' 👑' : ''}</span><small>${t.c} ${t.c === 1 ? 'catch' : 'catches'} · ${titleFor(t.pts)}</small><b>${t.pts}</b></div>`).join('')}${pb}</div>`;
+}
+const mySideOrA = () => mode === 'online' ? mySide() : 'a';
 const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.progress > y.progress;
 
 function showRunResult(res) {
@@ -737,9 +840,11 @@ function showRunResult(res) {
   const tie = r1 && r2 && !better(r1, r2) && !better(r2, r1);
   const win = tie ? null : better(r1, r2) ? r1 : r2;
   if (win && !run.scored) { score[win.runner]++; run.scored = true; }
+  if (lobby.bo3 && win && score[win.runner] >= 2) return trophyScreen(win.runner, r1, r2);
   const nextLevel = controls ? nextOf(run.level) : null;
   panel(`<div class="big-emoji">${tie ? '🤝' : '🏆'}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
     <div class="result">${[r1, r2].map(r => line(r, r === win)).join('')}</div>
+    ${trapKing(r1, r2)}
     <p>Score: ${esc(players.a.name)} <b>${score.a}</b> – <b>${score.b}</b> ${esc(players.b.name)}</p>
     <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(nextLevel.name || levelOf(nextLevel).name)}</button>
       <div class="row"><button class="mid" id="again">Rematch</button><button class="mid" id="toLobby">Lobby</button></div>` : `<p class="status">Waiting for the host…</p>`}</div>`);
@@ -750,9 +855,34 @@ function showRunResult(res) {
   $('toLobby').onclick = () => { sfx.click(); if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
 }
 
+// ---------- best of 3: the first to win two levels takes the trophy
+function trophyScreen(winner, r1, r2) {
+  const controls = mode !== 'online' || isHost, loser = other(winner);
+  sfx.goal(); buzz([60, 40, 60, 40, 120]);
+  panel(`<div class="trophy">🏆</div><h2>${esc(players[winner].name)} wins the match!</h2>
+    <div class="champ" data-portrait="${players[winner].char}"></div>
+    <p class="matchScore"><b>${score[winner]}</b> – <b>${score[loser]}</b></p>
+    ${trapKing(r1, r2)}
+    <div class="buttons">${controls ? `<button class="big pink" id="newMatch">New match</button><button class="mid" id="toLobby">Lobby</button>` : `<p class="status">Waiting for the host…</p>`}</div>`);
+  confetti();
+  if (!controls) return;
+  $('newMatch').onclick = () => { sfx.click(); score = { a: 0, b: 0 }; runs = []; lobby.level = nextOf(run.level); lobby.first = other(lobby.first); syncLobby(); hostStart(lobby.level, lobby.first, 1); };
+  $('toLobby').onclick = () => { sfx.click(); score = { a: 0, b: 0 }; if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
+}
+function confetti() {
+  const box = document.createElement('div'); box.className = 'confetti';
+  const cols = ['#ff5d8f', '#ffd84a', '#5ab4ff', '#7bd65a', '#b48cff', '#ffffff'];
+  for (let i = 0; i < 60; i++) {
+    const c = document.createElement('i');
+    c.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.5).toFixed(2)}s;--dx:${Math.round((Math.random() - 0.5) * 120)}px`;
+    box.appendChild(c);
+  }
+  document.body.appendChild(box); setTimeout(() => box.remove(), 4500);
+}
+
 function endRunView() {
   run = null; hidePanel();
-  for (const id of ['hud', 'hint', 'count', 'rotate', 'pad', 'padTop']) $(id).classList.add('hidden');
+  for (const id of ['hud', 'hint', 'count', 'rotate', 'pad', 'padTop', 'preview']) $(id).classList.add('hidden');
   document.body.classList.remove('playing', 'dualpad');
 }
 
@@ -773,13 +903,12 @@ function togglePause() {
     ${E && mode !== 'practice' ? `<button class="big blue" id="swapBtn">Swap sides (new level)</button>` : ''}
     ${canLobby ? `<button class="mid" id="endBtn">End run · lobby</button>` : ''}
     <button class="mid" id="quitRun">${online ? 'Leave the party' : 'Quit to lobby'}</button>
-    <div class="row"><button class="chip" id="pSound">Sound: ${audio.muted ? 'off' : 'on'}</button><button class="chip" id="pMusic">Music: ${audio.music ? 'on' : 'off'}</button></div></div>`);
+    <div class="row"><button class="chip" id="pSet">⚙ Settings</button></div></div>`);
   $('resume').onclick = () => { sfx.click(); hidePanel(); if (run) run.paused = false; };
   if ($('swapBtn')) $('swapBtn').onclick = () => { sfx.click(); swapSides(); };
   if ($('endBtn')) $('endBtn').onclick = () => { sfx.click(); if (online) net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
   $('quitRun').onclick = () => { sfx.click(); if (online) nav('title'); else { endRunView(); openLobby(); } };
-  $('pSound').onclick = () => { setMuted(!audio.muted); togglePause(); togglePause(); };
-  $('pMusic').onclick = () => { setMusic(!audio.music); if (audio.music) startMusic(); togglePause(); togglePause(); };
+  $('pSet').onclick = () => { sfx.click(); openSettings(() => { hidePanel(); togglePause(); }); };
 }
 $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
 
@@ -799,6 +928,7 @@ function tick(dt, now) {
   if (!run) { drawAttract(dt); animateTitle(dt); return; }
   const w = run.world;
   readInput();
+  if (run.phase === 'preview' && !run.paused) panPreview(dt);
   // countdown (both devices count on their own; the trapper also switches to 'play' when the first moving snapshot lands)
   if (run.phase === 'count' && !run.paused) {
     run.countT -= dt;
@@ -820,8 +950,9 @@ function tick(dt, now) {
         w.step(DT, { left: input.left, right: input.right, jump: input.jump, jumpPressed: input.jumpQueued });
         input.jumpQueued = false;
         if (run.bot) run.bot.think(w, DT);
+        if (run.steps % 6 === 0 && !run.endless) { const p = w.player; run.trail.push(Math.round(p.x), Math.round(p.y), (p.face > 0 ? 1 : 0) | (p.onGround ? 2 : 0) | (p.dead ? 4 : 0)); }
       }
-      for (const e of w.events) { R.onEvent(e, run.colors); playEvent(e); if (mode === 'online') run.outbox.push(e); }
+      for (const e of w.events) { gameEvent(e); if (mode === 'online') run.outbox.push(e); }
       w.events.length = 0;
       run.steps++;
       if (mode === 'online' && run.steps % 2 === 0) { const s = w.snapshot(); s.ev = run.outbox; run.outbox = []; net.send(s); }
@@ -844,10 +975,10 @@ function tick(dt, now) {
     }
     for (const shot of w.shots) shot.x += shot.vx * dt;
   }
-  R.follow(w, dt, run.trapperHere && !run.runnerHere);
+  if (run.phase !== 'preview') R.follow(w, dt, run.trapperHere && !run.runnerHere);
   updateGadgets();
   if (run.trapperHere) updateTrapBar();
-  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, runnerView: run.runnerHere, debug: DEBUG });
+  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
   $('timer').textContent = (E ? E.total + w.time : w.time).toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = (E ? E.deaths : 0) + w.player.deaths;

@@ -93,17 +93,17 @@ export class World {
     const out = [];
     for (const t of this.traps) {
       const x = t.x0 * TILE, w = (t.x1 - t.x0 + 1) * TILE, y = t.y * TILE;
-      if (t.kind === 'spikes' && t.state === 'active') out.push({ x: x + 1, y: y + 7, w: w - 2, h: 9 });
-      if (t.kind === 'crusher' && (t.state === 'active' || (t.state === 'recover' && t.t < TRAPS.crusher.impact))) out.push({ x, y: y + t.oy + 1, w, h: TILE - 1 });
-      if (t.kind === 'flame' && t.state === 'active' && t.reach) out.push({ x: x + 3, y: y - t.reach * TILE + 2, w: w - 6, h: t.reach * TILE - 2 });
-      if (t.kind === 'saw' && t.state === 'active') { const b = this.sawPos(t); out.push({ x: b.x - 6, y: b.y - 6, w: 12, h: 12 }); }
+      if (t.kind === 'spikes' && t.state === 'active') out.push({ x: x + 1, y: y + 7, w: w - 2, h: 9, kind: t.kind });
+      if (t.kind === 'crusher' && (t.state === 'active' || (t.state === 'recover' && t.t < TRAPS.crusher.impact))) out.push({ x, y: y + t.oy + 1, w, h: TILE - 1, kind: t.kind });
+      if (t.kind === 'flame' && t.state === 'active' && t.reach) out.push({ x: x + 3, y: y - t.reach * TILE + 2, w: w - 6, h: t.reach * TILE - 2, kind: t.kind });
+      if (t.kind === 'saw' && t.state === 'active') { const b = this.sawPos(t); out.push({ x: b.x - 6, y: b.y - 6, w: 12, h: 12, kind: t.kind }); }
       if (t.kind === 'laser' && t.state === 'active' && projectilesToo) {
         const a = t.dir > 0 ? (t.x0 + 1) * TILE : (t.end + 1) * TILE, b = t.dir > 0 ? t.end * TILE : t.x0 * TILE;
-        out.push({ x: Math.min(a, b), y: y + 6, w: Math.abs(b - a), h: 4 });
+        out.push({ x: Math.min(a, b), y: y + 6, w: Math.abs(b - a), h: 4, kind: t.kind });
       }
     }
-    if (projectilesToo) for (const s of this.shots) out.push({ x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h });
-    for (const f of this.fx) if (f.k === 'boom') { const r = TRAPS.dropper.blast; out.push({ x: f.x - r, y: f.y - r, w: 2 * r, h: r + 4 }); }
+    if (projectilesToo) for (const s of this.shots) out.push({ x: s.x - s.w / 2, y: s.y - s.h / 2, w: s.w, h: s.h, kind: s.kind === 'bomb' ? 'dropper' : s.kind });
+    for (const f of this.fx) if (f.k === 'boom') { const r = TRAPS.dropper.blast; out.push({ x: f.x - r, y: f.y - r, w: 2 * r, h: r + 4, kind: 'dropper' }); }
     return out;
   }
   fanZones() {
@@ -122,6 +122,7 @@ export class World {
     t.state = 'warn'; t.t = Math.min(lead, C.warn * 0.6); t.cd = C.hold ? 99 : C.cd; this.lock = TRAP_LOCK;
     if (chained) t.t = Math.max(t.t, C.warn - C.chainWarn);
     if (C.chain) { this.chainKind = t.kind; this.chainT = C.chain; }
+    this.pressT = this.time;
     if (C.hold) t.holding = hold;
     this.emit('warn', (t.x0 + t.x1 + 1) * TILE / 2, t.y * TILE, t.kind);
     return true;
@@ -247,6 +248,7 @@ export class World {
       default: return false;
     }
     if (g.n > 0) g.n--;
+    if (side === 'trapper') this.pressT = this.time;
     g.cd = def.cd;
     this.emit('gadget', def.aim ? x : px, def.aim ? y : py, id);
     return true;
@@ -427,7 +429,7 @@ export class World {
         if (tt === SPIKE && overlap(hb.x, hb.y, hb.w, hb.h, { x: tx * TILE + 2, y: ty * TILE + 9, w: 12, h: 7 })) return this.kill('spike');
         if (tt === CEILSPIKE && overlap(hb.x, hb.y, hb.w, hb.h, { x: tx * TILE + 2, y: ty * TILE, w: 12, h: 7 })) return this.kill('spike');
       }
-    for (const d of this.dangers(!(p.phase > 0))) if (overlap(hb.x, hb.y, hb.w, hb.h, d)) return this.kill('trap');
+    for (const d of this.dangers(!(p.phase > 0))) if (overlap(hb.x, hb.y, hb.w, hb.h, d)) return this.kill(d.kind || 'trap');
   }
 
   kill(why) {
@@ -438,6 +440,10 @@ export class World {
     }
     p.dead = true; p.deadT = PHYS.respawn; p.deaths++;
     this.emit('die', p.x + 5, p.y + 6, why);
+    // Who gets the credit: a trap kill is the trapper's; a fall or static spikes count as an assist
+    // if the trapper did something in the last 3 seconds, otherwise it was the runner's own slip.
+    const credit = TRAPS[why] ? why : this.time - (this.pressT ?? -9) < 3 ? 'assist' : null;
+    if (credit) this.emit('catch', p.x + 5, p.y - 8, credit);
   }
 
   movePlayer(dt) {

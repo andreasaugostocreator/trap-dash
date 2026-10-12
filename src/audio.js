@@ -88,6 +88,12 @@ export const sfx = {
   phase: () => tone(300, 0.5, { slide: 900, vol: 0.06, type: 'sine' }),
   magnet: () => tone(150, 0.3, { vol: 0.12, type: 'square' }),
   peek: () => [1000, 1000].forEach((f, i) => tone(f, 0.05, { vol: 0.06, delay: i * 0.12, type: 'sine' })),
+  kaching: (streak = 1) => {   // a catch: coin-register sparkle, higher and longer with a combo
+    const base = 880 * Math.pow(1.12, Math.min(6, streak - 1));
+    [0, 0.07, 0.14].forEach((d, i) => tone(base * [1, 1.26, 1.5][i], 0.18, { vol: 0.1, delay: d, type: 'square' }));
+    tone(base * 2, 0.35, { vol: 0.07, delay: 0.21, type: 'triangle' });
+    noise(0.12, { vol: 0.12, freq: 6000, delay: 0.02 });
+  },
   click: () => tone(880, 0.05, { vol: 0.07, type: 'triangle' }),
   count: () => tone(660, 0.12, { vol: 0.12, type: 'square' }),
   go: () => tone(990, 0.3, { vol: 0.14, type: 'square' }),

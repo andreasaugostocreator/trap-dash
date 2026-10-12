@@ -1,0 +1,22 @@
+// Online: both devices show the preview, play starts on both, the ghost reaches the other device for run 2.
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
+const errs = [];
+const page = async o => { const p = await b.newPage(o); p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+  await p.addInitScript(() => localStorage.setItem('trapdash-settings', JSON.stringify({ preview: true, ghost: true }))); return p; };
+const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const h = await page({ viewport: { width: 1280, height: 720 } }), g = await page({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
+await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(500);
+await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');
+await g.tap('text=Join a party'); await g.fill('#code', await h.textContent('#roomCode')); await g.tap('#joinGo');
+await h.waitForFunction(() => window.__td.players.b); await h.waitForTimeout(400);
+await h.click('#startBtn'); await h.waitForTimeout(800);
+const ph = async () => [await h.evaluate(() => window.__td.run.phase), await g.evaluate(() => window.__td.run.phase)];
+console.log('during preview (host, guest):', (await ph()).join(', '));
+await h.waitForTimeout(7200);
+console.log('after preview + count:', (await ph()).join(', '));
+await h.evaluate(() => { const w = window.__td.run.world; w.player.x = w.goal.x; w.player.y = w.goal.y; }); await h.waitForTimeout(2200);
+await h.click('#go2'); await h.waitForTimeout(1000);
+console.log('run 2: guest runs with ghost:', await g.evaluate(() => !!window.__td.run.ghost && window.__td.run.runnerHere), '| host sees ghost:', await h.evaluate(() => !!window.__td.run.ghost));
+console.log(errs.length ? 'ERRORS\n' + errs.join('\n') : 'no errors');
+await b.close();
