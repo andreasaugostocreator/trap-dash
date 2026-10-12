@@ -4,7 +4,7 @@
 import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS, PHYS } from './config.js';
 import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
-import { LEVELS } from './levels.js';
+import { LEVELS, THEMES } from './levels.js';
 import { Renderer } from './render.js';
 import { Net, cleanCode } from './net.js';
 import { Bot } from './bot.js';
@@ -58,6 +58,32 @@ function portrait(charId, frame = 'idle') {
 }
 
 // ---------- title
+// The logo letters bob in a wave, and your runner runs along beside it.
+(function dressTitle() {
+  const logo = document.querySelector('.logo');
+  let n = 0;
+  for (const word of logo.querySelectorAll('span')) word.innerHTML = [...word.textContent].map(ch => `<i style="--i:${n++}">${ch}</i>`).join('');
+  const run = document.createElement('canvas'); run.width = 16; run.height = 18; run.className = 'pix logoRun'; run.id = 'logoRun';
+  logo.appendChild(run);
+  const ICONS = { host: 'flag', join: 'blink', local: 'decoy', practice: 'shield' };
+  for (const [go, icon] of Object.entries(ICONS)) {
+    const b = document.querySelector(`#title [data-go="${go}"]`), c = document.createElement('canvas');
+    c.width = c.height = 7; c.className = 'pix bicon'; c.getContext('2d').drawImage(SPR.icon[icon], 0, 0); b.prepend(c);
+  }
+})();
+let titleAnimT = 0;
+function animateTitle(dt) {
+  if ($('title').classList.contains('hidden')) return;
+  titleAnimT += dt;
+  const f = ['run0', 'run1', 'run2', 'run1'][Math.floor(titleAnimT * 10) % 4];
+  const c = $('logoRun'), x = c.getContext('2d'); x.clearRect(0, 0, 16, 18); x.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1);
+  const on = document.querySelector('.swatch.on canvas');
+  if (on) { const y = on.getContext('2d'); y.clearRect(0, 0, 16, 18); y.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1); }
+}
+// On iPhone Safari the browser keeps a strip at the bottom; the home-screen app is true full screen.
+if (/iP(hone|od)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches)
+  setTimeout(() => toast('Tip: Share → Add to Home Screen plays in full screen'), 1500);
+
 function buildTitle() {
   $('name').value = me.name;
   $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; saveMe(); };
@@ -256,6 +282,7 @@ function openLobby() {
   LEVELS.forEach((L, i) => {
     const b = document.createElement('button');
     b.className = i === lobby.level ? 'on' : '';
+    b.style.setProperty('--theme', (THEMES[L.theme] || THEMES.day).sky[1]);
     b.innerHTML = `<span>${i + 1}. ${esc(L.name)}</span><small class="stars">${starText(starsOf(L))}${practice && best[L.id] ? ' · ' + best[L.id].toFixed(1) + 's' : ''}</small>`;
     b.disabled = online && !isHost;
     b.onclick = () => { lobby.level = i; sfx.click(); syncLobby(); openLobby(); };
@@ -768,7 +795,8 @@ function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 function tick(dt, now) {
   const dpr = Math.min(devicePixelRatio || 1, 3);
   if (canvas.width !== Math.round(canvas.clientWidth * dpr) || canvas.height !== Math.round(canvas.clientHeight * dpr)) R.resize();
-  if (!run) { drawAttract(dt); return; }
+  paintEdges();
+  if (!run) { drawAttract(dt); animateTitle(dt); return; }
   const w = run.world;
   readInput();
   // countdown (both devices count on their own; the trapper also switches to 'play' when the first moving snapshot lands)
@@ -823,6 +851,14 @@ function tick(dt, now) {
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
   $('timer').textContent = (E ? E.total + w.time : w.time).toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = (E ? E.deaths : 0) + w.player.deaths;
+}
+
+// Safari tints the strip it keeps at the bottom of the screen with the page background: match what's at the bottom.
+let edgeCol = '';
+function paintEdges() {
+  const th = THEMES[(run ? run.world : attract ? attract.world : { level: LEVELS[0] }).level.theme] || THEMES.day;
+  const col = run && !$('pad').classList.contains('hidden') ? '#241a30' : th.dirt[1];
+  if (col !== edgeCol) { edgeCol = col; document.documentElement.style.backgroundColor = col; document.body.style.backgroundColor = col; }
 }
 
 // Behind the menus: a little demo of the first level with the bot.

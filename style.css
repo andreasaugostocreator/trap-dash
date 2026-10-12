@@ -26,8 +26,8 @@ h3 { font-size: 15px; margin: 12px 0 6px; color: var(--muted); text-transform: u
 p { margin: 6px 0; font-size: 17px; }
 .logo { font-family: 'Press Start 2P', monospace; font-size: clamp(30px, 8vw, 50px); line-height: 1.1; display: flex; justify-content: center; gap: .35em; margin: 6px 0 12px; }
 .logo span { display: inline-block; text-shadow: 3px 0 var(--ink), -3px 0 var(--ink), 0 3px var(--ink), 0 -3px var(--ink), 3px 3px var(--ink), -3px 3px var(--ink), 3px -3px var(--ink), -3px -3px var(--ink), 0 7px var(--ink), 3px 7px var(--ink), -3px 7px var(--ink); }
-.logo span:first-child { color: var(--pinkL); }
-.logo span:last-child { color: var(--blueL); }
+.logo span:nth-of-type(1) { color: var(--pinkL); }
+.logo span:nth-of-type(2) { color: var(--blueL); }
 .tag { color: var(--muted); font-weight: 600; margin-bottom: 12px; }
 
 button { font: inherit; font-variant-ligatures: none; font-weight: 700; font-size: 17px; color: var(--ink); background: #fffaf0; border: 0; border-radius: 0; padding: 8px 14px; margin: var(--px);
@@ -288,4 +288,69 @@ input { -webkit-user-select: text; user-select: text; -webkit-touch-callout: def
   #lobby .status { display: none; }
   #lobby .levels button small { display: inline; }
   #lobby .levels button { flex-direction: row; align-items: center; justify-content: space-between; }
+}
+
+/* ---------- Adventure look: wooden signboards on parchment, a bouncing logo, livelier buttons */
+:root { --wood: #a8673a; --parch: #f6e7c8; }
+.screen:not(.overlay) { background: radial-gradient(ellipse at center, transparent 55%, rgba(28, 20, 36, .32)); }
+.card {
+  border: 7px solid var(--wood);
+  border-image: repeating-linear-gradient(90deg, #b06f3f 0 9px, #985a31 9px 11px, #c27f4b 11px 20px, #a8673a 20px 27px, #8e5330 27px 28px) 7;
+  background:
+    radial-gradient(circle, #ffe0a6 0 1px, #7a4522 1.5px 2.6px, transparent 3px) 4px 4px / 8px 8px no-repeat,
+    radial-gradient(circle, #ffe0a6 0 1px, #7a4522 1.5px 2.6px, transparent 3px) right 4px top 4px / 8px 8px no-repeat,
+    radial-gradient(circle, #ffe0a6 0 1px, #7a4522 1.5px 2.6px, transparent 3px) left 4px bottom 4px / 8px 8px no-repeat,
+    radial-gradient(circle, #ffe0a6 0 1px, #7a4522 1.5px 2.6px, transparent 3px) right 4px bottom 4px / 8px 8px no-repeat,
+    repeating-linear-gradient(0deg, transparent 0 5px, rgba(170, 120, 60, .07) 5px 6px),
+    var(--parch);
+  box-shadow: 0 0 0 3px var(--ink), 0 10px 0 2px rgba(28, 20, 36, .45), inset 0 0 0 2px #fff6dd, inset 0 -4px 0 2px #e6cf9f;
+}
+.screen:not(.hidden) > .card { animation: cardPop .38s cubic-bezier(.2, 1.4, .4, 1) both; }
+@keyframes cardPop { from { transform: translateY(26px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+h2 { display: inline-block; background: var(--pink); color: #fff; padding: 7px 14px 5px; margin: 0 0 10px; text-shadow: 0 2px 0 rgba(28, 20, 36, .5);
+  box-shadow: 0 0 0 3px var(--ink), inset 0 -3px 0 rgba(0, 0, 0, .2), inset 0 3px 0 rgba(255, 255, 255, .25); }
+.lobbyTop h2 { margin-bottom: 4px; }
+.logo { align-items: center; }
+.logo span { text-shadow: none; display: inline-flex; }
+.logo i { font-style: normal; display: inline-block; animation: logoBob 1.8s ease-in-out infinite; animation-delay: calc(var(--i) * -.12s);
+  text-shadow: 3px 0 var(--ink), -3px 0 var(--ink), 0 3px var(--ink), 0 -3px var(--ink), 3px 3px var(--ink), -3px 3px var(--ink), 3px -3px var(--ink), -3px -3px var(--ink), 0 7px var(--ink), 3px 7px var(--ink), -3px 7px var(--ink); }
+@keyframes logoBob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+.logoRun { width: 1.05em; height: 1.18em; flex: none; margin-left: -.15em; animation: logoHop .45s steps(2) infinite; }
+@keyframes logoHop { 50% { transform: translateY(-3px); } }
+.tag::before, .tag::after { content: '★'; color: #ffb52e; margin: 0 8px; }
+button.big { overflow: hidden; display: flex; align-items: center; justify-content: center; gap: 12px; }
+button.big::after { content: ''; position: absolute; top: 0; bottom: 0; width: 30%; left: -40%; background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .35), transparent);
+  animation: sheen 3.2s ease-in-out infinite; pointer-events: none; }
+button.blue.big::after { animation-delay: 1.6s; }
+@keyframes sheen { 0%, 60% { left: -40%; } 85%, 100% { left: 120%; } }
+button.pink { background: linear-gradient(#ff5d6a, #e8414f 60%, #cf3442); }
+button.blue { background: linear-gradient(#5584e6, #3c6fd1 60%, #315fbb); }
+@media (hover: hover) { button:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.06); } button:not(:disabled):active { transform: translateY(var(--px)); } }
+.bicon { position: static; width: 21px; height: 21px; flex: none; image-rendering: pixelated; }
+button.mid { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.swatch { background: linear-gradient(#cfe6ff, #a9d0f5); transition: transform .12s; }
+.swatch.on { background: linear-gradient(#ffe57a, #ffc93a); transform: translateY(-3px); }
+@media (hover: hover) { .swatch:not(.on):hover { transform: translateY(-3px) rotate(-3deg); } }
+.levels button { border-left: 7px solid var(--theme, #ccc); }
+.levels button.on { background: linear-gradient(#ffe57a, #ffd84a); }
+.player { background: linear-gradient(#ffffff, #f4ecdc); }
+.hud { background: linear-gradient(#2a1f3d, #1c1424); }
+.role { box-shadow: 0 0 0 2px var(--ink); }
+.pad { background: linear-gradient(#2c2140, #221930); }
+button.mid .bicon, button.chip .bicon { filter: brightness(.12); }
+@media (max-height: 500px), (max-width: 420px) {
+  .card { border-width: 5px; border-image-width: 5px; }
+  h2 { padding: 5px 10px 3px; margin-bottom: 6px; }
+  .titleCard .logo { margin-bottom: 6px; }
+  .tag { margin-bottom: 6px; }
+}
+@media (orientation: portrait) and (max-width: 440px) {
+  .titleCard .colors { gap: 4px; flex-wrap: nowrap; }
+  .titleCard .swatch { width: 46px; height: 52px; } .titleCard .swatch canvas { width: 40px; height: 45px; }
+  .titleCard button.mid { font-size: 15px; white-space: nowrap; padding: 8px 4px; gap: 6px; }
+  .titleCard .bicon { width: 17px; height: 17px; }
+}
+@media (orientation: portrait) and (max-width: 440px) {
+  .titleCard .swatch { width: 43px; height: 49px; } .titleCard .swatch canvas { width: 38px; height: 43px; }
+  .titleCard .row.small { gap: 4px; flex-wrap: nowrap; } .titleCard .row.small .chip { font-size: 13px; padding: 3px 6px; }
 }

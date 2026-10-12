@@ -105,6 +105,7 @@ export class Renderer {
       l.fillStyle = th.dirt[0]; l.fillRect(cx, world.h * TILE, this.lo.width, below);
       l.fillStyle = th.dirt[1]; for (let x = Math.floor(cx / 4) * 4; x < cx + this.lo.width; x += 4) l.fillRect(x, world.h * TILE + ((x / 4) % 3), 2, 1);
     }
+    this.drawAmbient(world, cx, cy);
     this.drawProps(world);
     for (const t of world.traps) this.drawTrap(t, th);
     this.drawGlue(world, o);
@@ -213,6 +214,14 @@ export class Renderer {
           px(i, j, col);
         }
       }
+      // a castle on a far peak: something to run toward
+      const cxl = 120, gy = 26, wall = light, dark = base;
+      const R = (i, j, w, h, col) => { x.fillStyle = col; x.fillRect(i, j, w, h); };
+      R(cxl - 10, gy - 10, 20, 14, wall); R(cxl - 14, gy - 18, 6, 22, wall); R(cxl + 8, gy - 18, 6, 22, wall); R(cxl - 3, gy - 22, 6, 12, wall);
+      for (const t0 of [cxl - 14, cxl + 8]) for (let k = 0; k < 3; k += 2) R(t0 + k * 2, gy - 20, 2, 2, wall);
+      for (let k = 0; k < 5; k += 2) R(cxl - 10 + k * 4, gy - 12, 3, 2, wall);
+      R(cxl - 2, gy - 1, 4, 5, dark); R(cxl - 12, gy - 13, 2, 3, dark); R(cxl + 10, gy - 13, 2, 3, dark); R(cxl - 1, gy - 18, 2, 3, dark);
+      R(cxl, gy - 30, 1, 8, dark); R(cxl + 1, gy - 30, 5, 3, '#e8414f');
     } else if (name === 'trees' || name === 'pines') {
       const ground = H - 18;
       for (let i = 0; i < W; i++) { const b = Math.round(Math.sin(i / W * TAU * 4) * 3 + Math.sin(i / W * TAU * 11) * 1.5); x.fillStyle = base; x.fillRect(i, ground - 3 + b, 1, H); px(i, ground - 3 + b, light); }
@@ -236,6 +245,16 @@ export class Renderer {
             x.fillStyle = top; x.fillRect(cx0 - 1, ground, 3, 3);
           }
         }
+      }
+      if (name === 'trees') {   // a windmill on the hill
+        const mx = 330, R = (i, j, w, h, col) => { x.fillStyle = col; x.fillRect(i, j, w, h); };
+        for (let j = 0; j < 30; j++) R(mx - 4 - Math.floor(j / 6), ground - 30 + j, 9 + Math.floor(j / 6) * 2, 1, top);
+        R(mx - 1, ground - 10, 3, 6, base);
+        for (let k = 0; k < 4; k++) {
+          const a = k * Math.PI / 2 + 0.4;
+          for (let d = 2; d < 15; d++) { const bx = Math.round(mx + Math.cos(a) * d), by = Math.round(ground - 30 + Math.sin(a) * d); R(bx, by, 2, 2, d > 5 ? light : top); }
+        }
+        R(mx - 1, ground - 31, 3, 3, base);
       }
     } else {   // cloud banks for the sky level
       const yb = name === 'clouds' ? 34 : 44;
@@ -307,8 +326,118 @@ export class Renderer {
         if (!edge && i > 1 && i < 14 && hash(gx, 21) < 0.07) { px(gx, Y - 3, hash(gx, 22) < 0.5 ? '#ffffff' : '#ffd84a'); px(gx, Y - 2, G[0]); }
       }
     }
+    this.decorate(world, th, x);
     this.levelCache = { world, c };
     return c;
+  }
+
+  // Little things that make a place feel lived in: flowers, tufts, mushrooms, rocks, bushes, signposts on the grass;
+  // roots, bones, gems and stones in the dirt. All deterministic from the tile position, baked into the level canvas.
+  decorate(world, th, x) {
+    const G = th.grass, D = th.dirt, line = th.line, theme = world.level.theme;
+    const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
+    const rect = (i, j, w, h, col) => { x.fillStyle = col; x.fillRect(i, j, w, h); };
+    const PETALS = { day: ['#ff6f91', '#ffd84a', '#8fd3ff', '#ffffff', '#c58bff'], sunset: ['#ffd84a', '#ff6f91', '#ffffff', '#ff9a3c'],
+      night: ['#9ad7ff', '#c9a8ff', '#e6f3ff'], sky: ['#ffd84a', '#ff9ec4', '#8fd3ff'], dusk: ['#ffd0e8', '#ffffff', '#ffd84a'] }[theme] || ['#ffd84a'];
+    const free = (tx, ty) => tx >= 0 && tx < world.w && ty >= 0 && world.tile(tx, ty) === 0 && world.trapAt[ty * world.w + tx] < 0;
+    const marks = [world.start, world.goal, ...world.checkpoints].filter(Boolean).map(m => Math.floor((m.x + 5) / TILE));
+    for (let ty = 1; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
+      if (world.tile(tx, ty) !== SOLID || !free(tx, ty - 1) || world.trapAt[ty * world.w + tx] >= 0) continue;
+      if (marks.some(m => Math.abs(m - tx) <= 1)) continue;
+      const X = tx * TILE, Y = ty * TILE - 2, r = hash(tx * 7 + 3, ty * 13 + 5), o = Math.floor(hash(tx, ty * 5) * 9);
+      const petal = PETALS[Math.floor(hash(tx * 3, ty) * PETALS.length)];
+      if (r < 0.2) {   // a few flowers
+        for (let k = 0; k < 2 + (r < 0.08 ? 1 : 0); k++) {
+          const fx = X + 2 + ((o + k * 5) % 12), h = 3 + ((o + k) % 3), col = k ? PETALS[(Math.floor(r * 50) + k) % PETALS.length] : petal;
+          rect(fx, Y - h, 1, h, G[0]);
+          px(fx, Y - h - 2, col); px(fx - 1, Y - h - 1, col); px(fx + 1, Y - h - 1, col); px(fx, Y - h, col); px(fx, Y - h - 1, '#ffd84a');
+          if (k === 0) px(fx + 1, Y - 2, G[2]);
+        }
+      } else if (r < 0.32) {   // a tall tuft
+        for (let k = 0; k < 5; k++) { const h = 3 + Math.floor(hash(tx + k, ty) * 5); rect(X + o + k, Y - h, 1, h, k % 2 ? G[2] : G[1]); px(X + o + k, Y - h - 1, G[3]); }
+      } else if (r < 0.37) {   // a mushroom (they glow at night)
+        const mx = X + 3 + o % 8, glow = theme === 'night' || theme === 'dusk', cap = glow ? '#5ad1c8' : '#e8414f';
+        if (glow) { x.fillStyle = '#5ad1c833'; x.fillRect(mx - 2, Y - 9, 10, 9); }
+        rect(mx + 2, Y - 3, 2, 3, '#f4ead7'); rect(mx, Y - 6, 6, 3, cap); rect(mx + 1, Y - 7, 4, 1, cap);
+        rect(mx, Y - 4, 6, 1, glow ? '#2f8f8a' : '#a3202e'); px(mx + 1, Y - 6, '#ffffff'); px(mx + 4, Y - 5, '#ffffff'); px(mx + 3, Y - 7, '#ffffff');
+      } else if (r < 0.42) {   // a rock
+        const rx = X + 2 + o % 7;
+        rect(rx, Y - 4, 7, 4, line); rect(rx + 1, Y - 5, 5, 1, line); rect(rx + 1, Y - 4, 5, 3, '#8b93a6'); rect(rx + 1, Y - 4, 3, 1, '#c3c9d6'); rect(rx + 4, Y - 2, 2, 1, '#5d6475');
+      } else if (r < 0.47 && free(tx + 1, ty - 1) && world.tile(tx + 1, ty) === SOLID) {   // a berry bush
+        for (let j = -9; j <= 0; j++) for (let i = 0; i < 22; i++) {
+          const d = Math.hypot((i - 11) / 11, (j + 3) / 7) + (hash(X + i, j) - 0.5) * 0.15;
+          if (d < 1) px(X + 4 + i, Y + j, d > 0.88 ? line : (i + j < 6 ? G[2] : G[1]));
+        }
+        for (let k = 0; k < 4; k++) { px(X + 9 + k * 4, Y - 4 - (k % 2) * 3, '#e8414f'); }
+        px(X + 10, Y - 7, G[3]); px(X + 16, Y - 8, G[3]);
+      } else if (r < 0.49 && free(tx, ty - 2) && theme !== 'sky') {   // a signpost pointing on
+        rect(X + 7, Y - 11, 2, 11, '#6b4325'); rect(X + 2, Y - 14, 12, 6, line); rect(X + 3, Y - 13, 10, 4, '#c9874e');
+        rect(X + 3, Y - 13, 10, 1, '#e3a86b'); rect(X + 5, Y - 11, 5, 1, line); px(X + 9, Y - 12, line); px(X + 9, Y - 10, line); px(X + 10, Y - 11, line);
+      } else if (r < 0.55 && theme === 'dusk') {   // crystals
+        const cx0 = X + 4 + o % 6;
+        for (const [dx, h] of [[0, 6], [3, 9], [6, 5]]) { rect(cx0 + dx, Y - h, 2, h, '#f07fb4'); px(cx0 + dx, Y - h - 1, '#ffc0dc'); px(cx0 + dx, Y - h + 1, '#ffffff'); }
+      }
+    }
+    // underground: roots under the grass, and now and then a bone, a gem or a stone deeper down
+    for (let ty = 1; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
+      if (world.tile(tx, ty) !== SOLID) continue;
+      const X = tx * TILE, Y = ty * TILE, r = hash(tx * 11 + 1, ty * 17 + 2);
+      const topHere = world.tile(tx, ty - 1) !== SOLID, deep = world.tile(tx, ty - 1) === SOLID && world.tile(tx, ty - 2) === SOLID;
+      if (topHere && r < 0.3) {
+        let rx = X + 3 + Math.floor(hash(tx, ty) * 10);
+        for (let j = 7; j < 7 + 4 + Math.floor(r * 20); j++) { px(rx, Y + j, D[0]); if (hash(rx, j) < 0.3) rx += hash(j, rx) < 0.5 ? -1 : 1; }
+      } else if (deep && r < 0.02) {   // a bone
+        const bx = X + 4, by = Y + 7;
+        rect(bx + 1, by, 6, 2, '#e9dfc7'); rect(bx, by - 1, 2, 2, '#e9dfc7'); rect(bx, by + 1, 2, 2, '#e9dfc7'); rect(bx + 6, by - 1, 2, 2, '#e9dfc7'); rect(bx + 6, by + 1, 2, 2, '#e9dfc7'); rect(bx + 1, by + 2, 6, 1, '#b9ad94');
+      } else if (deep && r < 0.035) {   // a gem
+        const gx = X + 6, gy = Y + 6, col = hash(tx, ty * 9) < 0.5 ? '#5ad1ff' : '#ff7bd5';
+        rect(gx, gy - 2, 3, 1, col); rect(gx - 1, gy - 1, 5, 2, col); rect(gx, gy + 1, 3, 1, col); px(gx + 2, gy + 2, col); px(gx, gy - 1, '#ffffff'); px(gx + 1, gy - 2, '#ffffff');
+      } else if (deep && r < 0.07) {   // a buried stone
+        const sx = X + 3 + Math.floor(hash(ty, tx) * 6), sy = Y + 5 + Math.floor(hash(tx + 1, ty) * 6);
+        rect(sx, sy, 6, 3, '#6d6a78'); rect(sx + 1, sy - 1, 4, 1, '#6d6a78'); rect(sx + 1, sy - 1, 2, 1, '#9a97a6'); rect(sx, sy + 3, 6, 1, D[0]);
+      }
+    }
+  }
+
+  // Butterflies by day, fireflies at night, birds crossing the sky. Purely decorative.
+  groundTop(world, x) {
+    const tx = Math.max(0, Math.min(world.w - 1, Math.floor(x / TILE)));
+    if (!this.tops || this.tops.world !== world) this.tops = { world, m: new Map() };
+    if (!this.tops.m.has(tx)) { let y = 0; while (y < world.h && world.tile(tx, y) !== SOLID) y++; this.tops.m.set(tx, y * TILE); }
+    return this.tops.m.get(tx);
+  }
+  drawAmbient(world, cx, cy) {
+    const l = this.l, W = this.lo.width, t = this.t, theme = world.level.theme, night = theme === 'night' || theme === 'dusk';
+    const CELL = 150;
+    for (let c = Math.floor(cx / CELL) - 1; c <= Math.floor((cx + W) / CELL) + 1; c++) {
+      if (c < 0 || hash(c, 77) > (night ? 0.9 : 0.55)) continue;
+      for (let k = 0; k < (night ? 3 : 1); k++) {
+        const ph = hash(c, k + 3) * TAU, bx = c * CELL + hash(c, k) * CELL + Math.sin(t * 0.6 + ph) * 24, gy = this.groundTop(world, bx);
+        if (gy >= world.h * TILE) continue;
+        const by = gy - 16 - hash(c, k + 9) * 18 + Math.sin(t * 1.7 + ph * 2) * 6;
+        if (night) {   // a blinking firefly
+          const on = Math.sin(t * 2.3 + ph * 5) > -0.2;
+          if (!on) continue;
+          l.fillStyle = '#d8ff7a33'; l.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 3);
+          l.fillStyle = '#efffb0'; l.fillRect(Math.round(bx), Math.round(by), 1, 1);
+        } else {   // a fluttering butterfly
+          const up = Math.floor(t * 9 + ph) % 2, X = Math.round(bx), Y = Math.round(by);
+          const col = ['#ff6f91', '#ffd84a', '#8fd3ff', '#ffffff'][Math.floor(hash(c, 5) * 4)];
+          l.fillStyle = '#1c1424'; l.fillRect(X, Y, 1, 3);
+          l.fillStyle = col;
+          if (up) { l.fillRect(X - 2, Y - 2, 2, 2); l.fillRect(X + 1, Y - 2, 2, 2); }
+          else { l.fillRect(X - 2, Y, 2, 2); l.fillRect(X + 1, Y, 2, 2); }
+        }
+      }
+    }
+    if (!night) {   // a small flock crossing the sky, in screen space
+      const span = W + 120, fx = ((t * 16 + 300) % span) - 60, fy = 26 + Math.sin(t * 0.4) * 6;
+      l.fillStyle = theme === 'sky' ? '#4a5a8a' : '#3a3350';
+      for (const [dx, dy] of [[0, 0], [-9, 4], [-16, -3], [-24, 6]]) {
+        const X = Math.round(cx + fx + dx), Y = Math.round(cy + fy + dy), f = Math.floor(t * 6 + dx) % 2;
+        l.fillRect(X - 2, Y - f, 2, 1); l.fillRect(X + 1, Y - f, 2, 1); l.fillRect(X, Y + 1 - f, 1, 1);
+      }
+    }
   }
 
   drawProps(world) {
