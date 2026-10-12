@@ -103,6 +103,17 @@ export const SEGMENTS = [
     if (f < 11) return null;
     const gap = tier + 1; g.ground(x, x + 2, f); g.rect(x + 3, f + 2, x + 2 + gap, H - 1); g.row(x + 3, x + 2 + gap, f + 2, 'W');
     g.rect(x + 2, f - 9, x + 3 + gap, f - 7); g.row(x + 2, x + 3 + gap, f - 6, 'v'); g.ground(x + 3 + gap, x + 6 + gap, f); return [x + 7 + gap, f]; } },
+  // ---- moving things: a platform shuttling over a pit, a lift, a crumbling bridge, a rope swing
+  { id: 'mover', kinds: [], tiers: [1, 2, 3], make: (g, r, x, f, tier) => {
+    const gap = 5 + tier; g.ground(x, x + 2, f); g.row(x + 3, x + 4, f, 'M'); g.ground(x + 3 + gap, x + 5 + gap, f); return [x + 6 + gap, f]; } },
+  { id: 'lift', kinds: [], tiers: [2, 3], make: (g, r, x, f) => {
+    if (f < 11) return null;
+    g.ground(x, x + 2, f); g.row(x + 3, x + 4, f, 'N'); g.ground(x + 5, x + 9, f - 5); return [x + 10, f - 5]; } },
+  { id: 'crumble', kinds: [], tiers: [1, 2, 3], make: (g, r, x, f, tier) => {
+    const n = 4 + tier; g.ground(x, x + 1, f); g.row(x + 2, x + 1 + n, f, 'L'); g.ground(x + 2 + n, x + 4 + n, f); return [x + 5 + n, f]; } },
+  { id: 'rope', kinds: [], tiers: [2, 3], make: (g, r, x, f) => {
+    if (f < 10) return null;
+    g.ground(x, x + 2, f); g.rect(x + 4, Math.max(0, f - 11), x + 6, f - 9); g.set(x + 5, f - 9, 'R'); g.ground(x + 10, x + 13, f); return [x + 14, f]; } },
   { id: 'stairs', kinds: [], tiers: [2, 3], make: (g, r, x, f) => {   // climb over gaps
     if (f < 13) return null;
     for (let i = 0; i < 3; i++) g.ground(x + i * 4, x + i * 4 + 1, f - 2 * i);

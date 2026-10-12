@@ -1,7 +1,7 @@
 // Pixel-art renderer. The world is drawn 1:1 onto a small canvas (1 canvas pixel = 1 world pixel),
 // which is then scaled up by a whole number with smoothing off, so every pixel stays crisp.
 import { TILE, PHYS, TRAPS, GADGETS } from './config.js';
-import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE, TURRET, FAN, CEILSPIKE, LASER, DROPPER } from './sim.js';
+import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE, TURRET, FAN, CEILSPIKE, LASER, DROPPER, ANCHOR } from './sim.js';
 import { THEMES } from './levels.js';
 import { SPR, initSprites, charFrame, mirror, drawDigits } from './sprites.js';
 
@@ -114,6 +114,9 @@ export class Renderer {
     }
     if (k === 'spawn') P(12, i => { const a = i / 12 * TAU; return { x: x + Math.cos(a) * 14, y: y + Math.sin(a) * 14, vx: -Math.cos(a) * 45, vy: -Math.sin(a) * 45, life: 0.3, size: 1, color: '#ffffff', g: 0 }; });
     if (k === 'cp' || k === 'goal') P(k === 'goal' ? 60 : 24, () => ({ x, y: y - 10, vx: (Math.random() - 0.5) * 150, vy: -70 - Math.random() * 140, life: 1 + Math.random() * 0.7, size: Math.random() < 0.5 ? 2 : 1, color: ['#ff5d8f', '#ffd84a', '#5ab4ff', '#7bd65a', '#b48cff', '#ffffff'][Math.floor(Math.random() * 6)], g: 260, flicker: true }));
+    if (k === 'crumble') P(10, () => ({ x: x + (Math.random() - 0.5) * 14, y: y + (Math.random() - 0.5) * 10, vx: (Math.random() - 0.5) * 50, vy: -Math.random() * 40, life: 0.7, size: 2, color: Math.random() < 0.5 ? '#a89a86' : '#7d705f', g: 500 }));
+    if (k === 'crack') dust(3, 20, '#c9bca6');
+    if (k === 'grab') { this.sq = { x: 1.2, y: 0.85 }; P(5, () => ({ x, y: y - 6, vx: (Math.random() - 0.5) * 40, vy: -Math.random() * 30, life: 0.25, size: 1, color: '#c99a5e', g: 100 })); }
     if (k === 'poof') P(7, () => ({ x, y, vx: (Math.random() - 0.5) * 60, vy: (Math.random() - 0.5) * 60, life: 0.35, size: 2, color: '#9aa3b5', g: -20 }));
     if (k === 'thud') { this.shake = Math.max(this.shake, 0.18); dust(12, 80, '#d8d2c8'); }
     if (k === 'fire' && extra === 'cannon') { this.shake = Math.max(this.shake, 0.05); P(6, () => ({ x, y: y + 7, vx: (Math.random() - 0.5) * 60, vy: -Math.random() * 40, life: 0.35, size: 2, color: '#c8c8d0', g: -20 })); }
@@ -143,6 +146,7 @@ export class Renderer {
       l.fillStyle = th.dirt[1]; for (let x = Math.floor(cx / 4) * 4; x < cx + this.lo.width; x += 4) l.fillRect(x, world.h * TILE + ((x / 4) % 3), 2, 1);
     }
     this.drawWater(world, cx);
+    this.drawPlatforms(world);
     this.drawAmbient(world, cx, cy);
     this.drawProps(world);
     for (const t of world.traps) this.drawTrap(t, th);
@@ -361,6 +365,11 @@ export class Renderer {
       else if (t === FAN) x.drawImage(SPR.fan, X, Y);
       else if (t === TURRET) { /* drawn with its trap */ }
       else if (t === DROPPER) x.drawImage(SPR.dropper, X, Y);
+      else if (t === ANCHOR) {   // an iron block with a ring the rope hangs from
+        x.fillStyle = line; x.fillRect(X, Y, 16, 16); x.fillStyle = '#5d6475'; x.fillRect(X + 1, Y + 1, 14, 14); x.fillStyle = '#8b93a6'; x.fillRect(X + 1, Y + 1, 14, 2); x.fillRect(X + 1, Y + 1, 2, 14);
+        x.fillStyle = '#3b3f52'; for (const [i, j] of [[3, 3], [12, 3], [3, 12], [12, 12]]) x.fillRect(X + i, Y + j, 1, 1);
+        x.fillStyle = '#c3c9d6'; x.fillRect(X + 6, Y + 14, 4, 1); x.fillRect(X + 5, Y + 15, 1, 1); x.fillRect(X + 10, Y + 15, 1, 1);
+      }
     }
     // grass caps on exposed tops; blades poke a little into the tile above
     for (let ty = 1; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
@@ -798,6 +807,46 @@ export class Renderer {
       l.fillStyle = '#e8414f'; l.fillRect(X + 2, Y + 1 - b, 3, 5); l.fillRect(X + 3, Y + 7 - b, 1, 2); l.fillRect(X + 2, Y + 7 - b, 3, 2);
     }
   }
+  // Moving platforms (wood on a dotted track), crumbling stone tiles, ropes.
+  drawPlatforms(world) {
+    const l = this.l, time = world.rtime ?? world.time;
+    for (const m of world.movers) {
+      const a = world.moverPos(m, time);
+      l.fillStyle = 'rgba(28,20,36,0.35)';   // the track
+      if (m.axis === 'x') for (let d = 0; d <= m.range + m.w; d += 4) l.fillRect(m.x0 + d, m.y0 + 4, 2, 1);
+      else for (let d = 0; d <= m.range + 8; d += 4) l.fillRect(m.x0 + m.w / 2, m.y0 + 8 - d, 1, 2);
+      const X = Math.round(a.x), Y = Math.round(a.y);
+      l.fillStyle = '#1c1424'; l.fillRect(X, Y, m.w, 7);
+      l.fillStyle = '#b06f3f'; l.fillRect(X + 1, Y + 1, m.w - 2, 5);
+      l.fillStyle = '#d99a5e'; l.fillRect(X + 1, Y + 1, m.w - 2, 1);
+      l.fillStyle = '#7a4522'; for (let i = 8; i < m.w - 2; i += 8) l.fillRect(X + i, Y + 2, 1, 4);
+      l.fillStyle = '#9aa3b5'; l.fillRect(X + 2, Y + 3, 2, 2); l.fillRect(X + m.w - 4, Y + 3, 2, 2);
+      l.fillStyle = '#1c1424'; l.fillRect(X + m.w / 2 - 3, Y + 7, 6, 2); l.fillStyle = '#5d6475'; l.fillRect(X + m.w / 2 - 2, Y + 7, 4, 1);
+    }
+    for (const c of world.crumbles) {
+      if (c.state === 'gone') { if (Math.floor(this.t * 2) % 2) { l.fillStyle = 'rgba(255,255,255,0.18)'; l.fillRect(c.x * TILE + 2, c.y * TILE + 2, 12, 1); l.fillRect(c.x * TILE + 2, c.y * TILE + 13, 12, 1); } continue; }
+      const jx = c.state === 'shake' ? Math.round(Math.sin(this.t * 60 + c.x) * 1) : 0, X = c.x * TILE + jx, Y = c.y * TILE;
+      l.fillStyle = '#1c1424'; l.fillRect(X, Y, 16, 16);
+      l.fillStyle = '#a89a86'; l.fillRect(X + 1, Y + 1, 14, 14);
+      l.fillStyle = '#c9bca6'; l.fillRect(X + 1, Y + 1, 14, 2); l.fillRect(X + 1, Y + 8, 6, 1); l.fillRect(X + 9, Y + 8, 6, 1);
+      l.fillStyle = '#7d705f'; l.fillRect(X + 7, Y + 3, 1, 5); l.fillRect(X + 4, Y + 9, 1, 6); l.fillRect(X + 11, Y + 9, 1, 6); l.fillRect(X + 1, Y + 14, 14, 1);
+      if (c.state === 'shake') { l.fillStyle = '#1c1424'; l.fillRect(X + 5, Y + 2, 1, 3); l.fillRect(X + 6, Y + 5, 1, 3); l.fillRect(X + 10, Y + 6, 1, 4); l.fillRect(X + 9, Y + 10, 1, 3); }
+    }
+    for (let i = 0; i < world.ropes.length; i++) {
+      const r = world.ropes[i], p = world.player;
+      let ex, ey;
+      if (p.rope === i && !p.dead) { ex = p.x + PHYS.w / 2; ey = p.y + PHYS.h / 2 - 3; }
+      else { const a = Math.sin(this.t * 1.3 + i) * 0.08; ex = r.ax + Math.sin(a) * r.len; ey = r.ay + Math.cos(a) * r.len; }
+      const n = Math.max(1, Math.round(Math.hypot(ex - r.ax, ey - r.ay)));
+      for (let k = 0; k <= n; k++) {
+        const x = Math.round(r.ax + (ex - r.ax) * k / n), y = Math.round(r.ay + (ey - r.ay) * k / n);
+        l.fillStyle = '#5a3418'; l.fillRect(x - 1, y, 3, 1);
+        l.fillStyle = k % 4 < 2 ? '#c99a5e' : '#9a6a3a'; l.fillRect(x, y, 1, 1);
+      }
+      if (p.rope !== i) { l.fillStyle = '#5a3418'; l.fillRect(Math.round(ex) - 1, Math.round(ey), 3, 3); l.fillStyle = '#c99a5e'; l.fillRect(Math.round(ex), Math.round(ey) + 1, 1, 1); }
+    }
+  }
+
   // Pits end in water (or a sea of cloud on the sky level), gently waving.
   drawWater(world, cx) {
     const l = this.l, W = this.lo.width, base = world.h * TILE, theme = world.level.theme;

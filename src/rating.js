@@ -66,7 +66,11 @@ export function rateLevel(level) {
   for (let i = 1; i < lethal.length; i++) if (lethal[i].x - lethal[i - 1].x <= Math.ceil(TRAP_LOCK * V / TILE) + 3) combos++;
   // Platforming: deadly pits (no floor all the way down), measured against the longest jump, and static spikes.
   let pits = 0, spikes = 0, run = 0;
-  const groundAt = x => { for (let y = 0; y < world.h; y++) if (world.tile(x, y) !== 0) return true; return false; };
+  // Columns a moving platform or a rope carries you over don't count as pits; those get their own small cost below.
+  const helped = new Set();
+  for (const m of world.movers) if (m.axis === 'x') for (let x = m.tx0; x <= m.tx1 + m.range / TILE; x++) helped.add(x);
+  for (const r of world.ropes) for (let x = r.tx - 4; x <= r.tx + 4; x++) helped.add(x);
+  const groundAt = x => { if (helped.has(x)) return true; for (let y = 0; y < world.h; y++) if (world.tile(x, y) !== 0) return true; return false; };
   for (let x = 0; x <= world.w; x++) {
     if (x < world.w && !groundAt(x)) { run++; continue; }
     if (run) pits += Math.pow(run * TILE / JUMP_SPAN, 2);
@@ -76,7 +80,9 @@ export function rateLevel(level) {
   const vertical = world.h > 24 ? 1.5 : 0;                   // climbing: a slip costs a long fall
   const gaps = cps.slice(1).map((c, i) => c - cps[i]).concat([world.goal.x - cps[cps.length - 1]]);
   const longest = Math.max(...gaps) / TILE;                  // longest stretch without a checkpoint, in tiles
-  const platform = pits + spikes * 0.08 + vertical + Math.max(0, longest - 40) * 0.03;
+  const crumbleRuns = world.crumbles.filter(c => !world.crumbles.some(o => o.y === c.y && o.x === c.x - 1)).length;
+  const moving = world.movers.length * 0.6 + world.ropes.length * 0.8 + crumbleRuns * 0.4;
+  const platform = pits + spikes * 0.08 + vertical + Math.max(0, longest - 40) * 0.03 + moving;
   const score = trapScore + combos * 0.3 + platform;
   const stars = score < STAR2 ? 1 : score < STAR3 ? 2 : 3;
   return { score: +score.toFixed(2), stars, trapScore: +trapScore.toFixed(2), combos, platform: +platform.toFixed(2), traps };

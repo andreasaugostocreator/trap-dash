@@ -316,7 +316,10 @@ function openLobby() {
     b.className = 'chip' + (cur && cur.stars === n ? ' on' : ''); b.textContent = starText(n);
     b.title = ['Easy', 'Medium', 'Hard'][n - 1] + ' random level';
     b.disabled = online && !isHost;
-    b.onclick = () => { sfx.click(); lobby.level = randomLevel(n); syncLobby(); openLobby(); };
+    b.onclick = () => {
+      sfx.click(); b.disabled = true; b.textContent = '…';
+      genAsync(n).then(L => { lobby.level = L; syncLobby(); if (!run && !$('lobby').classList.contains('hidden')) openLobby(); });
+    };
     rr.appendChild(b);
   }
 
@@ -363,22 +366,49 @@ $('shareBtn').onclick = async () => {
 };
 
 function randomLevel(stars) { return generate((Math.random() * 1e9) >>> 0, stars); }
-const nextOf = ref => (typeof ref === 'number' ? (ref + 1) % LEVELS.length : randomLevel(ref.stars));
+// Random levels are built in a worker so the game doesn't freeze while one is made and checked.
+let genWorker = null;
+try { genWorker = new Worker('src/genworker.js', { type: 'module' }); } catch { /* old browser: build on the main thread */ }
+const genWaiting = new Map(); let genId = 0;
+if (genWorker) {
+  genWorker.onmessage = e => { const f = genWaiting.get(e.data.id); genWaiting.delete(e.data.id); if (f) f(e.data.level); };
+  genWorker.onerror = () => { genWorker = null; for (const [id, f] of genWaiting) { genWaiting.delete(id); f(null); } };
+}
+function genAsync(stars) {
+  const seed = (Math.random() * 1e9) >>> 0;
+  if (!genWorker) return Promise.resolve(generate(seed, stars));
+  return new Promise(res => { const id = ++genId; genWaiting.set(id, res); genWorker.postMessage({ id, seed, stars }); })
+    .then(level => level || generate(seed, stars));
+}
+const prefetched = {};   // one random level per difficulty, built ahead for the "Next" button
+function prefetch(stars) { if (!prefetched[stars]) prefetched[stars] = { p: genAsync(stars).then(L => (prefetched[stars].level = L)) }; }
+function takeRandom(stars) { const f = prefetched[stars]; if (f && f.level) { delete prefetched[stars]; return f.level; } return randomLevel(stars); }
+const nextOf = ref => (typeof ref === 'number' ? (ref + 1) % LEVELS.length : takeRandom(ref.stars));
 
 // ---------- endless: generated stages one after another, totals carry over
-const endlessLevel = e => ({ ...randomLevel(e.stars), name: `Stage ${e.stage}` });
+const stageOf = (L, e) => ({ ...L, name: `Stage ${e.stage}` });
 function startEndless(stars, runner) {
-  const e = { stars, stage: 1, total: 0, deaths: 0 }, level = endlessLevel(e);
-  if (mode === 'online') net.send({ t: 'stage', level, runner, endless: e });
-  lobby.level = level; startRun(level, runner, 0, e);
+  const e = { stars, stage: 1, total: 0, deaths: 0 };
+  toast('Building the level…');
+  genAsync(stars).then(L => {
+    const level = stageOf(L, e);
+    if (mode === 'online') net.send({ t: 'stage', level, runner, endless: e });
+    $('toast').classList.add('hidden');
+    lobby.level = level; startRun(level, runner, 0, e);
+  });
 }
-function nextStage() {   // only on the runner's device, which owns the simulation
-  const e = run.endless, w = run.world;
+function nextStage() {   // only on the runner's device, which owns the simulation; the next stage was built during this one
+  if (run.advancing) return;
+  run.advancing = true;
+  const cur = run, e = run.endless, w = run.world;
   const ne = { ...e, stage: e.stage + 1, total: e.total + w.time, deaths: e.deaths + w.player.deaths,
     score: { pts: run.score.pts, catches: run.score.catches, bestStreak: run.score.bestStreak } };
-  const level = endlessLevel(ne);
-  if (mode === 'online') net.send({ t: 'stage', level, runner: run.runner, endless: ne });
-  startRun(level, run.runner, 0, ne);
+  (run.nextGen || genAsync(e.stars)).then(L => {
+    if (run !== cur) return;
+    const level = stageOf(L, ne);
+    if (mode === 'online') net.send({ t: 'stage', level, runner: cur.runner, endless: ne });
+    startRun(level, cur.runner, 0, ne);
+  });
 }
 function swapSides() {
   if (!run || !run.endless) return;
@@ -683,6 +713,9 @@ function startRun(level, runner, n, endless = null) {
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
   run.score = new TrapScore(); run.closes = 0;
+  if (endless && runnerHere) run.nextGen = genAsync(endless.stars);
+  const Lv = levelOf(level);
+  if (Lv.random && !endless && (mode !== 'online' || isHost)) prefetch(Lv.stars);
   if (endless && endless.stage >= 5) achieve('endless5');
   if (endless && endless.stage >= 10) achieve('endless10');
   run.trail = [];
@@ -1023,6 +1056,7 @@ function tick(dt, now) {
       w.player.x = a.x + (b.x - a.x) * k; w.player.y = a.y + (b.y - a.y) * k;
     }
     for (const shot of w.shots) shot.x += shot.vx * dt;
+    w.rtime = w.rtime == null || Math.abs(w.rtime - (w.time - 0.06)) > 0.25 ? w.time - 0.06 : w.rtime + dt;   // smooth clock for moving platforms
   }
   if (run.phase !== 'preview') R.follow(w, dt, run.trapperHere && !run.runnerHere);
   // footsteps while running, and now and then a bird (by day) or a cricket (at night)

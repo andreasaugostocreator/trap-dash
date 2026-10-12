@@ -4,12 +4,14 @@ import { TILE, PHYS, TRAPS, TRAP_LOCK, GADGETS } from './config.js';
 import { chooseLoadout } from './loadout.js';
 
 export const EMPTY = 0, SOLID = 1, ONEWAY = 2, SPIKE = 3, SPRING = 4, DOOR = 5, CANNON = 6, NOZZLE = 7, TURRET = 8, FAN = 9, WALL = 10, CEILSPIKE = 11,
-  RAIL = 12, LASER = 13, DROPPER = 14, BELT = 15, ICE = 16;
+  RAIL = 12, LASER = 13, DROPPER = 14, BELT = 15, ICE = 16, CRUMBLE = 17, ANCHOR = 18;
 const STATES = ['idle', 'warn', 'active', 'recover'];
 const GROUPED = { P: 'spikes', T: 'trapdoor', X: 'crusher', F: 'flame', W: 'fan', Z: 'saw', Q: 'conveyor', I: 'ice' };
 const TILE_OF = { '#': SOLID, '=': ONEWAY, '^': SPIKE, B: SPRING, T: DOOR, '<': CANNON, '>': CANNON, F: NOZZLE, '{': TURRET, '}': TURRET, W: FAN, U: WALL,
-  v: CEILSPIKE, Z: RAIL, K: LASER, k: LASER, D: DROPPER, Q: BELT, I: ICE };
-const SOLIDS = new Set([SOLID, CANNON, NOZZLE, SPRING, TURRET, FAN, LASER, DROPPER, BELT, ICE]);
+  v: CEILSPIKE, Z: RAIL, K: LASER, k: LASER, D: DROPPER, Q: BELT, I: ICE, L: CRUMBLE, R: ANCHOR };
+const SOLIDS = new Set([SOLID, CANNON, NOZZLE, SPRING, TURRET, FAN, LASER, DROPPER, BELT, ICE, ANCHOR]);
+// Platforms that move: speed in px/s, how far they travel at most (tiles). Crumbling tiles: shake time, how long they stay gone.
+export const MOVER = { speed: 42, maxRange: 7 }, CRUMBLE_T = { shake: 0.45, gone: 3 }, ROPE = { maxLen: 5, pump: 5.5, release: 270 };
 const r1 = v => Math.round(v * 10) / 10;
 // Runner status timers (seconds left). Most come from gadgets.
 const STATUS = ['stun', 'rev', 'shield', 'inv', 'gust', 'frost', 'fog', 'heavy', 'moon', 'squash', 'glide', 'boots', 'haste', 'phase', 'anchor', 'radar'];
@@ -22,6 +24,7 @@ export class World {
     this.tiles = new Uint8Array(this.w * this.h);
     this.trapAt = new Int16Array(this.w * this.h).fill(-1);
     this.traps = []; this.checkpoints = []; this.shots = []; this.events = []; this.fx = [];
+    this.movers = []; this.crumbles = []; this.ropes = []; this.crumbleAt = new Int16Array(this.w * this.h).fill(-1);
     this.lock = 0; this.time = 0; this.jam = 0; this.slowmo = 0; this.decoy = null; this.trail = [];
     const ch = (x, y) => (rows[y] && rows[y][x]) || '.';
     for (let y = 0; y < this.h; y++) for (let x = 0; x < this.w; x++) {
@@ -34,6 +37,9 @@ export class World {
       if (c === '{' || c === '}') this.addTrap('arrows', x, x, y, { dir: c === '{' ? -1 : 1 });
       if (c === 'K' || c === 'k') this.addTrap('laser', x, x, y, { dir: c === 'k' ? -1 : 1 });
       if (c === 'D') this.addTrap('dropper', x, x, y);
+      if ((c === 'M' || c === 'N') && ch(x - 1, y) !== c) { let x1 = x; while (ch(x1 + 1, y) === c) x1++; this.movers.push({ axis: c === 'M' ? 'x' : 'y', x0: x * TILE, y0: y * TILE, w: (x1 - x + 1) * TILE, tx0: x, tx1: x1, ty: y }); }
+      if (c === 'L') { this.crumbleAt[i] = this.crumbles.length; this.crumbles.push({ x, y, state: 'ok', t: 0 }); }
+      if (c === 'R') this.ropes.push({ ax: x * TILE + 8, ay: (y + 1) * TILE, tx: x, ty: y });
       if (c === 'U') { this.addTrap('wall', x, x, y); if (y > 0) this.tiles[i - this.w] = WALL; }
       const kind = GROUPED[c];
       if (kind && ch(x - 1, y) !== c) { let x1 = x; while (ch(x1 + 1, y) === c) x1++; this.addTrap(kind, x, x1, y); }
@@ -56,9 +62,18 @@ export class World {
       }
       if (t.kind === 'saw') t.len = (t.x1 - t.x0) * TILE;
     }
+    // Moving platforms travel until the next solid tile (at most MOVER.maxRange tiles): sideways to the right, or up.
+    for (const m of this.movers) {
+      let n = 0;
+      if (m.axis === 'x') while (n < MOVER.maxRange && !this.solidAt(m.tx1 + 1 + n, m.ty)) n++;
+      else while (n < MOVER.maxRange && ![...Array(m.tx1 - m.tx0 + 1).keys()].some(k => this.solidAt(m.tx0 + k, m.ty - 1 - n))) n++;
+      m.range = n * TILE;
+    }
+    // A rope hangs from its anchor block down to the floor, at most ROPE.maxLen tiles.
+    for (const r of this.ropes) { let n = 0; while (n < ROPE.maxLen && !this.solidAt(r.tx, r.ty + 1 + n)) n++; r.len = n * TILE - 4; }
     this.player = { x: this.start.x, y: this.start.y, vx: 0, vy: 0, face: 1, onGround: false, coyote: 0, buffer: 0,
       dead: false, deadT: 0, finished: false, deaths: 0, cp: { ...this.start }, best: this.start.x, airT: 0, wasJump: false,
-      gustDir: 0, slow: false, lifted: false, icy: false, carry: 0, dash: 0 };
+      gustDir: 0, slow: false, lifted: false, icy: false, carry: 0, dash: 0, rope: -1, ang: 0, angV: 0, ropeLen: 0, ropeCd: 0, ride: -1 };
     for (const k of STATUS) this.player[k] = 0;
     // Gadgets: the level decides which four each side gets.
     this.loadout = level.loadout || chooseLoadout(level, this);
@@ -79,6 +94,7 @@ export class World {
     const t = this.tile(x, y);
     if (t === DOOR) { const tr = this.trapOn(x, y); return !(tr.state === 'active' || tr.state === 'recover'); }
     if (t === WALL) { const tr = this.trapOn(x, y); return tr.state === 'active' && !tr.pass; }
+    if (t === CRUMBLE) return this.crumbles[this.crumbleAt[y * this.w + x]].state !== 'gone';
     return SOLIDS.has(t);
   }
 
@@ -320,6 +336,61 @@ export class World {
     this.emit('stun', p.x + 5, p.y, why);
   }
 
+  // A moving platform's top-left at a given time: back and forth along its range.
+  moverPos(m, time) {
+    if (!m.range) return { x: m.x0, y: m.y0 };
+    const period = 2 * m.range / MOVER.speed, u = ((time % period) + period) % period / period, d = (u < 0.5 ? u * 2 : 2 - u * 2) * m.range;
+    return m.axis === 'x' ? { x: m.x0 + d, y: m.y0 } : { x: m.x0, y: m.y0 - d };
+  }
+  // On a rope: a pendulum. Left/right pump the swing, jump lets go with the swing's speed.
+  swing(dt, dir, input) {
+    const p = this.player, r = this.ropes[p.rope], L = p.ropeLen;
+    p.angV += (-(PHYS.gravity / L) * Math.sin(p.ang) + dir * ROPE.pump) * dt;
+    p.angV *= 1 - 0.25 * dt;
+    const na = Math.max(-1.45, Math.min(1.45, p.ang + p.angV * dt));
+    const nx = r.ax + Math.sin(na) * L - PHYS.w / 2, ny = r.ay + Math.cos(na) * L - PHYS.h / 2;
+    if (!this.boxFree(nx, ny)) { p.angV = 0; }
+    else { p.ang = na; p.x = nx; p.y = ny; }
+    if (dir) p.face = dir;
+    p.vx = Math.cos(p.ang) * p.angV * L; p.vy = -Math.sin(p.ang) * p.angV * L;
+    p.onGround = false;
+    if (input.jumpPressed && !(p.stun > 0)) {
+      p.rope = -1; p.ropeCd = 0.35;
+      p.vx = Math.max(-PHYS.maxRun * 1.7, Math.min(PHYS.maxRun * 1.7, p.vx));
+      p.vy = Math.min(p.vy, 0) - ROPE.release; p.wasJump = true; p.sprung = false;
+      this.emit('jump', p.x + 5, p.y + PHYS.h);
+    }
+  }
+  tryGrab() {
+    const p = this.player;
+    if (p.onGround || p.ropeCd > 0 || p.dead) return;
+    const cx = p.x + PHYS.w / 2, cy = p.y + PHYS.h / 2;
+    for (let i = 0; i < this.ropes.length; i++) {
+      const r = this.ropes[i];
+      if (cy < r.ay + 10 || cy > r.ay + r.len + 4 || Math.abs(cx - r.ax) > 7) continue;
+      const L = Math.max(20, Math.min(r.len, Math.hypot(cx - r.ax, cy - r.ay)));
+      p.rope = i; p.ropeLen = L; p.ang = Math.atan2(cx - r.ax, cy - r.ay);
+      p.angV = (p.vx * Math.cos(p.ang) - p.vy * Math.sin(p.ang)) / L;
+      this.emit('grab', cx, cy);
+      return;
+    }
+  }
+  stepCrumbles(dt) {
+    const p = this.player;
+    if (p.onGround && !p.dead) {
+      const ty = Math.floor((p.y + PHYS.h + 1) / TILE);
+      for (const tx of [Math.floor((p.x + 1) / TILE), Math.floor((p.x + PHYS.w - 1) / TILE)]) {
+        const i = this.crumbleAt[ty * this.w + tx];
+        if (i >= 0 && this.crumbles[i].state === 'ok') { this.crumbles[i].state = 'shake'; this.crumbles[i].t = 0; this.emit('crack', tx * TILE + 8, ty * TILE); }
+      }
+    }
+    for (const c of this.crumbles) {
+      c.t += dt;
+      if (c.state === 'shake' && c.t >= CRUMBLE_T.shake) { c.state = 'gone'; c.t = 0; this.emit('crumble', c.x * TILE + 8, c.y * TILE + 8); }
+      else if (c.state === 'gone' && c.t >= CRUMBLE_T.gone && !overlap(p.x, p.y, PHYS.w, PHYS.h, { x: c.x * TILE, y: c.y * TILE, w: TILE, h: TILE })) { c.state = 'ok'; c.t = 0; }
+    }
+  }
+
   standingOn(kind) {   // an active floor trap of this kind under the runner's feet
     const p = this.player;
     if (!p.onGround) return null;
@@ -340,7 +411,7 @@ export class World {
     if (p.dead) {
       p.deadT -= dt;
       if (p.deadT <= 0) {
-        Object.assign(p, { dead: false, x: p.cp.x, y: p.cp.y, vx: 0, vy: 0, buffer: 0, dash: 0 });
+        Object.assign(p, { dead: false, x: p.cp.x, y: p.cp.y, vx: 0, vy: 0, buffer: 0, dash: 0, rope: -1, ride: -1 });
         for (const k of STATUS) p[k] = 0;
         p.inv = 0.6; this.trail = [];
         this.emit('spawn', p.x + 5, p.y + 6);
@@ -352,6 +423,11 @@ export class World {
     this.trailT = (this.trailT || 0) + dt;
     if (this.trailT >= 0.1) { this.trailT = 0; this.trail.push({ x: p.x, y: p.y }); if (this.trail.length > G.trapper.rewind.back * 10) this.trail.shift(); }
 
+    p.ropeCd = Math.max(0, p.ropeCd - dt);
+    if (p.ride >= 0) {   // carried by a moving platform
+      const m = this.movers[p.ride], a = this.moverPos(m, this.time - dt), b = this.moverPos(m, this.time);
+      if (this.boxFree(p.x + b.x - a.x, p.y + b.y - a.y)) { p.x += b.x - a.x; p.y += b.y - a.y; }
+    }
     const stunned = p.stun > 0;
     let L = input.left, R = input.right;
     if (p.rev > 0) [L, R] = [R, L];
@@ -365,6 +441,8 @@ export class World {
     const maxRun = PHYS.maxRun * (p.slow ? G.trapper.glue.slow : 1) * (p.haste > 0 ? G.runner.haste.speed : 1) * (p.squash > 0 ? G.trapper.squash.speed : 1);
     const grip = p.icy ? 0.3 : 1;                 // ice: weak acceleration, almost no friction
     const dir = (R ? 1 : 0) - (L ? 1 : 0);
+    if (p.rope >= 0) this.swing(dt, dir, input);
+    else {
     if (p.dash > 0) {   // a dash keeps its speed and ignores gravity for a moment
       p.dash -= dt; p.vy = Math.min(p.vy, 0);
     } else if (dir) {
@@ -403,6 +481,9 @@ export class World {
     const wasGround = p.onGround, fallV = p.vy;
     this.movePlayer(dt);
     if (p.onGround && !wasGround) { p.wasJump = false; if (fallV > 160) this.emit('land', p.x + 5, p.y + PHYS.h, Math.min(1, fallV / PHYS.maxFall)); }
+    this.tryGrab();
+    }
+    this.stepCrumbles(dt);
     p.airT = p.onGround ? 0 : p.airT + dt;
     p.best = Math.max(p.best, p.x);
 
@@ -456,12 +537,16 @@ export class World {
     const prevBottom = p.y + H;
     p.y += p.vy * dt;
     const x0 = Math.floor(p.x / TILE), x1 = Math.floor((p.x + W - 0.01) / TILE);
-    p.onGround = false;
+    p.onGround = false; p.ride = -1;
     if (p.vy >= 0) {
       const ty = Math.floor((p.y + H) / TILE);
       for (let tx = x0; tx <= x1; tx++) {
         const t = this.tile(tx, ty);
         if (this.solidAt(tx, ty) || (t === ONEWAY && prevBottom <= ty * TILE + 0.5)) { p.y = ty * TILE - H; p.vy = 0; p.onGround = true; break; }
+      }
+      if (!p.onGround) for (let i = 0; i < this.movers.length; i++) {   // moving platforms: land on them from above
+        const m = this.movers[i], a = this.moverPos(m, this.time), prevTop = this.moverPos(m, this.time - dt).y;
+        if (p.x + W > a.x + 1 && p.x < a.x + m.w - 1 && prevBottom <= prevTop + 1.5 && p.y + H >= a.y) { p.y = a.y - H; p.vy = 0; p.onGround = true; p.ride = i; break; }
       }
     } else {
       const ty = Math.floor(p.y / TILE);
@@ -476,8 +561,8 @@ export class World {
     const gad = side => this.loadout[side].map(id => [this.gad[side][id].n, r1(this.gad[side][id].cd)]);
     const round = o => { const out = {}; for (const k in o) out[k] = typeof o[k] === 'number' ? r1(o[k]) : o[k]; return out; };
     return {
-      t: 'snap', tm: r1(this.time), d: p.deaths, lk: r1(this.lock), jm: r1(this.jam), ck: this.chainT > 0 ? [this.chainKind, r1(this.chainT)] : 0, sm: r1(this.slowmo),
-      p: [r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.face, (p.onGround ? 1 : 0) | (p.dead ? 2 : 0) | (p.finished ? 4 : 0) | (p.slow ? 8 : 0) | (p.lifted ? 16 : 0) | (p.icy ? 32 : 0), r1(p.carry)],
+      t: 'snap', tm: Math.round(this.time * 100) / 100, d: p.deaths, lk: r1(this.lock), jm: r1(this.jam), ck: this.chainT > 0 ? [this.chainKind, r1(this.chainT)] : 0, sm: r1(this.slowmo),
+      p: [r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.face, (p.onGround ? 1 : 0) | (p.dead ? 2 : 0) | (p.finished ? 4 : 0) | (p.slow ? 8 : 0) | (p.lifted ? 16 : 0) | (p.icy ? 32 : 0), r1(p.carry), p.rope],
       st: STATUS.map(k => r1(p[k])),
       tr: this.traps.map(t => [STATES.indexOf(t.state), r1(t.t), r1(t.cd), r1(t.oy)]),
       b: this.shots.map(round),
@@ -485,6 +570,7 @@ export class World {
       dc: this.decoy ? round(this.decoy) : null,
       g: [gad('trapper'), gad('runner')],
       cp: this.checkpoints.map(c => c.on ? 1 : 0).join(''),
+      cr: this.crumbles.length ? this.crumbles.map(c => c.state[0]).join('') : undefined,
       ev,
     };
   }
@@ -493,12 +579,13 @@ export class World {
     this.time = s.tm; p.deaths = s.d; this.lock = s.lk; this.jam = s.jm || 0; [this.chainKind, this.chainT] = s.ck || [null, 0]; this.slowmo = s.sm || 0;
     [p.x, p.y, p.vx, p.vy, p.face] = s.p;
     const f = s.p[5];
-    p.onGround = !!(f & 1); p.dead = !!(f & 2); p.finished = !!(f & 4); p.slow = !!(f & 8); p.lifted = !!(f & 16); p.icy = !!(f & 32); p.carry = s.p[6] || 0;
+    p.onGround = !!(f & 1); p.dead = !!(f & 2); p.finished = !!(f & 4); p.slow = !!(f & 8); p.lifted = !!(f & 16); p.icy = !!(f & 32); p.carry = s.p[6] || 0; p.rope = s.p[7] ?? -1;
     if (s.st) STATUS.forEach((k, i) => { p[k] = s.st[i] || 0; });
     s.tr.forEach((a, i) => { const t = this.traps[i]; if (!t) return; t.state = STATES[a[0]]; t.t = a[1]; t.cd = a[2]; t.oy = a[3]; });
     this.shots = s.b; this.fx = s.fx || []; this.decoy = s.dc || null;
     if (s.g) ['trapper', 'runner'].forEach((side, j) => this.loadout[side].forEach((id, i) => { const g = this.gad[side][id]; if (g && s.g[j][i]) [g.n, g.cd] = s.g[j][i]; }));
     [...s.cp].forEach((c, i) => { if (this.checkpoints[i]) this.checkpoints[i].on = c === '1'; });
+    if (s.cr) [...s.cr].forEach((c, i) => { const k = this.crumbles[i]; if (k) { const st = { o: 'ok', s: 'shake', g: 'gone' }[c]; if (st !== k.state) { k.state = st; k.t = 0; } } });
   }
 }
 
