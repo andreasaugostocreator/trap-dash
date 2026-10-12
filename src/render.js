@@ -1,7 +1,7 @@
 // Pixel-art renderer. The world is drawn 1:1 onto a small canvas (1 canvas pixel = 1 world pixel),
 // which is then scaled up by a whole number with smoothing off, so every pixel stays crisp.
 import { TILE, PHYS, TRAPS, GADGETS } from './config.js';
-import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE, TURRET, FAN, CEILSPIKE, LASER, DROPPER, ANCHOR } from './sim.js';
+import { SOLID, ONEWAY, SPIKE, SPRING, NOZZLE, TURRET, FAN, CEILSPIKE, LASER, DROPPER, ANCHOR, ICEFLOOR } from './sim.js';
 import { THEMES } from './levels.js';
 import { SPR, initSprites, charFrame, mirror, drawDigits } from './sprites.js';
 
@@ -222,7 +222,16 @@ export class Renderer {
         return c;
       }), Math.round(W * 0.78 - cx * 0.02), Math.round(H * 0.1));
     }
-    if (theme === 'day' || theme === 'sunset' || theme === 'sky') {   // soft sun rays
+    if (theme === 'lava') {   // stalactites hanging from the cave roof
+      l.drawImage(this.bg('stalactites', () => {
+        const c = canvasOf(480, 70), v = c.getContext('2d');
+        for (let k = 0; k < 22; k++) { const cx0 = Math.floor(hash(k, 71) * 480), hh = 15 + Math.floor(hash(k, 72) * 50), w0 = 4 + Math.floor(hash(k, 73) * 7);
+          for (let j = 0; j < hh; j++) { const half = Math.round(w0 * (1 - j / hh)); v.fillStyle = j > hh - 3 ? '#ff7a1a55' : '#2a1414'; v.fillRect(cx0 - half, j, half * 2 + 1, 1); } }
+        v.fillStyle = '#2a1414'; v.fillRect(0, 0, 480, 6); return c;
+      }), -Math.round((cx * 0.3) % 480), 0);
+      l.drawImage(this.bg('stalactites'), 480 - Math.round((cx * 0.3) % 480), 0);
+    }
+    if (theme === 'day' || theme === 'sunset' || theme === 'sky' || theme === 'ice' || theme === 'pirate') {   // soft sun rays
       l.save(); l.globalAlpha = 0.07 + 0.02 * Math.sin(this.t * 0.7);
       l.fillStyle = theme === 'sunset' ? '#fff0b0' : '#ffffff';
       for (let i = 0; i < 4; i++) {
@@ -259,9 +268,10 @@ export class Renderer {
   }
 
   makeLayer(th, name) {
-    const W = 480, H = name === 'mountains' ? 130 : name.startsWith('clouds') ? 70 : 90;
+    const W = 480, H = { mountains: 130, cave: 120, cave2: 90, sea: 80, mansion: 130, palms: 90, spires: 100, deadtrees: 100 }[name] || (name.startsWith('clouds') ? 70 : 90);
     const c = canvasOf(W, H), x = c.getContext('2d');
-    const [base, light, top] = name === 'mountains' || name === 'clouds' ? th.farCol : th.nearCol;
+    const [base, light, top] = ['mountains', 'clouds', 'cave', 'sea', 'mansion'].includes(name) ? th.farCol : th.nearCol;
+    const R = (i, j, w, h, col) => { x.fillStyle = col; x.fillRect(i, j, w, h); };
     const px = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
     if (name === 'mountains') {
       const peaks = [[40, 70], [120, 22], [190, 60], [262, 12], [340, 52], [410, 30]];
@@ -283,6 +293,51 @@ export class Renderer {
       for (let k = 0; k < 5; k += 2) R(cxl - 10 + k * 4, gy - 12, 3, 2, wall);
       R(cxl - 2, gy - 1, 4, 5, dark); R(cxl - 12, gy - 13, 2, 3, dark); R(cxl + 10, gy - 13, 2, 3, dark); R(cxl - 1, gy - 18, 2, 3, dark);
       R(cxl, gy - 30, 1, 8, dark); R(cxl + 1, gy - 30, 5, 3, '#e8414f');
+    } else if (name === 'cave' || name === 'cave2') {   // stalagmites, with a few glowing cracks
+      const n = name === 'cave' ? 14 : 20, maxH = name === 'cave' ? 100 : 70;
+      for (let i = 0; i < W; i++) { const h0 = H - 14 - Math.round(Math.sin(i / 37) * 5 + Math.sin(i / 13) * 3); R(i, h0, 1, H - h0, base); }
+      for (let k = 0; k < n; k++) for (const ox of [0, -W, W]) {
+        const cx0 = Math.floor(hash(k, 31) * W) + ox, hh = 30 + Math.floor(hash(k, 32) * (maxH - 30)), w0 = 6 + Math.floor(hash(k, 33) * 9);
+        for (let j = 0; j < hh; j++) { const half = Math.round(w0 * j / hh); for (let i = -half; i <= half; i++) if (cx0 + i >= 0 && cx0 + i < W) px(cx0 + i, H - hh + j, i < -half + 2 ? light : base); }
+        if (hash(k, 34) < 0.5) px(cx0, H - Math.floor(hh / 2), top);
+      }
+    } else if (name === 'spires') {   // ice crystal spires
+      const ground = H - 10;
+      R(0, ground, W, 10, base);
+      for (let k = 0; k < 16; k++) for (const ox of [0, -W, W]) {
+        const cx0 = Math.floor(hash(k, 41) * W) + ox, hh = 30 + Math.floor(hash(k, 42) * 60), w0 = 4 + Math.floor(hash(k, 43) * 5);
+        for (let j = 0; j < hh; j++) { const half = Math.round(w0 * j / hh); for (let i = -half; i <= half; i++) if (cx0 + i >= 0 && cx0 + i < W) px(cx0 + i, ground - hh + j, i < 0 ? light : i === half ? top : base); }
+      }
+    } else if (name === 'sea') {   // the open sea: a horizon, islands and a ship far away
+      const hz = 28;
+      R(0, hz, W, H - hz, base);
+      for (let j = hz; j < H; j += 3) for (let i = (j * 7) % 11; i < W; i += 11 + (j % 5)) R(i, j, 4, 1, light);
+      for (const [ix, iw] of [[60, 70], [300, 50]]) for (let i = 0; i < iw; i++) { const hh = Math.round(Math.sin(i / iw * Math.PI) * 12); R(ix + i, hz - hh, 1, hh, top); }
+      const sx = 190; R(sx, hz - 6, 26, 5, top); R(sx + 2, hz - 1, 22, 1, top); R(sx + 8, hz - 22, 1, 16, top); R(sx + 17, hz - 18, 1, 12, top);
+      R(sx + 4, hz - 20, 8, 9, '#f4ead7'); R(sx + 13, hz - 16, 7, 7, '#f4ead7'); R(sx + 8, hz - 24, 4, 2, '#e8414f');
+    } else if (name === 'palms') {   // sand dunes with palm trees
+      const ground = H - 14;
+      for (let i = 0; i < W; i++) { const b = Math.round(Math.sin(i / 50) * 3); R(i, ground + b, 1, H - ground - b, base); }
+      for (let k = 0; k < 7; k++) for (const ox of [0, -W, W]) {
+        const tx = Math.floor(hash(k, 51) * W) + ox, hh = 40 + Math.floor(hash(k, 52) * 25), lean = hash(k, 53) < 0.5 ? -1 : 1;
+        for (let j = 0; j < hh; j++) R(tx + Math.round(lean * (j / hh) * (j / hh) * 10), ground - j, 3, 1, top);
+        const fx = tx + lean * 10, fy = ground - hh;
+        for (const [dx, dy] of [[-1, 0.3], [1, 0.3], [-1, -0.2], [1, -0.2], [0, -0.8]]) for (let d = 0; d < 16; d++) R(fx + Math.round(dx * d), fy + Math.round(dy * d + d * d * 0.03), 2, 2, light);
+      }
+    } else if (name === 'mansion') {   // a haunted house on the hill, a few windows lit
+      const ground = H - 18;
+      for (let i = 0; i < W; i++) { const b = Math.round(Math.sin(i / 60) * 4); R(i, ground + b, 1, H - ground - b, base); }
+      const mx = 220;
+      R(mx - 40, ground - 40, 80, 42, light); R(mx - 52, ground - 60, 16, 62, light); R(mx + 36, ground - 52, 14, 54, light); R(mx - 10, ground - 58, 20, 20, light);
+      for (const [x0, w0, y0] of [[mx - 56, 24, ground - 60], [mx + 32, 22, ground - 52], [mx - 14, 28, ground - 58], [mx - 44, 88, ground - 40]]) for (let j = 0; j < w0 / 2; j++) R(x0 + j, y0 - j, w0 - 2 * j, 1, light);
+      for (const [wx, wy] of [[mx - 30, ground - 30], [mx - 14, ground - 30], [mx + 18, ground - 18], [mx - 47, ground - 45], [mx + 40, ground - 38], [mx - 3, ground - 48]]) R(wx, wy, 5, 6, hash(wx, wy) < 0.6 ? top : base);
+      R(mx - 4, ground - 14, 8, 16, base);
+    } else if (name === 'deadtrees') {   // bare trees and tombstones
+      const ground = H - 16;
+      R(0, ground, W, 16, base);
+      const branch = (bx, by, len, a, depth) => { for (let d = 0; d < len; d++) R(Math.round(bx + Math.cos(a) * d), Math.round(by - Math.sin(a) * d), depth > 1 ? 2 : 1, 1, base); if (depth > 0) { const ex = bx + Math.cos(a) * len, ey = by - Math.sin(a) * len; branch(ex, ey, len * 0.7, a + 0.5, depth - 1); branch(ex, ey, len * 0.65, a - 0.6, depth - 1); } };
+      for (let k = 0; k < 6; k++) { const tx = Math.floor(hash(k, 61) * (W - 40)) + 20; branch(tx, ground, 26 + hash(k, 62) * 14, Math.PI / 2 + (hash(k, 63) - 0.5) * 0.3, 3); }
+      for (let k = 0; k < 8; k++) { const gx = Math.floor(hash(k, 64) * W); R(gx, ground - 8, 6, 8, light); R(gx + 1, ground - 9, 4, 1, light); }
     } else if (name === 'trees' || name === 'pines') {
       const ground = H - 18;
       for (let i = 0; i < W; i++) { const b = Math.round(Math.sin(i / W * TAU * 4) * 3 + Math.sin(i / W * TAU * 11) * 1.5); x.fillStyle = base; x.fillRect(i, ground - 3 + b, 1, H); px(i, ground - 3 + b, light); }
@@ -365,6 +420,10 @@ export class Renderer {
       else if (t === FAN) x.drawImage(SPR.fan, X, Y);
       else if (t === TURRET) { /* drawn with its trap */ }
       else if (t === DROPPER) x.drawImage(SPR.dropper, X, Y);
+      else if (t === ICEFLOOR) {   // a block of solid ice: always slippery
+        x.fillStyle = line; x.fillRect(X, Y, 16, 16); x.fillStyle = '#9ad7ff'; x.fillRect(X, Y + 1, 16, 14); x.fillStyle = '#dff6ff'; x.fillRect(X, Y + 1, 16, 2);
+        x.fillStyle = '#ffffff'; x.fillRect(X + 3 + (tx % 3) * 3, Y + 4, 3, 1); x.fillRect(X + 2 + (tx % 3) * 3, Y + 5, 1, 1); x.fillStyle = '#6fb6e6'; x.fillRect(X + 9, Y + 9, 4, 1); x.fillRect(X, Y + 13, 16, 2);
+      }
       else if (t === ANCHOR) {   // an iron block with a ring the rope hangs from
         x.fillStyle = line; x.fillRect(X, Y, 16, 16); x.fillStyle = '#5d6475'; x.fillRect(X + 1, Y + 1, 14, 14); x.fillStyle = '#8b93a6'; x.fillRect(X + 1, Y + 1, 14, 2); x.fillRect(X + 1, Y + 1, 2, 14);
         x.fillStyle = '#3b3f52'; for (const [i, j] of [[3, 3], [12, 3], [3, 12], [12, 12]]) x.fillRect(X + i, Y + j, 1, 1);
@@ -412,6 +471,7 @@ export class Renderer {
       if (marks.some(m => Math.abs(m - tx) <= 1)) continue;
       const X = tx * TILE, Y = ty * TILE - 2, r = hash(tx * 7 + 3, ty * 13 + 5), o = Math.floor(hash(tx, ty * 5) * 9);
       const petal = PETALS[Math.floor(hash(tx * 3, ty) * PETALS.length)];
+      if (this.decorThemed(theme, X, Y, r, o, px, rect, line, free(tx, ty - 2))) continue;
       if (r < 0.2) {   // a few flowers
         for (let k = 0; k < 2 + (r < 0.08 ? 1 : 0); k++) {
           const fx = X + 2 + ((o + k * 5) % 12), h = 3 + ((o + k) % 3), col = k ? PETALS[(Math.floor(r * 50) + k) % PETALS.length] : petal;
@@ -444,6 +504,10 @@ export class Renderer {
         for (const [dx, h] of [[0, 6], [3, 9], [6, 5]]) { rect(cx0 + dx, Y - h, 2, h, '#f07fb4'); px(cx0 + dx, Y - h - 1, '#ffc0dc'); px(cx0 + dx, Y - h + 1, '#ffffff'); }
       }
     }
+    if (theme === 'ice') for (let ty = 0; ty < world.h - 1; ty++) for (let tx = 0; tx < world.w; tx++) {   // icicles under overhangs
+      if (world.tile(tx, ty) !== SOLID || world.tile(tx, ty + 1) !== 0 || hash(tx, ty * 7) > 0.45) continue;
+      for (let k = 0; k < 3; k++) { const ix = tx * TILE + 2 + k * 5 + Math.floor(hash(tx + k, ty) * 2), h = 3 + Math.floor(hash(tx, ty + k) * 6); rect(ix, (ty + 1) * TILE, 2, h - 2, '#bfe9ff'); px(ix, (ty + 1) * TILE + h - 2, '#ffffff'); px(ix, (ty + 1) * TILE, '#ffffff'); }
+    }
     // underground: roots under the grass, and now and then a bone, a gem or a stone deeper down
     for (let ty = 1; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {
       if (world.tile(tx, ty) !== SOLID) continue;
@@ -465,15 +529,62 @@ export class Renderer {
     }
   }
 
+  // Decorations for the newer worlds; returns true when it drew something (or decided to leave the spot bare).
+  decorGlow() {}
+  decorThemed(theme, X, Y, r, o, px, rect, line, tall) {
+    if (theme === 'lava') {
+      if (r < 0.14) { const rx = X + 2 + o % 6; rect(rx, Y - 5, 8, 5, line); rect(rx + 1, Y - 6, 6, 1, line); rect(rx + 1, Y - 5, 6, 4, '#3a2a2a'); rect(rx + 2, Y - 5, 3, 1, '#5a4040'); px(rx + 4, Y - 3, '#ff7a1a'); px(rx + 5, Y - 2, '#ffd84a'); }
+      else if (r < 0.22) { const cx0 = X + 4 + o % 6; for (const [dx, h] of [[0, 5], [3, 8], [6, 4]]) { rect(cx0 + dx, Y - h, 2, h, '#ff7a1a'); px(cx0 + dx, Y - h - 1, '#ffd84a'); }  }
+      else if (r < 0.26) { rect(X + 4, Y - 3, 7, 2, '#e9dfc7'); rect(X + 3, Y - 4, 2, 2, '#e9dfc7'); rect(X + 10, Y - 4, 2, 2, '#e9dfc7'); }
+      return true;
+    }
+    if (theme === 'ice') {
+      if (r < 0.2) { for (let i = 0; i < 12; i++) { const h = Math.round(Math.sin(i / 11 * Math.PI) * 4); rect(X + 2 + i, Y - h, 1, h, '#ffffff'); } px(X + 6, Y - 4, '#dff1fd'); }
+      else if (r < 0.27) { const cx0 = X + 5 + o % 5; for (const [dx, h] of [[0, 6], [3, 9], [6, 5]]) { rect(cx0 + dx, Y - h, 2, h, '#9ad7ff'); px(cx0 + dx, Y - h - 1, '#ffffff'); } }
+      else if (r < 0.3 && tall) {   // a snowman
+        const sx = X + 4; rect(sx, Y - 7, 8, 7, line); rect(sx + 1, Y - 7, 6, 6, '#ffffff'); rect(sx + 1, Y - 13, 6, 6, line); rect(sx + 2, Y - 13, 4, 5, '#ffffff');
+        px(sx + 3, Y - 11, line); px(sx + 5, Y - 11, line); px(sx + 6, Y - 10, '#ff9a3c'); rect(sx + 1, Y - 15, 6, 2, '#1c1424'); rect(sx, Y - 8, 8, 1, '#e8414f');
+      }
+      return true;
+    }
+    if (theme === 'pirate') {
+      if (r < 0.1) { const bx = X + 3 + o % 5; rect(bx, Y - 10, 9, 10, line); rect(bx + 1, Y - 10, 7, 10, '#a8673a'); rect(bx + 1, Y - 8, 7, 1, '#5d6475'); rect(bx + 1, Y - 3, 7, 1, '#5d6475'); rect(bx + 2, Y - 10, 1, 10, '#c9874e'); }
+      else if (r < 0.18) { const bx = X + 2 + o % 4; rect(bx, Y - 11, 11, 11, line); rect(bx + 1, Y - 10, 9, 9, '#c9874e'); rect(bx + 1, Y - 10, 9, 1, '#e3a86b'); for (let i = 0; i < 9; i++) { px(bx + 1 + i, Y - 10 + i, '#8a5a33'); px(bx + 9 - i, Y - 10 + i, '#8a5a33'); } }
+      else if (r < 0.22) { const cx0 = X + 8; for (let a = 0; a < 6.3; a += 0.3) for (const rr of [2, 4]) px(Math.round(cx0 + Math.cos(a) * rr * 1.4), Math.round(Y - 3 + Math.sin(a) * rr * 0.6), '#c99a5e'); }
+      else if (r < 0.28) { for (let k = 0; k < 4; k++) rect(X + o + k * 2, Y - 3 - (k % 2) * 2, 1, 3 + (k % 2) * 2, '#d9b26a'); }
+      return true;
+    }
+    if (theme === 'haunted') {
+      if (r < 0.1) { const gx = X + 4 + o % 5; rect(gx, Y - 10, 8, 10, line); rect(gx + 1, Y - 11, 6, 1, line); rect(gx + 1, Y - 10, 6, 10, '#8a8a9a'); rect(gx + 1, Y - 10, 2, 10, '#a8a8b8'); rect(gx + 3, Y - 8, 2, 5, '#5a5a6a'); rect(gx + 2, Y - 7, 4, 1, '#5a5a6a'); }
+      else if (r < 0.17) {   // a jack-o'-lantern
+        const pxx = X + 4 + o % 5; 
+        rect(pxx, Y - 7, 9, 7, line); rect(pxx + 1, Y - 7, 7, 6, '#ff9a3c'); rect(pxx + 2, Y - 7, 2, 6, '#ffb86a'); rect(pxx + 4, Y - 9, 1, 2, '#3a7a2a');
+        px(pxx + 2, Y - 5, '#ffd84a'); px(pxx + 6, Y - 5, '#ffd84a'); rect(pxx + 2, Y - 3, 5, 1, '#ffd84a');
+      }
+      else if (r < 0.21) { const cx0 = X + 7; rect(cx0, Y - 6, 2, 6, '#f4ead7'); px(cx0, Y - 8 - (o % 2), '#ffd84a'); px(cx0 + 1, Y - 7, '#ff9a3c'); }
+      else if (r < 0.28) { for (let k = 0; k < 5; k++) { const h = 4 + (k * 3 + o) % 5; for (let j = 0; j < h; j++) px(X + 3 + k * 2 + (j % 3 === 2 ? 1 : 0), Y - j, '#5a5a6a'); } }
+      return true;
+    }
+    return false;
+  }
+
   // Butterflies by day, fireflies at night, birds crossing the sky. Purely decorative.
   groundTop(world, x) {
     const tx = Math.max(0, Math.min(world.w - 1, Math.floor(x / TILE)));
     if (!this.tops || this.tops.world !== world) this.tops = { world, m: new Map() };
-    if (!this.tops.m.has(tx)) { let y = 0; while (y < world.h && world.tile(tx, y) !== SOLID) y++; this.tops.m.set(tx, y * TILE); }
+    // the top of the ground under this column, found from the bottom up (so a cave roof doesn't count); a pit has none
+    if (!this.tops.m.has(tx)) { let y = world.h - 1; if (world.tile(tx, y) !== SOLID) y = world.h; else while (y > 0 && world.tile(tx, y - 1) === SOLID) y--; this.tops.m.set(tx, y * TILE); }
     return this.tops.m.get(tx);
   }
   drawAmbient(world, cx, cy) {
-    const l = this.l, W = this.lo.width, t = this.t, theme = world.level.theme, night = theme === 'night' || theme === 'dusk';
+    const l = this.l, W = this.lo.width, t = this.t, theme = world.level.theme, night = theme === 'night' || theme === 'dusk' || theme === 'haunted' || theme === 'lava';
+    if (theme === 'ice') {   // snowfall across the view
+      const H = this.lo.height;
+      for (let i = 0; i < 40; i++) {
+        const sx = ((hash(i, 81) * W + Math.sin(t * 0.8 + i) * 10 - cx * 0.6) % W + W) % W, sy = ((hash(i, 82) * H + t * (10 + hash(i, 83) * 14)) % H);
+        l.fillStyle = i % 3 ? '#ffffff' : '#dff1fd'; l.fillRect(Math.round(cx + sx), Math.round(cy + sy), i % 5 ? 1 : 2, i % 5 ? 1 : 2);
+      }
+    }
     const CELL = 150;
     for (let c = Math.floor(cx / CELL) - 1; c <= Math.floor((cx + W) / CELL) + 1; c++) {
       if (c < 0 || hash(c, 77) > (night ? 0.9 : 0.55)) continue;
@@ -481,11 +592,16 @@ export class Renderer {
         const ph = hash(c, k + 3) * TAU, bx = c * CELL + hash(c, k) * CELL + Math.sin(t * 0.6 + ph) * 24, gy = this.groundTop(world, bx);
         if (gy >= world.h * TILE) continue;
         const by = gy - 16 - hash(c, k + 9) * 18 + Math.sin(t * 1.7 + ph * 2) * 6;
-        if (night) {   // a blinking firefly
+        if (theme === 'lava') {   // embers drifting up
+          const ey = gy - ((t * 18 + hash(c, k + 5) * 80) % 80), ex = bx + Math.sin(t * 2 + ph) * 4;
+          l.fillStyle = '#ff7a1a55'; l.fillRect(Math.round(ex) - 1, Math.round(ey) - 1, 3, 3);
+          l.fillStyle = hash(c, k) < 0.5 ? '#ffd84a' : '#ff9a3c'; l.fillRect(Math.round(ex), Math.round(ey), 1, 1);
+        } else if (night) {   // a blinking firefly (pale wisps in the haunted manor)
           const on = Math.sin(t * 2.3 + ph * 5) > -0.2;
           if (!on) continue;
-          l.fillStyle = '#d8ff7a33'; l.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 3);
-          l.fillStyle = '#efffb0'; l.fillRect(Math.round(bx), Math.round(by), 1, 1);
+          const glow = theme === 'haunted' ? ['#b8ffd833', '#e0fff0'] : ['#d8ff7a33', '#efffb0'];
+          l.fillStyle = glow[0]; l.fillRect(Math.round(bx) - 1, Math.round(by) - 1, 3, 3);
+          l.fillStyle = glow[1]; l.fillRect(Math.round(bx), Math.round(by), 1, 1);
         } else {   // a fluttering butterfly
           const up = Math.floor(t * 9 + ph) % 2, X = Math.round(bx), Y = Math.round(by);
           const col = ['#ff6f91', '#ffd84a', '#8fd3ff', '#ffffff'][Math.floor(hash(c, 5) * 4)];
@@ -850,10 +966,12 @@ export class Renderer {
   // Pits end in water (or a sea of cloud on the sky level), gently waving.
   drawWater(world, cx) {
     const l = this.l, W = this.lo.width, base = world.h * TILE, theme = world.level.theme;
-    const C = { day: ['#2f74d0', '#5aa2ff', '#bfe3ff'], sunset: ['#b4506e', '#e07a8a', '#ffd0b0'], night: ['#1b2550', '#2e3f86', '#7f95e6'], dusk: ['#3d2260', '#6a3f8e', '#f2a6c4'], sky: ['#e6f3ff', '#ffffff', '#ffffff'] }[theme] || ['#2f74d0', '#5aa2ff', '#bfe3ff'];
+    const C = { day: ['#2f74d0', '#5aa2ff', '#bfe3ff'], sunset: ['#b4506e', '#e07a8a', '#ffd0b0'], night: ['#1b2550', '#2e3f86', '#7f95e6'], dusk: ['#3d2260', '#6a3f8e', '#f2a6c4'], sky: ['#e6f3ff', '#ffffff', '#ffffff'],
+      lava: ['#c2361b', '#ff7a1a', '#ffd84a'], ice: ['#5a9ed6', '#bfe9ff', '#ffffff'], pirate: ['#1f5f9e', '#3d8be0', '#bfe3ff'], haunted: ['#2a1f3d', '#4a3a6a', '#9a7acc'] }[theme] || ['#2f74d0', '#5aa2ff', '#bfe3ff'];
     for (let x = Math.max(0, Math.floor(cx)); x < Math.min(world.w * TILE, cx + W); x++) {
       if (this.groundTop(world, x) < base) continue;
       const wave = Math.round(Math.sin(x / 7 + this.t * 2) * 1.5 + Math.sin(x / 3 - this.t * 3) * 0.6), top = base - 9 + wave;
+      if (theme === 'lava') { l.fillStyle = '#ff7a1a22'; l.fillRect(x, top - 10, 1, 10); }
       l.fillStyle = C[0]; l.fillRect(x, top, 1, base - top);
       l.fillStyle = C[1]; l.fillRect(x, top, 1, 2);
       if ((x + Math.floor(this.t * 6)) % 11 === 0) { l.fillStyle = C[2]; l.fillRect(x, top, 1, 1); }

@@ -125,7 +125,7 @@ const PLAN = {   // per star rating: how many segments, how tiers are drawn, che
   2: { n: 12, tiers: [1, 2, 2, 2, 3], cp: 3, kinds: 5 },
   3: { n: 15, tiers: [2, 2, 3, 3, 3], cp: 5, kinds: 6 },
 };
-const THEMES = ['day', 'sunset', 'night', 'dusk'];
+const THEMES = ['day', 'sunset', 'night', 'dusk', 'lava', 'ice', 'pirate', 'haunted'];
 const ADJ = ['Breezy', 'Crooked', 'Sneaky', 'Rusty', 'Windy', 'Mossy', 'Dizzy', 'Wobbly', 'Shady', 'Spiky'];
 const NOUN = ['Ridge', 'Gulch', 'Trail', 'Hollow', 'Yard', 'Pass', 'Bluff', 'Run', 'Canyon', 'Alley'];
 

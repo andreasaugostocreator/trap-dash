@@ -305,6 +305,7 @@ function openLobby() {
     b.onclick = () => { lobby.level = i; sfx.click(); syncLobby(); openLobby(); };
     lv.appendChild(b);
   });
+  const on = lv.querySelector('.on'); if (on) lv.scrollLeft = Math.max(0, on.offsetLeft - lv.clientWidth / 2 + on.offsetWidth / 2);
   // Random levels: pick a difficulty, the host's device builds one and shares it.
   const rr = $('randRow'); rr.innerHTML = '';
   const cur = typeof lobby.level === 'object' ? lobby.level : null;

@@ -7,6 +7,8 @@
 //   U  pop-up wall (rises two tiles)     W  fan (blows upward)      v  ceiling spikes (always out)
 //   Z  saw rail (a blade runs along it)  K  k  laser facing right / left    D  bomb dropper (in a ceiling)
 //   Q  conveyor belt floor (runs back)   I  floor that freezes over
+//   M  moving platform (sideways)        N  lift (moves up and down)    L  crumbling stone     R  rope anchor
+//   j  solid ice (always slippery)
 function build(w, h, fn) {
   const g = Array.from({ length: h }, () => Array(w).fill('.'));
   const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < w && y < h) g[y][x] = c; };
@@ -116,6 +118,63 @@ export const LEVELS = [
       row(131, 135, 16, 'T'); ground(136, 148, 16); set(144, 15, 'G'); set(148, 15, '<');
     }),
   },
+  {
+    id: 'lava', name: 'Lava Caves', theme: 'lava',
+    map: build(130, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(129, 0, 129, 17); rect(1, 0, 128, 2); row(30, 34, 3, 'v'); row(64, 68, 3, 'v');
+      ground(1, 10, 14); set(3, 13, 'S'); row(11, 16, 14, 'L');
+      ground(17, 30, 14); set(20, 2, 'D'); set(25, 2, 'D'); set(28, 13, 'C');
+      row(31, 32, 14, 'M'); ground(41, 52, 14); set(45, 14, 'F'); set(49, 14, 'F');
+      ground(53, 56, 12); ground(57, 70, 10); row(59, 60, 9, 'P'); set(66, 9, 'C');
+      row(71, 72, 10, 'N'); ground(73, 84, 7); row(76, 78, 6, 'P'); set(82, 6, 'U');
+      ground(85, 100, 14); row(88, 89, 13, '^'); set(92, 13, 'C'); set(99, 13, '<');
+      rect(103, 5, 105, 6); set(104, 6, 'R');
+      ground(109, 128, 14); set(110, 13, '#'); set(118, 13, 'k'); set(124, 13, 'G');
+    }),
+  },
+  {
+    id: 'frost', name: 'Frost Castle', theme: 'ice',
+    map: build(130, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(129, 0, 129, 17);
+      ground(1, 24, 14); set(3, 13, 'S'); row(5, 11, 14, 'j');
+      rect(15, 4, 22, 7); row(16, 17, 8, 'X'); row(20, 21, 8, 'X');
+      rect(28, 6, 30, 7); set(29, 7, 'R');
+      ground(33, 44, 14); set(34, 13, 'C'); row(36, 41, 14, 'I'); set(42, 13, '^');
+      row(45, 50, 14, 'L'); ground(51, 62, 14); row(54, 58, 13, 'Z'); set(62, 13, '{');
+      ground(63, 70, 14); set(65, 13, 'C');
+      row(71, 72, 14, 'M');
+      ground(80, 86, 12); row(82, 86, 12, 'j'); row(87, 90, 12, 'T'); ground(91, 96, 12);
+      ground(97, 128, 14); set(103, 14, 'F'); set(107, 14, 'F'); set(100, 13, 'C'); row(112, 116, 14, 'j'); set(117, 13, '^'); set(124, 13, 'G');
+    }),
+  },
+  {
+    id: 'cove', name: 'Pirate Cove', theme: 'pirate',
+    map: build(140, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(139, 0, 139, 17);
+      ground(1, 10, 14); set(3, 13, 'S');
+      ground(14, 40, 12); rect(24, 13, 26, 17, '.'); row(24, 26, 12, 'T'); set(39, 11, '<'); set(31, 11, 'U');
+      rect(43, 4, 47, 4); set(45, 4, 'R');
+      ground(50, 75, 12); set(52, 11, 'C'); set(60, 11, 'U'); rect(64, 13, 66, 17, '.'); row(64, 66, 12, 'L'); set(75, 11, '{');
+      row(76, 77, 12, 'M');
+      ground(85, 100, 12); set(87, 11, 'C'); row(89, 94, 12, 'Q'); set(100, 11, '<');
+      ground(101, 138, 14); row(108, 110, 13, 'P'); rect(114, 7, 116, 7); set(115, 7, 'R'); rect(112, 13, 119, 17, '.'); set(134, 13, 'G');
+    }),
+  },
+  {
+    id: 'manor', name: 'Haunted Manor', theme: 'haunted',
+    map: build(140, 18, ({ set, rect, ground, row }) => {
+      rect(0, 0, 0, 17); rect(139, 0, 139, 17);
+      ground(1, 12, 14); set(3, 13, 'S'); row(13, 18, 14, 'L');
+      ground(19, 30, 14); set(20, 13, 'K'); set(30, 13, '#');
+      ground(31, 42, 14); rect(33, 5, 40, 8); row(33, 40, 9, 'v'); row(35, 37, 14, 'W');
+      ground(43, 46, 14); set(44, 13, 'C');
+      rect(50, 6, 52, 7); set(51, 7, 'R');
+      ground(56, 70, 14); row(60, 62, 13, 'P'); row(71, 74, 14, 'T'); ground(75, 86, 14); set(80, 2, '.');
+      row(87, 88, 14, 'N'); ground(89, 100, 9); set(90, 8, 'C'); set(93, 9, 'F'); set(96, 9, 'F');
+      row(101, 104, 9, 'L');
+      ground(105, 138, 14); row(110, 115, 13, 'Z'); set(122, 13, 'U'); set(134, 13, 'G'); set(137, 13, '<');
+    }),
+  },
 ];
 
 // Pixel palettes: sky bands top to bottom, background layers, grass [dark, mid, light, tip], dirt [darkest .. light].
@@ -128,6 +187,14 @@ export const THEMES = {
     grass: ['#245452', '#357a72', '#56a594', '#98e0c4'], dirt: ['#1f1833', '#2c2247', '#3c2f5e', '#4e3f76'], cloud: ['#3a4080', '#2c3168'], line: '#0e0b1a' },
   sky: { sky: ['#3fa6ff', '#68bcff', '#97d2ff', '#cdeaff'], far: 'clouds', farCol: ['#e6f3ff', '#ffffff', '#c3dcf5'], near: 'clouds2', nearCol: ['#f4f9ff', '#ffffff', '#d4e6f8'],
     grass: ['#a9c6ea', '#dfeeff', '#ffffff', '#ffffff'], dirt: ['#6e8fc4', '#87a7d6', '#a0bde4', '#bcd2ef'], cloud: ['#ffffff', '#e1efff'], line: '#24304f' },
+  lava: { sky: ['#1a0d0d', '#2b1210', '#3d1812', '#5a2214'], far: 'cave', farCol: ['#2a1414', '#3d1d18', '#ff7a1a'], near: 'cave2', nearCol: ['#1e0e0c', '#2e1612', '#ff9a3c'],
+    grass: ['#1c1414', '#3a2a2a', '#5a4040', '#ff7a1a'], dirt: ['#1a1010', '#2a1a18', '#3a2622', '#4e3530'], cloud: ['#4a3030', '#3a2424'], line: '#0c0606' },
+  ice: { sky: ['#9fd3f5', '#bfe3fa', '#dff1fd', '#f2faff'], far: 'mountains', farCol: ['#9ab8e0', '#c4dcf5', '#ffffff'], near: 'spires', nearCol: ['#7fb6e6', '#bfe0ff', '#5a8ec4'],
+    grass: ['#a8c8e8', '#e6f3ff', '#ffffff', '#ffffff'], dirt: ['#3a5a8a', '#5a7fb0', '#7aa0cc', '#a0c4e8'], cloud: ['#ffffff', '#e1efff'], line: '#1c2a44' },
+  pirate: { sky: ['#3fa6ff', '#68bcff', '#97d2ff', '#cdeaff'], far: 'sea', farCol: ['#1f5f9e', '#3d8be0', '#2a3a5a'], near: 'palms', nearCol: ['#d9b26a', '#2f7a45', '#5a3a1a'],
+    grass: ['#7a4b26', '#b07a45', '#d9a066', '#f0c08a'], dirt: ['#3a2414', '#5a3a20', '#6e4828', '#83582f'], cloud: ['#ffffff', '#d8ecff'], line: '#1c1424' },
+  haunted: { sky: ['#120d1e', '#1c1430', '#2a1f45', '#3a2a5a'], stars: true, far: 'mansion', farCol: ['#1e1630', '#2c2244', '#ffd84a'], near: 'deadtrees', nearCol: ['#140f22', '#221a36', '#0c0816'],
+    grass: ['#3a4a3a', '#566656', '#7a8a6a', '#a0b090'], dirt: ['#1e1a28', '#2c2638', '#3c3448', '#4e4560'], cloud: ['#4a3a6a', '#3a2c55'], line: '#0a0610' },
   dusk: { sky: ['#2d2152', '#4a3075', '#83508f', '#d67896'], far: 'mountains', farCol: ['#3e2a66', '#52387f', '#f2a6c4'], near: 'pines', nearCol: ['#26193f', '#33224f', '#1a1030'],
     grass: ['#7a2f5e', '#b44f86', '#f07fb4', '#ffc0dc'], dirt: ['#221425', '#331f38', '#47304c', '#5d4162'], cloud: ['#f2a6c4', '#b07aa8'], line: '#140b18' },
 };

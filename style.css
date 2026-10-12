@@ -438,3 +438,7 @@ body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 .tro { display: flex; gap: 8px; align-items: center; background: #efe3cc; padding: 5px 8px; box-shadow: 0 0 0 2px var(--ink); opacity: .55; }
 .tro.got { background: #fff6c8; opacity: 1; box-shadow: 0 0 0 2px var(--ink), inset 0 -3px 0 #ffd84a; }
 .tro b { display: block; font-size: 15px; } .tro small { color: var(--muted); font-size: 13px; }
+/* ---------- the level picker: one swipeable row of cards */
+.levels, #lobby .levels { display: flex; grid-template-columns: none; overflow-x: auto; overflow-y: hidden; gap: 8px; padding: 4px 4px 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; touch-action: pan-x; overscroll-behavior-x: contain; scrollbar-width: thin; }
+.levels button, #lobby .levels button { flex: 0 0 auto; width: 150px; scroll-snap-align: start; white-space: normal; }
+@media (max-height: 500px), (max-width: 440px) { .levels button, #lobby .levels button { width: 128px; } }

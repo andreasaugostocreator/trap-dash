@@ -4,12 +4,12 @@ import { TILE, PHYS, TRAPS, TRAP_LOCK, GADGETS } from './config.js';
 import { chooseLoadout } from './loadout.js';
 
 export const EMPTY = 0, SOLID = 1, ONEWAY = 2, SPIKE = 3, SPRING = 4, DOOR = 5, CANNON = 6, NOZZLE = 7, TURRET = 8, FAN = 9, WALL = 10, CEILSPIKE = 11,
-  RAIL = 12, LASER = 13, DROPPER = 14, BELT = 15, ICE = 16, CRUMBLE = 17, ANCHOR = 18;
+  RAIL = 12, LASER = 13, DROPPER = 14, BELT = 15, ICE = 16, CRUMBLE = 17, ANCHOR = 18, ICEFLOOR = 19;
 const STATES = ['idle', 'warn', 'active', 'recover'];
 const GROUPED = { P: 'spikes', T: 'trapdoor', X: 'crusher', F: 'flame', W: 'fan', Z: 'saw', Q: 'conveyor', I: 'ice' };
 const TILE_OF = { '#': SOLID, '=': ONEWAY, '^': SPIKE, B: SPRING, T: DOOR, '<': CANNON, '>': CANNON, F: NOZZLE, '{': TURRET, '}': TURRET, W: FAN, U: WALL,
-  v: CEILSPIKE, Z: RAIL, K: LASER, k: LASER, D: DROPPER, Q: BELT, I: ICE, L: CRUMBLE, R: ANCHOR };
-const SOLIDS = new Set([SOLID, CANNON, NOZZLE, SPRING, TURRET, FAN, LASER, DROPPER, BELT, ICE, ANCHOR]);
+  v: CEILSPIKE, Z: RAIL, K: LASER, k: LASER, D: DROPPER, Q: BELT, I: ICE, L: CRUMBLE, R: ANCHOR, j: ICEFLOOR };
+const SOLIDS = new Set([SOLID, CANNON, NOZZLE, SPRING, TURRET, FAN, LASER, DROPPER, BELT, ICE, ANCHOR, ICEFLOOR]);
 // Platforms that move: speed in px/s, how far they travel at most (tiles). Crumbling tiles: shake time, how long they stay gone.
 export const MOVER = { speed: 42, maxRange: 7 }, CRUMBLE_T = { shake: 0.45, gone: 3 }, ROPE = { maxLen: 5, pump: 5.5, release: 270 };
 const r1 = v => Math.round(v * 10) / 10;
@@ -391,6 +391,12 @@ export class World {
     }
   }
 
+  onTile(kind) {   // is the runner standing on a tile of this kind?
+    const p = this.player;
+    if (!p.onGround) return false;
+    const ty = Math.floor((p.y + PHYS.h + 1) / TILE);
+    return this.tile(Math.floor((p.x + 1) / TILE), ty) === kind || this.tile(Math.floor((p.x + PHYS.w - 1) / TILE), ty) === kind;
+  }
   standingOn(kind) {   // an active floor trap of this kind under the runner's feet
     const p = this.player;
     if (!p.onGround) return null;
@@ -433,7 +439,7 @@ export class World {
     if (p.rev > 0) [L, R] = [R, L];
     if (stunned) L = R = false;
     p.slow = this.fx.some(f => f.k === 'glue' && p.onGround && p.x + PHYS.w > f.x0 && p.x < f.x1 && Math.abs(p.y + PHYS.h - f.y) < 2);
-    p.icy = p.frost > 0 || !!this.standingOn('ice');
+    p.icy = p.frost > 0 || !!this.standingOn('ice') || this.onTile(ICEFLOOR);
     const belt = p.anchor > 0 ? null : this.standingOn('conveyor');
     p.carry = belt ? TRAPS.conveyor.carry : 0;
     // Wind carries you like a belt does, whatever you press: running into it crawls, jumps fall short.
