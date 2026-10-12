@@ -192,6 +192,7 @@ $('joinGo').onclick = async () => {
   mode = 'online'; isHost = false; roomCode = code; score = { a: 0, b: 0 };
   try {
     await net.join(code);
+    saveSession();
     net.send({ t: 'hi', name: me.name, char: me.char });
     players = { a: null, b: { name: me.name, char: me.char } };
     openLobby();
@@ -204,15 +205,21 @@ $('joinGo').onclick = async () => {
   $('joinGo').disabled = false;
 };
 
+let pendingStart = null;
 net.onMessage = m => {
   if (m.t === 'hi' && isHost) {
     const char = charOf(m.char).id === players.a.char ? otherChar(players.a.char) : charOf(m.char).id;
+    const back = m.rejoin && players.b;
     players.b = { name: String(m.name || 'Friend').slice(0, 12), char };
-    score = { a: 0, b: 0 }; runs = [];
+    if (!back) { score = { a: 0, b: 0 }; runs = []; }
+    if (back && run && performance.now() - lastRestart > 3000) restartRound();
     syncLobby(); if (!run) openLobby();
     toast(players.b.name + ' joined!');
+  } else if ((m.t === 'start' || m.t === 'stage') && !isHost && (!players.a || !players.b)) {
+    pendingStart = m;   // after a reload we don't know the players yet: start once the lobby arrives
   } else if (m.t === 'lobby' && !isHost) {
     players = m.players; lobby = m.lobby; score = m.score;
+    if (pendingStart) { const p = pendingStart; pendingStart = null; net.onMessage(p); return; }
     if (!run) openLobby();
   } else if (m.t === 'full') {
     toast('That party is already full.'); nav('title');
@@ -239,10 +246,63 @@ net.onMessage = m => {
     friendLeft();
   }
 };
-net.onLost = () => friendLeft();
+// ---------- reconnecting: the host keeps the friend's place for a minute, the guest keeps trying with the same id
+const REJOIN_WAIT = 60;
+let waitTimer = null;
+function netBanner(text) { const b = $('netWait'); if (!text) { b.classList.add('hidden'); return; } b.innerHTML = text; b.classList.remove('hidden'); }
+net.onLost = () => {
+  if (mode !== 'online') return;
+  if (run) run.paused = true;
+  if (isHost) {
+    if (!players.b) return friendLeft();
+    const until = performance.now() + REJOIN_WAIT * 1000, name = esc(players.b.name);
+    clearInterval(waitTimer);
+    const tick = () => {
+      const left = Math.ceil((until - performance.now()) / 1000);
+      if (left <= 0) { clearInterval(waitTimer); netBanner(null); return friendLeft(); }
+      netBanner(`<b>📡 Lost ${name}</b><small>Waiting for them to come back… ${left}s</small>`);
+    };
+    tick(); waitTimer = setInterval(tick, 500);
+  } else guestRejoin();
+};
+net.onBack = () => {
+  clearInterval(waitTimer); netBanner(null);
+  toast(players.b.name + ' is back!'); sfx.cp();
+  syncLobby();
+  if (run) restartRound();
+};
+let lastRestart = -1e9;
+function restartRound() {   // after a reconnect the round starts over; the score stays
+  const r = run; lastRestart = performance.now();
+  if (r.endless) { const e = { ...r.endless }; net.send({ t: 'stage', level: r.level, runner: r.runner, endless: e }); startRun(r.level, r.runner, 0, e); }
+  else hostStart(r.level, r.runner, r.n || 1);
+}
+async function guestRejoin(fromReload) {
+  const code = roomCode, gid = net.gid, until = performance.now() + REJOIN_WAIT * 1000;
+  for (let attempt = 1; performance.now() < until && mode === 'online'; attempt++) {
+    netBanner(`<b>📡 Connection lost</b><small>Reconnecting to the party… (try ${attempt})</small>`);
+    try {
+      await net.join(code, gid);
+      netBanner(null); toast('Reconnected!'); sfx.cp();
+      saveSession();
+      if (fromReload) { players = { a: null, b: { name: me.name, char: me.char } }; net.send({ t: 'hi', name: me.name, char: me.char, rejoin: true }); }
+      return true;
+    } catch (e) {
+      if (e && e.type === 'full') break;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+  netBanner(null);
+  if (mode === 'online' && !isHost) { forgetSession(); friendLeft(); }
+  return false;
+}
+// A guest remembers the party for a few minutes, so closing the app or reloading the page rejoins the same party.
+const saveSession = () => store.set('session', { code: roomCode, gid: net.gid, t: Date.now() });
+const forgetSession = () => store.set('session', null);
 
 function friendLeft() {
   if (mode !== 'online') return;
+  clearInterval(waitTimer); netBanner(null);
   if (isHost) {
     const n = players.b ? players.b.name : 'Your friend';
     net.dropGuest();
@@ -255,7 +315,8 @@ function friendLeft() {
 }
 
 function leaveParty() {
-  if (mode === 'online') net.close();
+  if (mode === 'online') { net.close(); forgetSession(); }
+  clearInterval(waitTimer); netBanner(null);
   mode = null; players = { a: null, b: null }; endRunView();
 }
 
@@ -1105,7 +1166,12 @@ function drawAttract(dt) {
 R.resize(); addEventListener('resize', () => R.resize());
 buildTitle();
 const q = new URLSearchParams(location.search);
+const session = store.get('session', null);
 if (q.get('join')) { $('code').value = cleanCode(q.get('join')); show('join'); }
+else if (session && Date.now() - session.t < 5 * 60 * 1000) {   // the app was closed mid-party: go straight back in
+  show('title'); mode = 'online'; isHost = false; roomCode = session.code; net.gid = session.gid; score = { a: 0, b: 0 };
+  guestRejoin(true).then(ok => { if (!ok) { mode = null; show('title'); } });
+}
 else show('title');
 requestAnimationFrame(frame);
 window.__td = { get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };

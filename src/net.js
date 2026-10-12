@@ -27,11 +27,11 @@ const useRelay = () => !Q().has('norelay');
 const relayUrls = () => (Q().get('relay') ? [Q().get('relay')] : BROKERS);
 
 export class Net {
-  constructor() { this.onMessage = () => {}; this.onLost = () => {}; this.onPeer = () => {}; this.reset(); }
+  constructor() { this.onMessage = () => {}; this.onLost = () => {}; this.onPeer = () => {}; this.onBack = () => {}; this.reset(); }
 
   reset() {
     this.peer = null; this.conn = null; this.relay = null; this.code = ''; this.role = null;
-    this.guest = null; this.gid = null; this.lastHeard = 0; clearInterval(this.ping); this.ping = null;
+    this.guest = null; this.gid = null; this.lastHeard = 0; clearInterval(this.ping); this.ping = null; this.waiting = false;
   }
 
   get connected() { return !!this.ping; }
@@ -63,18 +63,19 @@ export class Net {
     return code;
   }
 
-  // A guest said hello (through either transport).
+  // A guest said hello (through either transport). The same guest coming back after a drop is a reconnect.
   welcome(gid) {
-    const fresh = this.guest !== gid;
-    this.guest = gid;
+    const fresh = this.guest !== gid, back = !fresh && this.waiting;
+    this.guest = gid; this.waiting = false;
     this.relaySend({ t: 'welcome' });
     if (fresh) { this.startLiveness(); this.onPeer(); }
+    else if (back) { this.startLiveness(); this.onBack(); }
   }
 
   // ---------- guest: knock on the relay and try a direct link at the same time
-  join(code) {
+  join(code, gid) {
     this.close(true);
-    this.code = code; this.role = 'guest'; this.gid = rid();
+    this.code = code; this.role = 'guest'; this.gid = gid || rid();
     return new Promise((resolve, reject) => {
       let done = false, noHost = false, knock = null;
       const finish = err => {
@@ -158,15 +159,16 @@ export class Net {
     }, 1500);
   }
 
+  // Nothing heard for a while. The host keeps the guest's place (waiting) so the same guest can come back.
   lost() {
     if (!this.ping) return;
     clearInterval(this.ping); this.ping = null;
-    if (this.role === 'host') { this.guest = null; if (this.conn) { try { this.conn.close(); } catch { /* gone */ } this.conn = null; } }
+    if (this.role === 'host') { this.waiting = true; if (this.conn) { try { this.conn.close(); } catch { /* gone */ } this.conn = null; } }
     this.onLost();
   }
 
   // The host's room stays open after a guest leaves; a guest disconnects fully.
-  dropGuest() { this.guest = null; clearInterval(this.ping); this.ping = null; if (this.conn) { try { this.conn.close(); } catch { /* gone */ } this.conn = null; } }
+  dropGuest() { this.guest = null; this.waiting = false; clearInterval(this.ping); this.ping = null; if (this.conn) { try { this.conn.close(); } catch { /* gone */ } this.conn = null; } }
 
   close(quiet) {
     if (!quiet && this.ping) this.send({ t: 'bye' });
