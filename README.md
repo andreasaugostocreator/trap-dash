@@ -18,6 +18,13 @@ Six runners to pick from: Explorer, Knight, Astronaut, Ninja, Robot and Pirate. 
   plus **random levels** of the difficulty you pick, and **∞ Endless**: new stages one after another with no clock; swap sides from the menu.
 - **13 traps in 4 families:** spikes, flame, crusher, saw (zone); cannon, arrows, laser, bomb dropper (emitter); trapdoor, pop-up wall, ice (floor); fan, conveyor belt (force).
 - **24 gadgets**, never deadly on their own. Each map deals 4 to each side, chosen from its traps and layout (`src/loadout.js`).
+- **4 more worlds:** Lava Caves, Frost Castle, Pirate Cove, Haunted Manor, each with its own look, music and ambience.
+- **Moving platforms, lifts, crumbling stones and swinging ropes.**
+- **Trapper score:** points for every catch, combos for quick catches, a bonus for each new trap kind; a "trap king" per level.
+- **Best of 3 matches** with a trophy screen, **achievements** (🏆 Trophies on the title screen), a **level preview** before each round,
+  the **ghost** of the last run, **vibration**, and **reconnecting** after a dropped connection (or a reload) without losing the score.
+- **Training** for each role (How to play → Runner / Trapper training).
+- Settings (⚙): sound, music, vibration, ghost, level preview, screen shake.
 - See [DESIGN.md](DESIGN.md) for the trap families, the difficulty model and how random levels are built.
 - Phone friendly (landscape is best), installable as a home-screen app, chiptune music and sound effects.
 
@@ -59,6 +66,7 @@ Bump `VERSION` in `sw.js` on each release so phones pick up the update.
 - `node tools/rate.mjs -v`: star rating of each level with the threat of every trap. `node tools/gen.mjs`: random level stats.
 - `tools/gadget-test.mjs`, `tools/random-test.mjs`, `tools/trapbar-test.mjs`, `tools/endless-test.mjs`, `tools/new-stuff-test.mjs`: browser tests (need the relay broker).
 - `node tools/segments.mjs`: checks every generator segment can be passed.
+- More browser tests: `score-test`, `match-test`, `achv-test`, `online-preview-test`, `reconnect-test`, `tutorial-test` (in `tools/`).
 - `node tools/broker.mjs` + `node tools/relay-broker.mjs` + `npm run shots`: plays through local, practice (phone sizes) and online mode
   (two browsers through local PeerJS and MQTT brokers; `Q='?nop2p&relay=ws://127.0.0.1:8883'` tests the relay alone) and saves screenshots to `shots/`.
 - `node tools/make-icons.mjs`: renders the app icons. `tools/sheet.html` shows every sprite.

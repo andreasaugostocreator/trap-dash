@@ -448,3 +448,9 @@ body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
   box-shadow: 0 0 0 3px #ffd84a, 0 0 0 6px var(--ink); display: flex; flex-direction: column; gap: 6px; animation: netPulse 1.2s ease-in-out infinite alternate; }
 .netWait b { font-family: 'Press Start 2P', monospace; font-size: 13px; } .netWait small { font-size: 15px; color: #ffd84a; }
 @keyframes netPulse { to { box-shadow: 0 0 0 3px #ff7b8a, 0 0 0 6px var(--ink); } }
+
+/* ---------- training */
+.hint.tut { font-size: 18px; padding: 8px 16px; background: #fff6c8; box-shadow: 0 0 0 3px var(--ink), 0 0 0 6px #ffd84a, 0 8px 0 rgba(28, 20, 36, .4); animation: tutIn .35s cubic-bezier(.2, 1.5, .4, 1); max-width: min(560px, 92vw); }
+@keyframes tutIn { from { transform: translateX(-50%) scale(.85); opacity: .3; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
+@media (max-height: 500px) { .hint.tut { font-size: 15px; padding: 6px 12px; } }
+.tutRow { margin: 4px 0 8px; } .tutRow button { flex: 1; }

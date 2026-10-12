@@ -17,6 +17,7 @@ const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { TrapScore, titleFor } from './score.js';
+import { TRAINING, Tutorial } from './tutorial.js';
 import { ACHIEVEMENTS, unlock, has, count as achCount, bump } from './achievements.js';
 
 const $ = id => document.getElementById(id);
@@ -83,6 +84,7 @@ function animateTitle(dt) {
   const on = document.querySelector('.swatch.on canvas');
   if (on) { const y = on.getContext('2d'); y.clearRect(0, 0, 16, 18); y.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1); }
 }
+if (!store.get('seenTip', false)) { store.set('seenTip', true); setTimeout(() => toast('New here? Try the training in “How to play”.'), 900); }
 // On iPhone Safari the browser keeps a strip at the bottom; the home-screen app is true full screen.
 if (/iP(hone|od)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches)
   setTimeout(() => toast('Tip: Share → Add to Home Screen plays in full screen'), 1500);
@@ -118,8 +120,9 @@ function openSettings(back) {
   $('setDone').onclick = () => { sfx.click(); back(); };
 }
 R.shakeOn = settings.shake;
-$('howBtn').onclick = () => panel(`
+$('howBtn').onclick = () => { panel(`
   <h2>How to play</h2>
+  <div class="row tutRow"><button class="mid pink" id="tutRun">🏃 Runner training</button><button class="mid blue" id="tutTrap">🪤 Trapper training</button></div>
   <ul class="help">
     <li><b>The runner</b> dashes from the start to the checkered flag. Move with <b>← →</b> or <b>A D</b>, jump with <b>Space</b>, <b>W</b> or <b>↑</b> (hold for higher). On a phone, use the buttons.</li>
     <li><b>The trapper</b> uses the trap bar (or keys 1-6) to fire the nearest trap of each kind: spikes, trapdoors, walls, cannons, arrows, crushers, flames, fans, saws, lasers, bombs, conveyor belts and ice.</li>
@@ -130,6 +133,9 @@ $('howBtn').onclick = () => panel(`
     <li><b>∞ Endless</b>: stage after stage of new levels, no clock. Swap sides whenever you like from the <b>II</b> menu.</li>
   </ul>
   <div class="buttons"><button class="big pink" data-close>Got it</button></div>`);
+  $('tutRun').onclick = () => { sfx.click(); startTutorial('runner'); };
+  $('tutTrap').onclick = () => { sfx.click(); startTutorial('trapper'); };
+};
 
 document.addEventListener('click', e => {
   const go = e.target.closest('[data-go]'); if (go) { unlockAudio(); sfx.click(); nav(go.dataset.go); }
@@ -761,19 +767,35 @@ function layoutControls() {
 }
 
 // ---------- a run
-function startRun(level, runner, n, endless = null) {
+// ---------- training: a guided level for each role
+function startTutorial(role) {
+  unlockAudio(); hidePanel();
+  mode = 'tutorial'; isHost = true;
+  players = { a: { name: me.name, char: me.char }, b: { name: 'Coach Bot', char: otherChar(me.char) } };
+  score = { a: 0, b: 0 }; runs = [];
+  startRun(TRAINING, role === 'runner' ? 'a' : 'b', 1, null, role);
+}
+function updateTutorial() {
+  const t = run.tut, before = t.text;
+  if (t.role === 'runner') t.runner(run.world, 1 / 60); else t.trapper(run.world, 1 / 60, run.tutCaught);
+  run.tutCaught = false;
+  if (t.text !== before && run.phase !== 'preview') { const h = $('hint'); h.textContent = t.text; h.classList.remove('hidden'); h.style.animation = 'none'; void h.offsetWidth; h.style.animation = ''; }
+}
+
+function startRun(level, runner, n, endless = null, tutRole = null) {
   forgetTyping();
   hidePanel();
   show(null);
   const world = new World(levelOf(level));
   const online = mode === 'online';
-  const runnerHere = !online || runner === mySide();
+  const runnerHere = mode === 'tutorial' ? tutRole === 'runner' : !online || runner === mySide();
   run = {
     level, runner, n, world, phase: 'count', countT: 3.2, previewT: 0, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
-    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere), simOwner: runnerHere, held: new Map(),
+    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere) || (mode === 'tutorial' && !runnerHere), simOwner: runnerHere || mode === 'tutorial', held: new Map(),
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5, endless,
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
+  if (tutRole) { run.tut = new Tutorial(tutRole, touchDevice, kind => run.kinds.indexOf(kind) + 1); run.countT = 1.5; }
   run.score = new TrapScore(); run.closes = 0;
   if (endless && runnerHere) run.nextGen = genAsync(endless.stars);
   const Lv = levelOf(level);
@@ -782,13 +804,14 @@ function startRun(level, runner, n, endless = null) {
   if (endless && endless.stage >= 10) achieve('endless10');
   run.trail = [];
   run.ghost = settings.ghost && lastGhost && !endless && lastGhost.key === levelKey(level) ? lastGhost : null;
-  run.preview = settings.preview && !(endless && endless.stage > 1);
+  run.preview = settings.preview && !(endless && endless.stage > 1) && !tutRole;
   if (endless && endless.score) Object.assign(run.score, endless.score, { kinds: new Set(), lastT: -99, streak: 0 });
   R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
   $('hud').classList.remove('hidden');
   const role = $('role');
   if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
   else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = levelOf(level).name; }
+  else if (mode === 'tutorial') { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = 'Training Grounds'; }
   else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
   if (endless) $('who').textContent = `∞ ${starText(endless.stars)} · Stage ${endless.stage}` + (mode === 'online' ? (runnerHere ? '' : ` · ${players[runner].name} runs`) : mode === 'local' ? ` · ${players[runner].name} runs` : '');
   buildTrapBar();
@@ -810,7 +833,7 @@ function gameEvent(e) {
   R.onEvent(e, run.colors); playEvent(e);
   if (k === 'die') buzz(run.runnerHere ? [60, 40, 90] : 25);
   if ((k === 'stun' || k === 'block') && run.runnerHere) buzz(35);
-  if (k === 'catch') onCatch(extra);
+  if (k === 'catch') { onCatch(extra); run.tutCaught = true; }
   if (k === 'block' && run.runnerHere) achieve('shield_save');
 }
 R.onClose = () => { sfx.whoosh(); if (run && run.runnerHere) { buzz(12); if (++run.closes >= 5) achieve('close5'); } };
@@ -955,6 +978,18 @@ function showRunResult(res) {
   if (!run) return;
   const name = players[res.runner].name, L = levelOf(run.level);
   const controls = mode !== 'online' || isHost;
+  if (mode === 'tutorial') {
+    const trap = run.tut.role === 'trapper', other = trap ? 'runner' : 'trapper';
+    panel(`<div class="big-emoji">🎓</div><h2>Training complete!</h2>
+      <p>${trap ? `You caught the Coach Bot ${run.score.catches} ${run.score.catches === 1 ? 'time' : 'times'} (${run.score.pts} points).` : `You reached the flag in ${res.time.toFixed(1)}s with ${res.deaths} ${res.deaths === 1 ? 'fall' : 'falls'}.`}</p>
+      <p>Now grab a friend: host a party, or play on the same screen.</p>
+      <div class="buttons"><button class="big pink" id="tutNext">${trap ? '🏃 Runner training' : '🪤 Trapper training'}</button>
+      <div class="row"><button class="mid" id="tutAgain">Again</button><button class="mid" id="tutDone">Main menu</button></div></div>`);
+    $('tutNext').onclick = () => { sfx.click(); startTutorial(other); };
+    $('tutAgain').onclick = () => { sfx.click(); startTutorial(run.tut.role); };
+    $('tutDone').onclick = () => { sfx.click(); nav('title'); };
+    return;
+  }
   if (mode === 'practice') {
     const best = store.get('best', {}), prev = L.random ? null : best[L.id];
     const record = res.finished && (!prev || res.time < prev);
@@ -1051,7 +1086,7 @@ function togglePause() {
   $('resume').onclick = () => { sfx.click(); hidePanel(); if (run) run.paused = false; };
   if ($('swapBtn')) $('swapBtn').onclick = () => { sfx.click(); swapSides(); };
   if ($('endBtn')) $('endBtn').onclick = () => { sfx.click(); if (online) net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
-  $('quitRun').onclick = () => { sfx.click(); if (online) nav('title'); else { endRunView(); openLobby(); } };
+  $('quitRun').onclick = () => { sfx.click(); if (online || mode === 'tutorial') nav('title'); else { endRunView(); openLobby(); } };
   $('pSet').onclick = () => { sfx.click(); openSettings(() => { hidePanel(); togglePause(); }); };
 }
 $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
@@ -1083,6 +1118,8 @@ function tick(dt, now) {
     }
     if (run.countT <= 0) { run.phase = 'play'; input.jumpQueued = false; setTimeout(() => $('count').classList.add('hidden'), 450); }
   }
+  if (run.tut) { if (run.phase === 'play') updateTutorial(); run.hintT = 99; }
+  $('hint').classList.toggle('tut', !!run.tut);
   run.hintT -= dt; if (run.hintT <= 0) $('hint').classList.add('hidden');
   for (const id in run.pending) run.pending[id] -= dt;
 
@@ -1091,7 +1128,7 @@ function tick(dt, now) {
     while (run.acc >= DT) {
       run.acc -= DT;
       if (run.phase === 'play') {
-        w.step(DT, { left: input.left, right: input.right, jump: input.jump, jumpPressed: input.jumpQueued });
+        w.step(DT, run.tut && run.tut.role === 'trapper' ? run.tut.botInput(w, DT) : { left: input.left, right: input.right, jump: input.jump, jumpPressed: input.jumpQueued });
         input.jumpQueued = false;
         if (run.bot) run.bot.think(w, DT);
         if (run.steps % 6 === 0 && !run.endless) { const p = w.player; run.trail.push(Math.round(p.x), Math.round(p.y), (p.face > 0 ? 1 : 0) | (p.onGround ? 2 : 0) | (p.dead ? 4 : 0)); }

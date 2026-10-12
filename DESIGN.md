@@ -216,3 +216,29 @@ A row of flames could be outrun: after the first one fired, the 0.25 s lock plus
 time to clear the next one too. Now, for 1 s after a flame fires (and the whole time one is burning), any other flame
 skips the lock and lights after 0.03 s instead of 0.12 s. The first flame still warns normally, so it stays fair; the rest
 of the row follows the runner. Other trap kinds still wait out the lock.
+
+
+## 7. Party features
+
+- **Trapper score** (`src/score.js`): a trap catch is 100, an assist (the runner falls or hits static spikes within 3 s of
+  something the trapper did) is 60, the first catch with each new trap kind after the first adds 50, and catches less than
+  6 s apart multiply: ×1.5, ×2, ×2.5… Titles from Rookie to Evil Genius. Both devices compute it from the same events.
+- **Best of 3:** the first to win two levels gets the trophy screen.
+- **Ghost:** the runner's device records its position 10 times a second and sends it with the result; in the second run of
+  the same level both devices draw it. Off in Settings.
+- **Level preview:** before a round the camera flies to the flag and back (3.4 s, tap to skip, off in Settings) while a banner
+  shows the level and each side's gadgets.
+- **Achievements** (`src/achievements.js`): 18, kept on the device.
+- **Reconnect:** the host keeps a dropped guest's place for 60 s; the guest retries with the same id, and a guest whose page
+  reloads within 5 minutes rejoins the same party. The round restarts, the score is kept.
+
+## 8. Moving things and new worlds
+
+- **Moving platforms** (`M` sideways, `N` lifts) go back and forth until the next wall, at most 7 tiles. Their position is a
+  function of the clock, so both devices agree without sending it. You land on them from above and they carry you.
+- **Crumbling stones** (`L`) shake for 0.45 s after you step on them, drop, and come back 3 s later.
+- **Ropes** (`R`, an iron block the rope hangs from) are pendulums: grab one in the air, left/right pumps the swing, jump lets go
+  with the swing's speed.
+- **Solid ice** (`j`) is always slippery.
+- Worlds: Lava Caves (lava pits, embers, falling rocks), Frost Castle (snow, icicles, ice floors), Pirate Cove (decks, ropes
+  between ships, the sea), Haunted Manor (graves, pumpkins, wisps). Random levels use them too, and are built in a Web Worker.
