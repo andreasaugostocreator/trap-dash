@@ -1,0 +1,89 @@
+<!doctype html><meta charset="utf-8"><style>html,body{margin:0;background:#000}canvas{display:block;image-rendering:pixelated}</style><canvas></canvas>
+<script type="module">
+// App icon ideas, each a 32x32 pixel picture drawn with the game's own sprites, scaled up with nearest-neighbour.
+import { CHARS, charFrame, initSprites, SPR } from '../src/sprites.js';
+initSprites();
+const ch = id => CHARS.find(c => c.id === id);
+const mk = () => { const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d'); x.imageSmoothingEnabled = false; return [c, x]; };
+const R = (x, a, b, w, h, col) => { x.fillStyle = col; x.fillRect(a, b, w, h); };
+const sky = (x, cols) => { for (let j = 0; j < 32; j++) R(x, 0, j, 32, 1, cols[Math.min(cols.length - 1, Math.floor(j / (32 / cols.length)))]); };
+const disc = (x, cx, cy, r, col) => { for (let j = -r; j <= r; j++) for (let i = -r; i <= r; i++) if (i * i + j * j <= r * r + r * 0.3) R(x, cx + i, cy + j, 1, 1, col); };
+const ink = '#1c1424';
+const IDEAS = {};
+
+// 1. Dash Jump: a ninja leaping over glowing spikes against a sunset, with a speed trail
+IDEAS.dash = (() => { const [c, x] = mk();
+  sky(x, ['#ff6f61', '#ff9466', '#ffbb7a', '#ffdfa0']);
+  disc(x, 24, 9, 4, '#fff1b8'); disc(x, 24, 9, 3, '#ffe27a');
+  R(x, 0, 24, 32, 1, ink); R(x, 0, 25, 32, 2, '#55a83a'); R(x, 0, 27, 32, 5, '#62331f'); R(x, 0, 27, 32, 1, '#2f7a2c');
+  for (let i = 0; i < 4; i++) { const sx = 15 + i * 4; R(x, sx + 1, 20, 1, 1, '#fff'); R(x, sx, 21, 3, 1, '#c8ccd8'); R(x, sx - 1, 22, 5, 2, '#9aa3b5'); R(x, sx - 1, 23, 5, 1, ink); }
+  R(x, 13, 22, 18, 1, '#ff5d6a55');
+  for (let k = 3; k >= 1; k--) { x.globalAlpha = 0.18 * k; x.drawImage(charFrame(ch('ninja'), 'jump', 1, 0), 3 - k * 3, 6 + k); }
+  x.globalAlpha = 1; x.drawImage(charFrame(ch('ninja'), 'jump', 1, 0), 6, 4);
+  return c; })();
+
+// 2. The Trap Button: a big red arcade button with a warning sign and the runner sprinting across it
+IDEAS.button = (() => { const [c, x] = mk();
+  sky(x, ['#2a1f3d', '#33264a', '#3a2c55']);
+  for (let i = 0; i < 12; i++) R(x, (i * 7 + 3) % 32, (i * 11 + 2) % 14, 1, 1, i % 3 ? '#8f95d6' : '#fff');
+  for (let j = 0; j < 7; j++) { const w = 28 - Math.abs(j - 3) * 0.6; R(x, 16 - w / 2, 24 + j, w, 1, j < 3 ? '#5d6475' : '#3b3f52'); }
+  for (let j = 0; j < 10; j++) { const half = Math.round(Math.sqrt(Math.max(0, 11 * 11 - (j - 10) * (j - 10))) * 1.15); R(x, 16 - half, 15 + j, half * 2, 1, j < 3 ? '#ff8a96' : j < 8 ? '#e8414f' : '#a3202e'); }
+  R(x, 8, 17, 5, 1, '#ffc0c8'); R(x, 7, 18, 3, 1, '#ffc0c8');
+  R(x, 11, 18, 2, 4, '#fff'); R(x, 11, 23, 2, 1, '#fff');
+  x.drawImage(charFrame(ch('robot'), 'run1', 1, 0), 16, 0);
+  R(x, 9, 4, 5, 1, '#ffffffaa'); R(x, 7, 7, 6, 1, '#ffffffaa'); R(x, 10, 10, 4, 1, '#ffffffaa');
+  return c; })();
+
+// 3. TD badge: the logo's letters on a wooden sign
+IDEAS.badge = (() => { const [c, x] = mk();
+  R(x, 0, 0, 32, 32, '#5fb8ff'); R(x, 0, 22, 32, 10, '#47ad4b'); R(x, 0, 22, 32, 1, '#7bd65a');
+  R(x, 2, 5, 28, 20, ink); R(x, 3, 6, 26, 18, '#a8673a'); R(x, 5, 8, 22, 14, '#f6e7c8'); R(x, 5, 8, 22, 1, '#fffaf0');
+  for (const [a, b] of [[4, 7], [27, 7], [4, 22], [27, 22]]) R(x, a, b, 1, 1, '#ffe0a6');
+  R(x, 7, 25, 2, 6, '#7a4522'); R(x, 23, 25, 2, 6, '#7a4522');
+  // T (pink) and D (blue), 3px strokes with a dark drop
+  const T = [[0, 0, 8, 3], [2.5, 0, 3, 11]], D = [[0, 0, 3, 11], [0, 0, 6, 2], [0, 9, 6, 2], [6, 1, 2, 9], [5, 1, 2, 2], [5, 8, 2, 2]];
+  for (const [a, b, w, h] of T) { R(x, Math.round(7 + a), 11 + b, w, h, ink); R(x, Math.round(7 + a), 10 + b, w, h, '#ff7b8a'); }
+  for (const [a, b, w, h] of D) { R(x, 17 + a, 11 + b, w, h, ink); R(x, 17 + a, 10 + b, w, h, '#6c9bff'); }
+  R(x, 25, 4, 1, 3, '#ffd84a'); R(x, 24, 5, 3, 1, '#ffd84a');
+  return c; })();
+
+// 4. Crusher: the angry crusher slamming down, the runner just escaping to the right
+IDEAS.crusher = (() => { const [c, x] = mk();
+  sky(x, ['#ffd84a', '#ffc23d', '#ffb52e']);
+  R(x, 7, 0, 1, 3, '#5d6475'); R(x, 15, 0, 1, 3, '#5d6475');
+  R(x, 1, 3, 20, 15, ink); R(x, 2, 4, 18, 13, '#9aa3b5'); R(x, 2, 4, 18, 2, '#c3c9d6'); R(x, 2, 15, 18, 2, '#5d6475');
+  R(x, 4, 7, 5, 1, ink); R(x, 13, 7, 5, 1, ink); R(x, 5, 8, 3, 3, '#fff'); R(x, 14, 8, 3, 3, '#fff'); R(x, 6, 9, 2, 2, ink); R(x, 15, 9, 2, 2, ink);
+  R(x, 7, 13, 8, 1, ink);
+  for (let i = 0; i < 9; i++) { R(x, 2 + i * 2, 18, 1, 3, '#fff'); R(x, 3 + i * 2, 18, 1, 2, '#c3c9d6'); }
+  R(x, 0, 27, 32, 1, ink); R(x, 0, 28, 32, 4, '#8d5a31');
+  for (const [a, b, w] of [[2, 24, 3], [6, 25, 4], [11, 24, 3], [15, 25, 2]]) R(x, a, b, w, 1, '#fff6d0');
+  x.drawImage(charFrame(ch('explorer'), 'run0', 1, 0), 19, 11);
+  R(x, 15, 14, 3, 1, '#ffffffcc'); R(x, 14, 17, 4, 1, '#ffffffcc');
+  return c; })();
+
+// 5. Saw night: a big spinning saw under a full moon, the knight vaulting over it
+IDEAS.saw = (() => { const [c, x] = mk();
+  sky(x, ['#121330', '#191c42', '#222759', '#2e3470']);
+  for (let i = 0; i < 16; i++) R(x, (i * 13 + 5) % 32, (i * 7 + 1) % 18, 1, 1, i % 4 ? '#8f95d6' : '#fff');
+  disc(x, 25, 6, 4, '#fff6d0'); R(x, 23, 5, 2, 2, '#e3d39c');
+  const cx = 16, cy = 25;
+  for (let a = 0; a < 16; a++) { const ang = a / 16 * Math.PI * 2; R(x, Math.round(cx + Math.cos(ang) * 9), Math.round(cy + Math.sin(ang) * 9), 2, 2, '#c3c9d6'); }
+  disc(x, cx, cy, 8, '#9aa3b5'); disc(x, cx, cy, 6, '#c3c9d6'); disc(x, cx, cy, 2, '#5d6475'); R(x, cx - 4, cy - 5, 3, 1, '#fff');
+  R(x, 0, 30, 32, 2, '#245452');
+  x.drawImage(charFrame(ch('knight'), 'jump', 1, 0), 11, 1);
+  return c; })();
+
+// 6. Runner vs trapper: blue and red halves split by a lightning bolt, the runner and a trap button
+IDEAS.versus = (() => { const [c, x] = mk();
+  for (let j = 0; j < 32; j++) for (let i = 0; i < 32; i++) R(x, i, j, 1, 1, i + j * 0.6 < 25 ? (j < 16 ? '#5584e6' : '#3c6fd1') : (j < 16 ? '#ff5d6a' : '#e8414f'));
+  const bolt = [[17, 0], [14, 9], [18, 10], [12, 21], [16, 22], [10, 32]];
+  for (let k = 0; k < bolt.length - 1; k++) { const [a, b] = bolt[k], [c2, d] = bolt[k + 1]; for (let s = 0; s <= 12; s++) { const px = Math.round(a + (c2 - a) * s / 12), py = Math.round(b + (d - b) * s / 12); R(x, px - 1, py, 3, 1, ink); R(x, px, py, 1, 1, '#ffd84a'); } }
+  x.drawImage(charFrame(ch('astronaut'), 'run1', 1, 0), 1, 13);
+  disc(x, 24, 22, 5, ink); disc(x, 24, 21, 4, '#ffd84a'); disc(x, 24, 20, 3, '#fff6c8'); R(x, 23, 18, 2, 3, '#e8414f'); R(x, 23, 22, 2, 1, '#e8414f');
+  R(x, 21, 27, 7, 2, ink);
+  return c; })();
+
+window.ideas = Object.keys(IDEAS);
+window.draw = (id, size) => { const c = document.querySelector('canvas'); c.width = c.height = size; const k = c.getContext('2d'); k.imageSmoothingEnabled = false; k.drawImage(IDEAS[id], 0, 0, size, size); };
+window.ready = true;
+</script>
