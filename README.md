@@ -32,7 +32,7 @@ Six runners to pick from: Explorer, Knight, Astronaut, Ninja, Robot and Pirate. 
 
 Runner: **← →** or **A D** to run, **Space / W / ↑** to jump (hold for higher). On a phone: the ◀ ▶ and JUMP buttons.
 Runner gadgets: **Shift**, **Q**, **E**, **R** for the map's gadgets in order (an air jump is used by jumping in mid-air).
-Trapper: the trap bar or keys **1-6** fire the nearest trap of each kind; gadgets **7 8 9 0** (aimed ones at the mouse). On a phone, tap a gadget, then tap the map.
+Trapper: three coloured buttons (keys **1 2 3**) fire the next traps ahead of the runner, outlined in the same colour on the map; gadgets **7 8 9 0** (aimed ones at the mouse). On a phone, tap a gadget, then tap the map.
 **Esc** or the **II** button opens the menu.
 
 ## Play locally

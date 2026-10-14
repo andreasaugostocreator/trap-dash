@@ -454,3 +454,17 @@ body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 @keyframes tutIn { from { transform: translateX(-50%) scale(.85); opacity: .3; } to { transform: translateX(-50%) scale(1); opacity: 1; } }
 @media (max-height: 500px) { .hint.tut { font-size: 15px; padding: 6px 12px; } }
 .tutRow { margin: 4px 0 8px; } .tutRow button { flex: 1; }
+
+/* ---------- trap bar: three coloured slots */
+.tbtn { --slot: #e8414f; }
+.tbtn[data-state="ready"] { background: var(--slot); }
+.tbtn[data-state="cool"], .tbtn[data-state="lock"], .tbtn[data-state="sent"], .tbtn[data-state="burn"], .tbtn[data-state="jam"] { box-shadow: var(--frame), inset 0 0 0 4px var(--slot), 0 calc(var(--px) * 2) 0 var(--ink); }
+.tbtn[data-state="cool"] { background: #4a4f62; }
+.tbtn[data-state="empty"] { background: transparent; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .12); pointer-events: none; }
+.tbtn[data-state="empty"] canvas, .tbtn[data-state="empty"] small { visibility: hidden; }
+.tbtn .skey { position: absolute; right: 3px; top: 2px; font-style: normal; font-family: 'Press Start 2P', monospace; font-size: 9px; color: #fff; text-shadow: 0 1px 0 var(--ink); z-index: 3; }
+.tbtn.swap { animation: slotSwap .35s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes slotSwap { from { transform: scale(.6) translateY(10px); } to { transform: none; } }
+.pad .tbtn { width: calc(var(--btn) * 1.25); flex: 0 1 calc(var(--btn) * 1.25); }
+.trapbar { gap: 10px; }
+.tbtn[data-state="empty"] .skey { visibility: hidden; }

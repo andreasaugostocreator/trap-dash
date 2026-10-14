@@ -1,5 +1,6 @@
 // Needs the relay broker (node tools/relay-broker.mjs) and the site on :8080.
-// Trapper on a phone fires the crusher with the fixed trap bar; same-screen on PC uses key 1.
+// The trapper gets three coloured slots for the next traps ahead. A phone trapper fires a crusher from its slot,
+// holds a flame; same-screen on PC uses key 1.
 import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
 const errs = [];
@@ -13,8 +14,12 @@ await g.tap('text=Join a party'); await g.fill('#code', await h.textContent('#ro
 await h.waitForFunction(() => window.__td.players.b);
 await h.click('#levels button:has-text("Midnight Meadow")'); await h.click('#startBtn'); await h.waitForTimeout(3800);
 await h.keyboard.down('ArrowRight'); await h.waitForTimeout(500);
+console.log('slots at the start:', await g.evaluate(() => [...document.querySelectorAll('.tbtn')].map(b => (b.dataset.kind || '-') + ':' + b.dataset.state).join('  ')));
+await h.evaluate(() => { const w = window.__td.run.world, c = w.traps.find(t => t.kind === 'crusher'); w.player.x = c.x0 * 16 - 60; });
+await g.waitForTimeout(500);
+console.log('slots near the crushers:', await g.evaluate(() => [...document.querySelectorAll('.tbtn')].map(b => (b.dataset.kind || '-') + ':' + b.dataset.state).join('  ')));
 const before = await g.evaluate(() => window.__td.run.world.traps.filter(t => t.kind === 'crusher').map(t => t.state).join());
-await g.tap('.tbtn[data-kind="crusher"]'); await g.waitForTimeout(350);
+await g.tap('.tbtn[data-kind="crusher"] >> nth=0'); await g.waitForTimeout(350);
 await g.screenshot({ path: 'shots/40-trapbar-phone.png' });
 const after = await h.evaluate(() => window.__td.run.world.traps.filter(t => t.kind === 'crusher').map(t => t.state).join());
 console.log('crushers before', before, '| after tapping bar (runner device)', after);
@@ -22,7 +27,7 @@ await h.keyboard.up('ArrowRight');
 // hold the flame button on the phone: the flame on the runner's device burns until the finger lifts
 await h.evaluate(() => { const w = window.__td.run.world; w.player.x = 36 * 16; w.player.y = 14 * 16 - 13; });
 await g.waitForTimeout(600);
-const fb = await g.locator('.tbtn[data-kind="flame"]').boundingBox();
+const fb = await g.locator('.tbtn[data-kind="flame"]').first().boundingBox();
 const cdp = await g.context().newCDPSession(g);
 await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: fb.x + fb.width / 2, y: fb.y + fb.height / 2 }] });
 await g.waitForTimeout(1100);

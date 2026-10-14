@@ -47,14 +47,14 @@ export class Tutorial {
   trapper(w, dt, caught) {
     const p = w.player, x = p.x, k = this.keyOf, T = this.touch;
     if (caught) this.catches++;
-    if (this.step === 0) { this.say('You are the trapper! The Coach Bot is running. Your traps are in the red bar.'); if ((this.t += dt) > 3) this.step++; }
+    if (this.step === 0) { this.say('You are the trapper! The Coach Bot is running. Your trap buttons are at the bottom: each colour fires the trap outlined in that colour.'); if ((this.t += dt) > 3) this.step++; }
     if (this.step === 1) {
-      this.say(caught || this.gotcha ? 'Gotcha! That is how you catch a runner. (+100)' : `Spikes ahead! Fire SPIKES${T ? '' : ` (key ${k('spikes')})`} just as the runner steps on them.`);
+      this.say(caught || this.gotcha ? 'Gotcha! That is how you catch a runner. (+100)' : `Spikes ahead! Fire SPIKES${T || !k('spikes') ? '' : ` (key ${k('spikes')})`} just as the runner steps on them.`);
       if (caught) this.gotcha = true;
       if (x > tx(36)) { this.step++; this.gotcha = false; }
     }
     if (this.step === 2) {
-      this.say(caught || this.gotcha ? 'Burnt! Nice timing.' : `The FLAME burns as long as you hold it${T ? '' : ` (key ${k('flame')})`}. Hold it while the runner passes!`);
+      this.say(caught || this.gotcha ? 'Burnt! Nice timing.' : `The FLAME burns as long as you hold it${T || !k('flame') ? '' : ` (key ${k('flame')})`}. Hold it while the runner passes!`);
       if (caught) this.gotcha = true;
       if (x > tx(49)) { this.step++; this.gotcha = false; }
     }
@@ -63,7 +63,7 @@ export class Tutorial {
       if (w.fx.some(f => f.k === 'glue')) this.glued = true;
       if (this.glued || x > tx(62)) this.step++;
     }
-    if (this.step === 4) this.say(`Last one: fire the CANNON${T ? '' : ` (key ${k('cannon')})`} so the ball meets the runner!`);
+    if (this.step === 4) this.say(`Last one: fire the CANNON${T || !k('cannon') ? '' : ` (key ${k('cannon')})`} so the ball meets the runner!`);
   }
   // The Coach Bot's buttons: run right, jump obstacles and gaps (with an air jump), pause before each trap.
   botInput(w, dt) {

@@ -125,7 +125,7 @@ $('howBtn').onclick = () => { panel(`
   <div class="row tutRow"><button class="mid pink" id="tutRun">🏃 Runner training</button><button class="mid blue" id="tutTrap">🪤 Trapper training</button></div>
   <ul class="help">
     <li><b>The runner</b> dashes from the start to the checkered flag. Move with <b>← →</b> or <b>A D</b>, jump with <b>Space</b>, <b>W</b> or <b>↑</b> (hold for higher). On a phone, use the buttons.</li>
-    <li><b>The trapper</b> uses the trap bar (or keys 1-6) to fire the nearest trap of each kind: spikes, trapdoors, walls, cannons, arrows, crushers, flames, fans, saws, lasers, bombs, conveyor belts and ice.</li>
+    <li><b>The trapper</b> gets three coloured buttons for the next traps ahead of the runner (or keys 1-3). Each button fires the trap outlined in its colour on the map; as the runner moves on, the buttons switch to the next traps. There are 13 kinds: spikes, trapdoors, walls, cannons, arrows, crushers, flames, fans, saws, lasers, bombs, conveyor belts and ice.</li>
     <li>Every trap has a <b>cooldown</b> (the dial fills up), and traps can't be fired back to back. The runner sees the dials too, so dash while they're recharging!</li>
     <li><b>Gadgets</b> never kill on their own. There are 12 for each side (lightning, glue, mines, bats, fog, frost, an anvil, rewind… and dash, shield, blink, glider, slow-mo, decoy, phase…), but <b>each map deals 4 to each player</b>, picked to suit its traps and layout. Small numbers show how many uses are left this run.</li>
     <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
@@ -504,7 +504,7 @@ addEventListener('keydown', e => {
   const n = /^(Digit|Numpad)([0-9])$/.exec(e.code);
   if (n && run.trapperHere) {
     const d = +n[2];
-    if (d >= 1 && d <= 6 && run.kinds[d - 1]) fireKind(run.kinds[d - 1], e.code);
+    if (d >= 1 && d <= SLOTS) fireSlot(d - 1, e.code);
     const gid = run.world.loadout.trapper[{ 7: 0, 8: 1, 9: 2, 0: 3 }[d]];
     if (gid) useTrapperGadget(gid, GADGETS.trapper[gid].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
   }
@@ -611,76 +611,84 @@ function releaseHold(holdKey) {
 }
 for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => releaseHold('p' + e.pointerId));
 
-// ---------- the trap bar: one fixed button per kind of trap, aimed at the runner
-// Each button fires the trap of its kind that is on screen and closest to the runner (preferring traps ahead).
-const KIND_ORDER = ['spikes', 'trapdoor', 'wall', 'ice', 'conveyor', 'cannon', 'arrows', 'dropper', 'laser', 'saw', 'crusher', 'flame', 'fan'];
-function pickTarget(world, kind) {
-  const p = world.player, px = p.x + 5, py = p.y + 6, W = R.lo.width, H = R.lo.height;
-  let best = null, bestReady = null, bs = 1e9, brs = 1e9;
-  for (const t of world.traps) {
-    if (t.kind !== kind) continue;
-    const tx = (t.x0 + t.x1 + 1) * TILE / 2, ty = t.y * TILE + 8;
-    if (tx < R.camX - 24 || tx > R.camX + W + 24 || ty < R.camY - 40 || ty > R.camY + H + 40) continue;
-    const dx = tx - px;
-    let score = Math.abs(dx) + Math.abs(ty - py) * 0.6;
-    if (dx * (p.face || 1) < -28) score += 300;           // behind the runner: rarely useful
-    if (score < bs) { bs = score; best = t; }
-    const ready = t.state === 'idle' && t.cd <= 0;
-    if (ready && score < brs) { brs = score; bestReady = t; }
+// ---------- the trap bar: three slots for the traps just ahead of the runner
+// Only the next few traps get a button. Each slot has its own colour, and the trap it fires is outlined in the same
+// colour on the map with the same number. A trap keeps its slot while it stays in range, so buttons don't jump around.
+const SLOT_COLORS = ['#ff4d5e', '#3d8bff', '#ffc23d'];
+const SLOTS = 3, AHEAD = 18 * TILE, BEHIND = 2 * TILE;
+function slotCandidates(w) {
+  const p = w.player, px = p.x + 5, py = p.y + 6, dir = Math.sign(w.goal.x - px) || 1, out = [];
+  for (const t of w.traps) {
+    const tx = (t.x0 + t.x1 + 1) * TILE / 2, ahead = (tx - px) * dir;
+    // how far up or down: to the part of the trap that hurts (a crusher's landing spot, a bomb's whole fall)
+    const top = t.y * TILE, bottom = t.kind === 'crusher' ? top + (t.drop || 0) + TILE : t.kind === 'dropper' ? w.h * TILE : top + TILE;
+    const dy = py < top ? top - py : py > bottom ? py - bottom : 0;
+    const near = ahead > -BEHIND - (t.x1 - t.x0) * TILE / 2 && ahead < AHEAD && dy < 7 * TILE;
+    const busy = t.state === 'active' || t.state === 'warn';
+    if (near || (busy && ahead > -6 * TILE)) out.push({ t, ahead });
   }
-  return bestReady || best;
+  return out.sort((a, b) => a.ahead - b.ahead);
 }
-function fireKind(kind, holdKey) {
-  const t = run.targets[kind];
+function updateSlots(w) {
+  const cand = slotCandidates(w), ids = new Set(cand.map(c => c.t.id));
+  run.slots = run.slots || Array(SLOTS).fill(null);
+  for (let i = 0; i < SLOTS; i++) if (run.slots[i] && !ids.has(run.slots[i].id) && !run.held.size) run.slots[i] = null;
+  const taken = new Set(run.slots.filter(Boolean).map(t => t.id));
+  for (const c of cand) {
+    if (taken.has(c.t.id)) continue;
+    let i = run.slots.indexOf(null);
+    if (i < 0) {   // all full: a much closer trap pushes out the farthest one (unless it's busy)
+      const far = run.slots.map((t, k) => ({ k, a: cand.find(x => x.t === t)?.ahead ?? 1e9, busy: t.state !== 'idle' })).filter(o => !o.busy).sort((a, b) => b.a - a.a)[0];
+      if (!far || far.a < c.ahead + 3 * TILE) break;
+      i = far.k;
+    }
+    run.slots[i] = c.t; taken.add(c.t.id);
+  }
+}
+function fireSlot(i, holdKey) {
+  const t = run.slots && run.slots[i];
   if (!t || run.phase !== 'play') { sfx.denied(); return; }
   fireTrap(t.id, holdKey);
 }
 function buildTrapBar() {
   const bar = $('trapbar'); bar.innerHTML = '';
-  run.kinds = KIND_ORDER.filter(k => run.world.traps.some(t => t.kind === k));
-  run.targets = {};
-  run.kinds.forEach((k, i) => {
+  run.slots = Array(SLOTS).fill(null);
+  for (let i = 0; i < SLOTS; i++) {
     const b = document.createElement('button');
-    b.className = 'tbtn'; b.dataset.kind = k;
-    const ic = document.createElement('canvas'); ic.width = ic.height = 7; ic.className = 'pix';
-    ic.getContext('2d').drawImage(SPR.icon[k], 0, 0);
-    b.innerHTML = `<i class="eta"></i><span class="cool"></span><span class="secs"></span>`;
-    b.prepend(ic);
-    const lab = document.createElement('small'); lab.textContent = (touchDevice || i > 5 ? '' : (i + 1) + ' ') + TRAPS[k].name; b.appendChild(lab);
-    b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireKind(k, 'p' + e.pointerId); });
+    b.className = 'tbtn'; b.dataset.slot = i; b.style.setProperty('--slot', SLOT_COLORS[i]);
+    b.innerHTML = `<i class="eta"></i><i class="skey">${touchDevice ? '' : i + 1}</i><canvas class="pix" width="7" height="7"></canvas><span class="cool"></span><span class="secs"></span><small></small>`;
+    b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireSlot(i, 'p' + e.pointerId); });
     bar.appendChild(b);
-  });
+  }
   bar.classList.toggle('hidden', !run.trapperHere);
 }
 function updateTrapBar() {
   const w = run.world;
-  for (const b of $('trapbar').children) {
-    const k = b.dataset.kind, t = pickTarget(w, k), C = TRAPS[k];
-    run.targets[k] = t;
-    const ready = t && t.state === 'idle' && t.cd <= 0, pend = t && run.pending[t.id] > 0;
-    const burning = t && TRAPS[k].hold && t.state === 'active';
-    const eta = etaOf(w, k);
-    const state = !t ? (eta != null ? 'soon' : 'none') : w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 && !w.chained(t) ? 'lock' : 'ready') : 'cool';
+  updateSlots(w);
+  [...$('trapbar').children].forEach((b, i) => {
+    const t = run.slots[i];
+    if (b.dataset.trap !== String(t ? t.id : '')) {   // a new trap in this slot: new icon and name, and a little pop
+      b.dataset.trap = t ? t.id : '';
+      b.dataset.kind = t ? t.kind : '';
+      const c = b.querySelector('canvas').getContext('2d'); c.clearRect(0, 0, 7, 7);
+      if (t) { c.drawImage(SPR.icon[t.kind], 0, 0); b.classList.remove('swap'); void b.offsetWidth; b.classList.add('swap'); }
+      b.querySelector('small').textContent = t ? TRAPS[t.kind].name : '';
+    }
+    if (!t) { if (b.dataset.state !== 'empty') b.dataset.state = 'empty'; b.querySelector('.eta').textContent = ''; return; }
+    const C = TRAPS[t.kind], ready = t.state === 'idle' && t.cd <= 0, pend = run.pending[t.id] > 0;
+    const burning = C.hold && t.state === 'active';
+    const state = w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 && !w.chained(t) ? 'lock' : 'ready') : 'cool';
     if (b.dataset.state !== state) b.dataset.state = state;
-    b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : t && !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
-    const secs = t && !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
-    if (b.lastChild.previousSibling.textContent != secs) b.lastChild.previousSibling.textContent = secs;
-    const etaText = eta == null ? '' : eta < 0.5 ? 'now' : `in ${Math.ceil(eta)}s`, el = b.querySelector('.eta');
+    b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
+    const secs = !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
+    const se = b.querySelector('.secs'); if (se.textContent != secs) se.textContent = secs;
+    const eta = etaOfTrap(w, t), etaText = eta == null ? '' : eta < 0.5 ? 'now' : `in ${Math.ceil(eta)}s`, el = b.querySelector('.eta');
     if (el.textContent !== etaText) el.textContent = etaText;
-  }
+  });
 }
-// Seconds until the runner reaches the next trap of this kind ahead (toward the flag), or null if none is near.
-function etaOf(w, kind) {
-  const p = w.player, px = p.x + 5, dir = Math.sign(w.goal.x - px) || 1;
-  let best = null;
-  for (const t of w.traps) {
-    if (t.kind !== kind) continue;
-    const ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - px) * dir;
-    if (ahead < -TILE * 2 || ahead > TILE * 60) continue;
-    const s = Math.max(0, ahead) / PHYS.maxRun;
-    if (best == null || s < best) best = s;
-  }
-  return best;
+function etaOfTrap(w, t) {
+  const p = w.player, px = p.x + 5, dir = Math.sign(w.goal.x - px) || 1, ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - px) * dir;
+  return ahead < -TILE * 2 ? null : Math.max(0, ahead) / PHYS.maxRun;
 }
 
 // ---------- gadgets: the trapper's (left column) and the runner's (above the jump button / bottom left on PC)
@@ -795,7 +803,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5, endless,
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
-  if (tutRole) { run.tut = new Tutorial(tutRole, touchDevice, kind => run.kinds.indexOf(kind) + 1); run.countT = 1.5; }
+  if (tutRole) { run.tut = new Tutorial(tutRole, touchDevice, kind => { const i = (run.slots || []).findIndex(t => t && t.kind === kind); return i < 0 ? '' : i + 1; }); run.countT = 1.5; }
   run.score = new TrapScore(); run.closes = 0;
   if (endless && runnerHere) run.nextGen = genAsync(endless.stars);
   const Lv = levelOf(level);
@@ -818,9 +826,9 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   buildGadgets();
   layoutControls();
   updateTrapScore(false);
-  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-6, gadgets 7-0)'}`
+  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-3, gadgets 7-0)'}`
     : runnerHere ? (touchDevice ? `Reach the flag! Your gadgets: ${gadNames('runner')}.` : `Reach the flag! ← → run, Space jump. ${runnerKeyed().map((id, i) => R_KEYS[i] + ' ' + GADGETS.runner[id].name.toLowerCase()).join(', ')}.`)
-      : (touchDevice ? `Red buttons fire the nearest trap (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-6 fire traps, 7-0 gadgets (${gadNames('trapper')}), aimed at your mouse.`);
+      : (touchDevice ? `The three coloured buttons fire the traps outlined in the same colour (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-3 fire the coloured trap buttons, 7-0 gadgets (${gadNames('trapper')}), aimed at your mouse.`);
   $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + (touchDevice && innerHeight > innerWidth ? ' (Tip: turn your phone sideways for a wider view.)' : ''); $('hint').classList.remove('hidden');
   if (run.preview) { run.phase = 'preview'; run.previewT = PREVIEW; showPreview(); $('hint').classList.add('hidden'); }
   input.jumpQueued = false;
@@ -1165,7 +1173,7 @@ function tick(dt, now) {
   if (run.ambT <= 0) { run.ambT = 3 + Math.random() * 6; const th = w.level.theme; (th === 'night' || th === 'dusk' || th === 'haunted' ? sfx.cricket : th === 'lava' || th === 'ice' ? sfx.drip : sfx.chirp)(); }
   updateGadgets();
   if (run.trapperHere) updateTrapBar();
-  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, targets: run.trapperHere ? run.targets : null, kinds: run.kinds, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
+  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, slots: run.trapperHere ? run.slots : null, slotColors: SLOT_COLORS, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
   $('timer').textContent = (E ? E.total + w.time : w.time).toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = (E ? E.deaths : 0) + w.player.deaths;

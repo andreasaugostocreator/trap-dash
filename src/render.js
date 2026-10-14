@@ -184,7 +184,7 @@ export class Renderer {
       g.addColorStop(0, 'rgba(28,20,36,0)'); g.addColorStop(1, 'rgba(28,20,36,0.28)'); v.fillStyle = g; v.fillRect(0, 0, W, H);
       return c;
     }), 0, 0);
-    if (o.trapper) this.drawUpcoming(world, cx, cy);
+    if (o.trapper) this.drawUpcoming(world, cx, cy, o);
     const ctx = this.ctx; ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.lo, 0, 0, this.lo.width * this.k, this.lo.height * this.k);
   }
@@ -1007,21 +1007,28 @@ export class Renderer {
   }
 
   // Corner brackets around the trap each trap-bar button will fire, with its key number.
+  // The traps that have a button: tinted and outlined in the button's colour, with its number on a tag.
   drawTargets(o) {
-    const l = this.l, on = Math.floor(this.t * 4) % 2 === 0;
-    o.kinds.forEach((k, i) => {
-      const t = o.targets[k]; if (!t) return;
-      const ready = t.state === 'idle' && t.cd <= 0;
+    const l = this.l, pulse = 0.5 + 0.5 * Math.sin(this.t * 6);
+    o.slots.forEach((t, i) => {
+      if (!t) return;
+      const col = o.slotColors[i], ready = t.state === 'idle' && t.cd <= 0;
       let x = t.x0 * TILE - 2, y = t.y * TILE - 2, w = (t.x1 - t.x0 + 1) * TILE + 4, h = TILE + 4;
       if (t.kind === 'crusher') y += Math.round(t.oy);
-      if (t.kind === 'spikes') { y += 6; h -= 6; }
-      if (t.kind === 'trapdoor') h = 10;
-      l.fillStyle = ready ? (on ? '#ffffff' : '#ffd84a') : '#8b93a6';
-      for (const [cx, cy, dx, dy] of [[x, y, 1, 1], [x + w - 1, y, -1, 1], [x, y + h - 1, 1, -1], [x + w - 1, y + h - 1, -1, -1]]) {
-        l.fillRect(Math.min(cx, cx + dx * 3), cy, 4, 1); l.fillRect(cx, Math.min(cy, cy + dy * 3), 1, 4);
-      }
-      l.fillStyle = '#1c1424'; l.fillRect(x - 1, y - 8, 6, 7);
-      drawDigits(l, i + 1, x + 1, y - 7, ready ? '#ffd84a' : '#8b93a6');
+      if (t.kind === 'spikes' || t.kind === 'saw') { y += 4; h -= 4; }
+      if (t.kind === 'wall') { y -= TILE; h += TILE; }
+      if (t.kind === 'trapdoor' || t.kind === 'conveyor' || t.kind === 'ice') h = 10;
+      l.globalAlpha = ready ? 0.18 + 0.14 * pulse : 0.1;
+      l.fillStyle = col; l.fillRect(x, y, w, h);
+      l.globalAlpha = ready ? 1 : 0.5;
+      l.fillStyle = '#1c1424'; l.fillRect(x - 1, y - 1, w + 2, 1); l.fillRect(x - 1, y + h, w + 2, 1); l.fillRect(x - 1, y, 1, h); l.fillRect(x + w, y, 1, h);
+      l.fillStyle = col; l.fillRect(x, y, w, 1); l.fillRect(x, y + h - 1, w, 1); l.fillRect(x, y, 1, h); l.fillRect(x + w - 1, y, 1, h);
+      // the tag: a coloured flag with the slot number, bobbing over the trap
+      const tx = Math.round(x + w / 2 - 4), ty = Math.round(y - 12 - (ready ? Math.round(pulse * 2) : 0));
+      l.fillStyle = '#1c1424'; l.fillRect(tx - 1, ty - 1, 10, 11); l.fillRect(tx + 3, ty + 10, 3, 2);
+      l.fillStyle = col; l.fillRect(tx, ty, 8, 9); l.fillRect(tx + 4, ty + 9, 1, 2);
+      drawDigits(l, i + 1, tx + 3, ty + 2, '#ffffff');
+      l.globalAlpha = 1;
     });
   }
 
@@ -1038,7 +1045,7 @@ export class Renderer {
   }
 
   // Traps ahead of the runner but off the trapper's screen: a marker on the edge with the trap and the seconds until the runner gets there.
-  drawUpcoming(world, cx, cy) {
+  drawUpcoming(world, cx, cy, o = {}) {
     const l = this.l, W = this.lo.width, H = this.lo.height, p = world.player, px = p.x + PHYS.w / 2;
     const dir = Math.sign(world.goal.x - px) || 1, list = [];
     for (const t of world.traps) {
@@ -1049,14 +1056,18 @@ export class Renderer {
     }
     list.sort((a, b) => a.ahead - b.ahead);
     const boxes = [];
-    for (const m of list.slice(0, 5)) {
+    const slotOf = t => (o.slots || []).indexOf(t);
+    const shown = [...list.filter(m => slotOf(m.t) >= 0), ...list.filter(m => slotOf(m.t) < 0).slice(0, 1)];
+    for (const m of shown) {
       let x = Math.max(1, Math.min(W - 18, m.tx - cx - 9)), y = Math.max(1, Math.min(H - 10, m.ty - cy - 5));
       while (boxes.some(b => Math.abs(b.x - x) < 18 && Math.abs(b.y - y) < 10)) y += m.ty < cy ? 10 : -10;
       boxes.push({ x, y });
       const ready = m.t.state === 'idle' && m.t.cd <= 0, eta = Math.min(9, Math.ceil(m.ahead / PHYS.maxRun));
       l.globalAlpha = Math.max(0.55, 1 - m.ahead / (W * 3));
       l.fillStyle = '#1c1424'; l.fillRect(x - 1, y - 1, 19, 11);
-      l.fillStyle = ready ? '#e8414f' : '#5d6475'; l.fillRect(x, y, 17, 9);
+      const si = slotOf(m.t);
+      l.fillStyle = si >= 0 ? o.slotColors[si] : ready ? '#e8414f' : '#5d6475'; l.fillRect(x, y, 17, 9);
+      if (si >= 0) { l.fillStyle = '#1c1424'; l.fillRect(x - 7, y - 1, 7, 11); l.fillStyle = o.slotColors[si]; l.fillRect(x - 6, y, 5, 9); drawDigits(l, si + 1, x - 5, y + 2, '#ffffff'); }
       l.drawImage(SPR.icon[m.t.kind], x + 1, y + 1);
       drawDigits(l, eta, x + 9, y + 2, '#ffd84a');
       l.fillStyle = '#ffd84a'; l.fillRect(x + 13, y + 6, 1, 1); l.fillRect(x + 14, y + 5, 1, 1); l.fillRect(x + 14, y + 7, 1, 1); l.fillRect(x + 15, y + 6, 1, 1);
@@ -1066,7 +1077,7 @@ export class Renderer {
 
   drawTrapButtons(world, o, mini) {
     const l = this.l, W = this.lo.width, H = this.lo.height;
-    if (o.targets) this.drawTargets(o);
+    if (o.slots) this.drawTargets(o);
     for (const t of world.traps) {
       const b = this.trapButton(world, t), C = TRAPS[t.kind], bx = Math.round(b.x), by = Math.round(b.y);
       if (bx < this.camX - 12 || bx > this.camX + W + 12 || by < this.camY - 12 || by > this.camY + H + 12) continue;

@@ -242,3 +242,13 @@ of the row follows the runner. Other trap kinds still wait out the lock.
 - **Solid ice** (`j`) is always slippery.
 - Worlds: Lava Caves (lava pits, embers, falling rocks), Frost Castle (snow, icicles, ice floors), Pirate Cove (decks, ropes
   between ships, the sea), Haunted Manor (graves, pumpkins, wisps). Random levels use them too, and are built in a Web Worker.
+
+
+## 9. The trapper's buttons: three coloured slots
+
+One button per trap kind was overwhelming (up to 7 trap buttons plus 4 gadgets). Now the trapper has **three slots**, for
+the traps just ahead of the runner (up to 18 tiles ahead, 2 behind, measured to where the trap hurts, so a crusher high up
+still counts). Each slot has a colour (red, blue, yellow); its trap is tinted and outlined in that colour on the map with a
+numbered tag, and if it's off screen, an edge marker in the same colour points to it. A trap keeps its slot while it is in
+range, so buttons don't jump under your thumb; as the runner moves on, passed traps leave and the next ones drop in (the
+button pops so you notice). Keys 1, 2, 3. The flame still burns while its button is held.
