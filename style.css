@@ -510,3 +510,18 @@ body.playing canvas#game, body.playing.nopad canvas#game, body.playing.dualpad c
 .pad.top { background: linear-gradient(rgba(18, 13, 26, .35), rgba(18, 13, 26, 0)); box-shadow: none; }
 .pad .gbtn, .pad .tbtn, .arrows button, #tJump { box-shadow: var(--frame), 0 calc(var(--px) * 2) 0 var(--ink), 0 4px 10px rgba(0, 0, 0, .35); }
 .tbtn[data-state="empty"] { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25); background: rgba(18, 13, 26, .25); }
+/* ---------- Samsung-style wide, short phones: keep clear of the rounded corners, one row of chips */
+.achv:not(.show) { visibility: hidden; }
+@media (max-height: 500px) and (orientation: landscape) {
+  .screen { padding-left: max(30px, env(safe-area-inset-left)); padding-right: max(30px, env(safe-area-inset-right)); }
+  .card { max-width: calc(100vw - 60px); }
+  .titleCard .row.small { flex-wrap: nowrap; gap: 4px; }
+  .titleCard .row.small .chip { font-size: 12px; padding: 3px 6px; white-space: nowrap; margin: 2px; }
+}
+@media (max-height: 500px) and (orientation: landscape) {
+  .titleCard .row.small { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 6px; justify-items: stretch; }
+  .titleCard .row.small .chip { width: auto; }
+}
+@media (max-height: 500px) and (orientation: landscape) and (min-width: 880px) {
+  .titleCard .row.small { grid-template-columns: repeat(4, auto); justify-content: center; }
+}

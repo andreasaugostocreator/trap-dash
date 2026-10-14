@@ -1,7 +1,7 @@
 // Every menu screen must fit without scrolling on common phone sizes (landscape and portrait).
 import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
-const sizes = [[844, 390], [932, 430], [667, 375], [390, 844], [375, 667]];
+const sizes = [[844, 390], [932, 430], [667, 375], [780, 360], [915, 412], [390, 844], [375, 667], [360, 780]];   // incl. Samsung Galaxy sizes
 const fits = p => p.evaluate(() => { const s = [...document.querySelectorAll('.screen')].find(x => !x.classList.contains('hidden')); const c = s.querySelector('.card'); return { over: Math.max(0, c.scrollHeight - c.clientHeight, s.scrollHeight - s.clientHeight), w: c.scrollWidth > c.clientWidth + 1 }; });
 let bad = 0;
 for (const [w, h] of sizes) {
