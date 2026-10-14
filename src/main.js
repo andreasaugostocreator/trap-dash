@@ -234,6 +234,9 @@ net.onMessage = m => {
     startRun(m.level, m.runner, m.n);
   } else if (m.t === 'stage') {          // endless: the next stage (from the runner) or a fresh run after a swap (from the host)
     lobby.level = m.level; startRun(m.level, m.runner, 0, m.endless);
+  } else if (m.t === 'ready') {
+    if (run && run.phase === 'preview') { run.peerReady = true; if (run.meReady) endPreview(); }
+    else if (run) run.peerReadyEarly = true;
   } else if (m.t === 'swap' && isHost && run && run.endless) {
     toast(players.b.name + ' swapped sides'); startEndless(run.endless.stars, other(run.runner));
   } else if (m.t === 'snap' && run && !run.simOwner) {
@@ -899,30 +902,54 @@ function updateTrapScore(bump) {
 }
 
 // ---------- level preview: the camera flies to the flag and back while a banner shows the level and the gadgets
-const PREVIEW = 3.4;
+const PREVIEW = 8;
+// One line per gadget, for the preview banner.
+const GAD_DESC = {
+  dash: 'burst forward', blink: 'teleport 3 tiles', haste: 'run faster', feather: 'jump again in the air', boots: 'jump higher', glider: 'hold jump to float',
+  shield: 'blocks one hit', phase: 'traps pass through you', jam: 'stops all traps for 2 s', slowmo: 'slows the traps', flag: 'checkpoint where you stand',
+  decoy: 'a fake runner', magnet: 'nothing can push you', peek: 'see hidden mines',
+  bolt: 'aimed lightning: stuns', glue: 'aimed puddle: slows', mine: 'hidden: pops them up', bat: 'chases the runner', gust: 'wind blows them back',
+  hex: 'swaps left and right', frost: 'their feet go icy', fog: 'they only see nearby', anvil: 'heavy: low jumps', moon: 'floaty jumps',
+  rewind: 'back 2 seconds', squash: 'small and slow',
+};
 function showPreview() {
   const L = levelOf(run.level), lo = run.world.loadout, el = $('preview');
-  const icons = side => lo[side].map(id => `<span class="pvGad"><canvas class="pix" width="7" height="7" data-icon="${id}"></canvas>${esc(GADGETS[side][id].name)}</span>`).join('');
+  const mine = side => (side === 'runner') === run.runnerHere || mode === 'local';
+  const icons = side => lo[side].map(id => `<span class="pvGad"><canvas class="pix" width="7" height="7" data-icon="${id}"></canvas><span><b>${esc(GADGETS[side][id].name)}</b><i>${GAD_DESC[id] || ''}</i></span></span>`).join('');
   const stars = L.stars || starsOf(L);
+  const kinds = [...new Set(run.world.traps.map(t => t.kind))];
   el.innerHTML = `<div class="pvName">${esc(run.endless ? '∞ ' + L.name : L.name)} <span class="stars">${starText(stars)}</span></div>
-    <div class="pvRow"><b class="pvSide run">RUNNER</b>${icons('runner')}</div>
-    <div class="pvRow"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
-    <small>${touchDevice ? 'Tap' : 'Click or press a key'} to skip</small>`;
+    <div class="pvTraps">${kinds.map(k => `<span class="pvTrap"><canvas class="pix" width="7" height="7" data-icon="${k}"></canvas>${esc(TRAPS[k].name)}</span>`).join('')}</div>
+    <div class="pvRow${mine('runner') ? ' mine' : ''}"><b class="pvSide run">RUNNER</b>${icons('runner')}</div>
+    <div class="pvRow${mine('trapper') ? ' mine' : ''}"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
+    <small id="pvT"></small>`;
   for (const c of el.querySelectorAll('canvas[data-icon]')) c.getContext('2d').drawImage(SPR.icon[c.dataset.icon], 0, 0);
   el.classList.remove('hidden');
+  run.meReady = false; run.peerReady = !!run.peerReadyEarly;
 }
 function endPreview() {
   if (!run || run.phase !== 'preview') return;
   run.phase = 'count'; run.previewT = 0; $('preview').classList.add('hidden'); $('hint').classList.remove('hidden'); run.hintT = 5;
   R.follow(run.world, 0, run.trapperHere && !run.runnerHere, true);
 }
-$('preview').addEventListener('pointerdown', e => { e.preventDefault(); endPreview(); });
-addEventListener('keydown', e => { if (run && run.phase === 'preview' && !e.repeat) endPreview(); });
+// Tap when you've seen enough. Online the round starts once both players are ready (or the time is up).
+function readyPreview() {
+  if (!run || run.phase !== 'preview' || run.meReady) return;
+  run.meReady = true; sfx.click();
+  if (mode === 'online') net.send({ t: 'ready' });
+  if (mode !== 'online' || run.peerReady) endPreview();
+}
+$('preview').addEventListener('pointerdown', e => { e.preventDefault(); readyPreview(); });
+addEventListener('keydown', e => { if (run && run.phase === 'preview' && !e.repeat) readyPreview(); });
 function panPreview(dt) {
   run.previewT -= dt;
   if (run.previewT <= 0) return endPreview();
+  const left = Math.ceil(run.previewT), other = players[mySide() === 'a' ? 'b' : 'a'];
+  const txt = run.meReady ? `Waiting for ${esc(other ? other.name : 'your friend')}… ${left}` : `Starts in ${left} · ${touchDevice ? 'tap' : 'click or press a key'} when you're ready${run.peerReady && other ? ` (${esc(other.name)} is ready)` : ''}`;
+  const pv = $('pvT'); if (pv && pv.textContent !== txt) pv.textContent = txt;
+  // hold on the start, fly to the flag, look around there, fly back
   const w = run.world, u = 1 - run.previewT / PREVIEW, ease = v => v * v * (3 - 2 * v);
-  const k = u < 0.55 ? ease(u / 0.55) : u < 0.7 ? 1 : 1 - ease((u - 0.7) / 0.3);
+  const k = u < 0.1 ? 0 : u < 0.6 ? ease((u - 0.1) / 0.5) : u < 0.75 ? 1 : 1 - ease((u - 0.75) / 0.25);
   R.pan(w, w.start.x + (w.goal.x - w.start.x) * k, w.start.y + (w.goal.y - w.start.y) * k, run.trapperHere && !run.runnerHere);
 }
 

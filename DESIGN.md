@@ -226,8 +226,9 @@ of the row follows the runner. Other trap kinds still wait out the lock.
 - **Best of 3:** the first to win two levels gets the trophy screen.
 - **Ghost:** the runner's device records its position 10 times a second and sends it with the result; in the second run of
   the same level both devices draw it. Off in Settings.
-- **Level preview:** before a round the camera flies to the flag and back (3.4 s, tap to skip, off in Settings) while a banner
-  shows the level and each side's gadgets.
+- **Level preview:** before a round, 8 s: the camera holds on the start, flies to the flag, looks around and flies back, while a
+  banner lists the level's traps and each side's gadgets with a line on what each does (your side highlighted). Tap when you're
+  ready; online the round starts when both players are ready or the time is up. Off in Settings.
 - **Achievements** (`src/achievements.js`): 18, kept on the device.
 - **Reconnect:** the host keeps a dropped guest's place for 60 s; the guest retries with the same id, and a guest whose page
   reloads within 5 minutes rejoins the same party. The round restarts, the score is kept.

@@ -468,3 +468,18 @@ body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 .pad .tbtn { width: calc(var(--btn) * 1.25); flex: 0 1 calc(var(--btn) * 1.25); }
 .trapbar { gap: 10px; }
 .tbtn[data-state="empty"] .skey { visibility: hidden; }
+
+/* ---------- preview: traps of the level, gadgets with what they do, your side highlighted */
+.pvTraps { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; margin: 0 0 6px; }
+.pvTrap { display: inline-flex; align-items: center; gap: 3px; font-size: 13px; font-weight: 700; color: #fff; background: #3b3f52; padding: 2px 6px 2px 3px; box-shadow: 0 0 0 2px var(--ink); }
+.pvTrap canvas { position: static; width: 14px; height: 14px; }
+.pvGad span { display: flex; flex-direction: column; line-height: 1.05; text-align: left; }
+.pvGad b { font-size: 14px; } .pvGad i { font-style: normal; font-weight: 600; font-size: 11px; color: var(--muted); }
+.pvRow { opacity: .75; } .pvRow.mine { opacity: 1; }
+.pvRow.mine .pvGad { box-shadow: 0 0 0 2px var(--ink), inset 0 -3px 0 #ffd84a; }
+.preview small { display: block !important; margin-top: 4px; font-weight: 700; color: var(--ink); }
+@media (max-height: 500px) { .pvGad b { font-size: 12px; } .pvGad i { font-size: 10px; } .pvTrap { font-size: 11px; } .pvTraps { margin-bottom: 3px; } }
+.preview { width: max-content; max-width: calc(100vw - 24px); }
+.pvRow { flex-wrap: nowrap; }
+.pvGad { padding: 2px 5px 2px 3px; }
+@media (max-width: 700px) { .pvRow { flex-wrap: wrap; } }
