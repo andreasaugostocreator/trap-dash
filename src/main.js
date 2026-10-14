@@ -62,11 +62,39 @@ function portrait(charId, frame = 'idle') {
 }
 
 // ---------- title
+// The logo has its own pixel lettering: chunky 6x7 letters with a light top row, a darker bottom, an ink outline and
+// a drop shadow, pink for TRAP and blue for DASH.
+const LOGO_GLYPHS = {
+  T: ['######', '######', '..##..', '..##..', '..##..', '..##..', '..##..'],
+  R: ['#####.', '##..##', '##..##', '#####.', '##.##.', '##..##', '##..##'],
+  A: ['.####.', '##..##', '##..##', '######', '##..##', '##..##', '##..##'],
+  P: ['#####.', '##..##', '##..##', '#####.', '##....', '##....', '##....'],
+  D: ['#####.', '##..##', '##..##', '##..##', '##..##', '##..##', '#####.'],
+  S: ['.#####', '##....', '##....', '.####.', '....##', '....##', '#####.'],
+  H: ['##..##', '##..##', '##..##', '######', '##..##', '##..##', '##..##'],
+};
+const LOGO_WORDS = ['TRAP', 'DASH'];
+const LOGO_COLS = [['#ffc0c8', '#ff7b8a', '#e8414f', '#a3202e'], ['#cfe0ff', '#6c9bff', '#3c6fd1', '#2a4f9e']];
+function logoLetter(word, k) {
+  const g = LOGO_GLYPHS[LOGO_WORDS[word][k]], [hi, base, mid, lo] = LOGO_COLS[word];
+  const c = document.createElement('canvas'); c.width = 8; c.height = 11; c.className = 'pix logoLetter';
+  const x = c.getContext('2d'), on = (i, j) => g[j] && g[j][i] === '#';
+  x.fillStyle = '#1c1424';   // drop shadow, then outline
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 6; i++) if (on(i, j)) x.fillRect(i + 1, j + 3, 1, 1);
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 6; i++) if (on(i, j)) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) x.fillRect(i + 1 + dx, j + 1 + dy, 1, 1);
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 6; i++) if (on(i, j)) { x.fillStyle = !on(i, j - 1) ? hi : !on(i, j + 1) ? mid : base; x.fillRect(i + 1, j + 1, 1, 1); }
+  return c;
+}
 // The logo letters bob in a wave, and your runner runs along beside it.
 (function dressTitle() {
   const logo = document.querySelector('.logo');
   let n = 0;
-  for (const word of logo.querySelectorAll('span')) word.innerHTML = [...word.textContent].map(ch => `<i style="--i:${n++}">${ch}</i>`).join('');
+  logo.setAttribute('aria-label', 'Trap Dash');
+  [...logo.querySelectorAll('span')].forEach((word, w) => {
+    const letters = word.textContent.length;
+    word.textContent = '';
+    for (let k = 0; k < letters; k++) { const i = document.createElement('i'); i.style.setProperty('--i', n++); i.appendChild(logoLetter(w, k)); word.appendChild(i); }
+  });
   const run = document.createElement('canvas'); run.width = 16; run.height = 18; run.className = 'pix logoRun'; run.id = 'logoRun';
   logo.appendChild(run);
   const ICONS = { host: 'flag', join: 'blink', local: 'decoy', practice: 'shield' };
@@ -84,6 +112,7 @@ function animateTitle(dt) {
   const on = document.querySelector('.swatch.on canvas');
   if (on) { const y = on.getContext('2d'); y.clearRect(0, 0, 16, 18); y.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1); }
 }
+try { document.fonts.load('bold 8px Silkscreen'); } catch { /* old browser */ }
 if (!store.get('seenTip', false)) { store.set('seenTip', true); setTimeout(() => toast('New here? Try the training in “How to play”.'), 900); }
 // On iPhone Safari the browser keeps a strip at the bottom; the home-screen app is true full screen.
 if (/iP(hone|od)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches)

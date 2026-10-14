@@ -91,7 +91,7 @@ export class Renderer {
     if (!g.colors) g.colors = g.charObj;
     const l = this.l, X = Math.round(x + PHYS.w / 2), Y = Math.round(y + PHYS.h);
     l.globalAlpha = 0.38; l.drawImage(charFrame(g.colors, frame, face, 0), X - 6, Y - 16); l.globalAlpha = 0.75;
-    l.font = '8px "Press Start 2P", monospace'; l.textAlign = 'center'; l.textBaseline = 'middle';
+    l.font = 'bold 8px Silkscreen, monospace'; l.textAlign = 'center'; l.textBaseline = 'middle';
     l.fillStyle = '#1c1424'; l.fillText('GHOST', X + 1, Y - 21); l.fillStyle = '#ffffff'; l.fillText('GHOST', X, Y - 22);
     l.globalAlpha = 1;
   }
@@ -911,7 +911,7 @@ export class Renderer {
   drawTexts(dt) {
     const l = this.l;
     if (!this.texts || !this.texts.length) return;
-    l.font = '8px "Press Start 2P", monospace'; l.textAlign = 'center'; l.textBaseline = 'middle';
+    l.font = 'bold 8px Silkscreen, monospace'; l.textAlign = 'center'; l.textBaseline = 'middle';
     for (let i = this.texts.length - 1; i >= 0; i--) {
       const q = this.texts[i];
       q.life -= dt; if (q.life <= 0) { this.texts.splice(i, 1); continue; }

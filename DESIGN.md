@@ -281,3 +281,12 @@ and fireflies, extra particles). Auto switches to Low by itself after a couple o
 
 `tools/perf-test.mjs [throttle]` measures frame times; `tools/devices-test.mjs` checks the game screen on 13 phone,
 tablet and foldable sizes; `tools/menu-fit-test.mjs` checks every menu on 16 sizes.
+
+## 12. Type and logo
+
+- **Jersey 10** for headings, buttons and numbers: a tall, chunky pixel face that matches the 1px-outlined sprites.
+- **Jersey 15** for body text: same family, but easier to read in longer lines.
+- **Silkscreen** for popups drawn on the canvas ("CLOSE!", trap scores): crisp at 8px when the canvas is scaled up as pixels.
+- The **TRAP DASH** logo is custom pixel lettering, drawn per letter on tiny canvases with an ink outline, a highlight and a drop shadow. It is red for TRAP and blue for DASH, and each letter still bobs.
+- Star ratings use a system symbol font, because Jersey draws ☆ and ★ almost the same.
+- The app icon is "Sunset Saw" (tools/make-icons.mjs).
