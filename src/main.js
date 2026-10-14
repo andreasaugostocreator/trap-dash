@@ -5,7 +5,7 @@ import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS, PHYS } from './config.js';
 import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS, THEMES } from './levels.js';
-import { Renderer } from './render.js';
+import { Renderer, viewH } from './render.js';
 import { Net, cleanCode } from './net.js';
 import { Bot } from './bot.js';
 import { rateLevel } from './rating.js';
@@ -804,7 +804,7 @@ function updateInsets() {
   const hud = $('hud').getBoundingClientRect(), top = $('padTop'), pad = $('pad');
   let t = hud.bottom, b = 0;
   if (!top.classList.contains('hidden')) t = Math.max(t, top.getBoundingClientRect().bottom);
-  if (!pad.classList.contains('hidden')) b = innerHeight - pad.getBoundingClientRect().top;
+  if (!pad.classList.contains('hidden')) b = viewH() - pad.getBoundingClientRect().top;
   R.setInsets(t, b); R.resize();
 }
 function layoutControls() {
@@ -1248,7 +1248,7 @@ function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 
 function tick(dt, now) {
   const dpr = Math.min(devicePixelRatio || 1, 3);
-  if (innerWidth !== R.vw || innerHeight !== R.vh || dpr !== R.dpr) updateInsets();
+  if (innerWidth !== R.vw || innerHeight !== R.ih || dpr !== R.dpr) updateInsets();
   paintEdges();
   if (!run) { drawAttract(dt); animateTitle(dt); return; }
   const w = run.world;

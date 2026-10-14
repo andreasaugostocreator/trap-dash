@@ -542,3 +542,8 @@ input.code { font-size-adjust: none; font-size: 40px; }
 
 /* star ratings: a font whose empty star is clearly hollow */
 .stars, #randRow .chip, #endRow .chip, .pvName .stars { font-family: system-ui, 'Segoe UI Symbol', 'Noto Sans Symbols 2', sans-serif; font-size-adjust: none; letter-spacing: 1px; }
+
+/* iPhone home-screen app started with a page shorter than the screen (see viewH in render.js): stretch the page over
+   the screen, and make the body the frame for everything pinned to the edges (a transform does that). */
+html.vfix, html.vfix body { height: var(--appH); }
+html.vfix body { transform: translateZ(0); }

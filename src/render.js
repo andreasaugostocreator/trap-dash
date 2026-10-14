@@ -11,6 +11,24 @@ const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const FIRE = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
 
+// iPhone home-screen apps sometimes start with a page that is shorter than the screen (by about the status bar), which
+// leaves a strip of bare background along the bottom. Measure the real screen and stretch the page over the gap.
+const IPHONE_APP = /iPhone|iPod/.test(navigator.userAgent) && navigator.standalone === true;
+export function viewH() {
+  const h = window.innerHeight;
+  let gap = 0;
+  if (IPHONE_APP && screen.width && screen.height) {
+    const full = window.innerWidth > h ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
+    gap = Math.max(0, Math.min(80, full - h));
+  }
+  const de = document.documentElement;
+  if (gap !== (+de.dataset.gap || 0)) {
+    de.dataset.gap = gap; de.classList.toggle('vfix', gap > 0);
+    de.style.setProperty('--appH', (h + gap) + 'px');
+  }
+  return h + gap;
+}
+
 export class Renderer {
   constructor(canvas) {
     initSprites();
@@ -23,7 +41,7 @@ export class Renderer {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    this.dpr = dpr; this.vw = window.innerWidth; this.vh = window.innerHeight; this.ox = 0; this.oy = 0;
+    this.dpr = dpr; this.vw = window.innerWidth; this.vh = viewH(); this.ih = window.innerHeight; this.ox = 0; this.oy = 0;
     this.insets = this.insets || { top: 0, bottom: 0 };
     this.devW = Math.round(this.vw * dpr); this.devH = Math.round(this.vh * dpr);   // the screen in device pixels
     this.wide = null;
