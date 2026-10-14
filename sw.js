@@ -1,8 +1,8 @@
 // Offline play: network first (so updates show up straight away), the cache when offline. Bump VERSION on each release.
-const VERSION = 'trap-dash-v36';
+const VERSION = 'trap-dash-v37';
 const FILES = ['./', './index.html', './style.css', './manifest.webmanifest', './lib/peerjs.min.js',
   './src/main.js', './src/config.js', './src/sim.js', './src/levels.js', './src/render.js', './src/audio.js', './src/net.js', './src/bot.js', './src/sprites.js', './src/relay.js', './src/rating.js', './src/gen.js', './src/solver.js', './src/loadout.js', './src/settings.js', './src/score.js', './src/achievements.js', './src/genworker.js', './src/tutorial.js',
-  './icons/icon-180.png', './icons/icon-192.png', './icons/icon-512.png'];
+  './icons/icon2-180.png', './icons/icon2-192.png', './icons/icon2-512.png', './icons/icon2-maskable-512.png'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(VERSION).then(c => c.addAll(FILES))); });
 self.addEventListener('activate', e => e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== VERSION).map(k => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', e => {

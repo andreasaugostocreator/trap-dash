@@ -179,5 +179,14 @@ IDEAS.bombDrop = (() => { const [c, x] = mk();
 
 window.ideas = Object.keys(IDEAS);
 window.draw = (id, size) => { const c = document.querySelector('canvas'); c.width = c.height = size; const k = c.getContext('2d'); k.imageSmoothingEnabled = false; k.drawImage(IDEAS[id], 0, 0, size, size); };
+// Android crops icons into a circle or squircle: the "maskable" version puts the 32x32 scene in the middle 80% of a
+// 40x40 picture and stretches its top row (sky) and bottom row (ground) out to the edges.
+window.drawPadded = (id, size) => {
+  const src = IDEAS[id], p = document.createElement('canvas'); p.width = p.height = 40; const x = p.getContext('2d'); x.imageSmoothingEnabled = false;
+  x.drawImage(src, 0, 0, 32, 1, 0, 0, 40, 4); x.drawImage(src, 0, 31, 32, 1, 0, 36, 40, 4);
+  for (let j = 0; j < 32; j++) { x.drawImage(src, 0, j, 1, 1, 0, 4 + j, 4, 1); x.drawImage(src, 31, j, 1, 1, 36, 4 + j, 4, 1); }
+  x.drawImage(src, 4, 4);
+  const c = document.querySelector('canvas'); c.width = c.height = size; const k = c.getContext('2d'); k.imageSmoothingEnabled = false; k.drawImage(p, 0, 0, size, size);
+};
 window.ready = true;
 </script>
