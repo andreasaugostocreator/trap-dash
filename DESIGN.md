@@ -267,3 +267,17 @@ pit) carries on to the screen edge.
 
 The **decoy** is a real fake runner now: it runs on with the runner's physics, lands on floors and platforms, hops over walls
 and gaps on its own, vanishes in pits, and bursts with "FOOLED!" when a trap hits it.
+
+## 11. Performance
+
+The game is drawn straight into a small canvas, one pixel per game pixel (about 690×310 on a phone), and the browser's
+GPU scales it up with `image-rendering: pixelated`. Before, every frame was also copied into a full-resolution canvas
+(2745×1236 on a big phone), which cost more than drawing the game itself. Only the on-screen part of the level image is
+drawn. On a phone-sized screen with the CPU slowed 6× (like a cheap phone) a frame went from ~75 ms to ~25–30 ms; on a
+normal phone that is a few ms, well inside 60 fps.
+
+**Graphics** setting: Auto (default), High, Low. Low drops purely decorative effects (sun rays, the vignette, butterflies
+and fireflies, extra particles). Auto switches to Low by itself after a couple of seconds below ~40 fps.
+
+`tools/perf-test.mjs [throttle]` measures frame times; `tools/devices-test.mjs` checks the game screen on 13 phone,
+tablet and foldable sizes; `tools/menu-fit-test.mjs` checks every menu on 16 sizes.

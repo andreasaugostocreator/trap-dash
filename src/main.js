@@ -114,12 +114,25 @@ function openSettings(back) {
     ['Level preview', () => settings.preview, v => { settings.preview = v; }],
     ['Screen shake', () => settings.shake, v => { settings.shake = v; R.shakeOn = v; }],
   ];
+  const GFX = { auto: 'Auto', high: 'High', low: 'Low' }, nextGfx = { auto: 'high', high: 'low', low: 'auto' };
   panel(`<h2>Settings</h2><div class="settings">${rows.map(([label, get], i) => `<div class="setRow"><span>${label}</span><button class="chip tog${get() ? ' on' : ''}" data-i="${i}">${get() ? 'On' : 'Off'}</button></div>`).join('')}</div>
+    <div class="setRow"><span>Graphics <small>(Low = lighter, for slow phones)</small></span><button class="chip tog on" id="gfxBtn">${GFX[settings.graphics] || 'Auto'}</button></div>
     <div class="buttons"><button class="big pink" id="setDone">Done</button></div>`);
+  $('gfxBtn').onclick = () => { settings.graphics = nextGfx[settings.graphics] || 'auto'; applyGraphics(); saveSettings(); sfx.click(); openSettings(back); };
   for (const b of $('panelCard').querySelectorAll('.tog')) b.onclick = () => { const r = rows[+b.dataset.i]; r[2](!r[1]()); saveSettings(); sfx.click(); openSettings(back); };
   $('setDone').onclick = () => { sfx.click(); back(); };
 }
 R.shakeOn = settings.shake;
+// Graphics: High keeps every effect, Low drops the purely decorative ones, Auto switches to Low by itself when frames
+// get slow (below ~40 fps for a couple of seconds).
+function applyGraphics() { R.lite = settings.graphics === 'low' || (settings.graphics === 'auto' && autoLite); }
+let autoLite = false, slowFrames = 0;
+function watchSpeed(dt) {
+  if (settings.graphics !== 'auto' || autoLite || !run || run.phase !== 'play' || run.paused) return;
+  slowFrames = dt > 0.025 ? slowFrames + 1 : Math.max(0, slowFrames - 2);
+  if (slowFrames > 90) { autoLite = true; applyGraphics(); }
+}
+applyGraphics();
 $('howBtn').onclick = () => { panel(`
   <h2>How to play</h2>
   <div class="row tutRow"><button class="mid pink" id="tutRun">🏃 Runner training</button><button class="mid blue" id="tutTrap">🪤 Trapper training</button></div>
@@ -1199,13 +1212,14 @@ let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;   // rAF time can trail performance.now() on the first frame
+  watchSpeed(dt);
   try { tick(dt, now); } catch (e) { console.error(e); showError(e); }
 }
 function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 
 function tick(dt, now) {
   const dpr = Math.min(devicePixelRatio || 1, 3);
-  if (canvas.width !== Math.round(canvas.clientWidth * dpr) || canvas.height !== Math.round(canvas.clientHeight * dpr)) updateInsets();
+  if (innerWidth !== R.vw || innerHeight !== R.vh || dpr !== R.dpr) updateInsets();
   paintEdges();
   if (!run) { drawAttract(dt); animateTitle(dt); return; }
   const w = run.world;

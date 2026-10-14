@@ -525,3 +525,10 @@ body.playing canvas#game, body.playing.nopad canvas#game, body.playing.dualpad c
 @media (max-height: 500px) and (orientation: landscape) and (min-width: 880px) {
   .titleCard .row.small { grid-template-columns: repeat(4, auto); justify-content: center; }
 }
+@media (max-height: 380px) and (orientation: landscape) {
+  #lobby .card { padding-top: 6px; padding-bottom: 6px; }
+  #lobby .players { margin: 3px 0 2px; } #lobby .player { padding: 2px 8px; }
+  #lobby .levels { padding-bottom: 4px; } #lobby .levels button { padding: 3px 8px; }
+  #lobby .randRow { margin-top: 3px; } #lobby #firstRow { margin-top: 2px; } #lobby .buttons { margin-top: 5px; }
+  #lobby button.big { padding: 7px; }
+}

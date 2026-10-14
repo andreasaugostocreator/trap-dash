@@ -14,18 +14,18 @@ const FIRE = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
 export class Renderer {
   constructor(canvas) {
     initSprites();
-    this.c = canvas; this.ctx = canvas.getContext('2d');
-    this.lo = canvasOf(320, 180); this.l = this.lo.getContext('2d');
+    // The game is drawn straight into a small canvas, 1 pixel per world pixel, and the browser scales it up (crisp, with
+    // image-rendering: pixelated). No big full-resolution canvas to fill every frame: much lighter on phones.
+    this.c = canvas; this.lo = canvas; this.l = canvas.getContext('2d', { alpha: false }); this.ctx = this.l;
     this.cam = { x: 0, y: 0 }; this.k = 3; this.parts = []; this.shake = 0; this.t = 0; this.springT = {};
     this.levelCache = null; this.bgCache = {}; this.anim = 0;
   }
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const r = this.c.getBoundingClientRect();   // the canvas fills the space the control panels leave
-    this.dpr = dpr; this.vw = r.width || window.innerWidth; this.vh = r.height || window.innerHeight; this.ox = r.left; this.oy = r.top;
+    this.dpr = dpr; this.vw = window.innerWidth; this.vh = window.innerHeight; this.ox = 0; this.oy = 0;
     this.insets = this.insets || { top: 0, bottom: 0 };
-    this.c.width = Math.round(this.vw * dpr); this.c.height = Math.round(this.vh * dpr);
+    this.devW = Math.round(this.vw * dpr); this.devH = Math.round(this.vh * dpr);   // the screen in device pixels
     this.wide = null;
   }
 
@@ -38,7 +38,7 @@ export class Renderer {
   setZoom(wide) {
     if (this.wide === wide) return;
     this.wide = wide;
-    const W = this.c.width, H = this.c.height;
+    const W = this.devW, H = this.devH;
     // Short views (phones) show fewer, bigger tiles: about one tile per 22 CSS px of height, 10 to 15 tiles.
     const band = Math.max(120, this.vh - this.insets.top - this.insets.bottom);
     const tiles = Math.max(10, Math.min(15, band / 22)) + (wide ? 3 : 0);
@@ -46,7 +46,9 @@ export class Renderer {
     k = Math.max(1, Math.min(k, Math.floor(W / (TILE * 13))));
     this.k = k;
     this.lo.width = Math.ceil(W / k); this.lo.height = Math.ceil(H / k);
-    this.l = this.lo.getContext('2d'); this.l.imageSmoothingEnabled = false;
+    // CSS stretches it over the screen (k device pixels per game pixel, give or take a fraction at the edge).
+    // It must never be wider than the screen: on phones that can make the page itself resize, over and over.
+    this.l.imageSmoothingEnabled = false;
     this.bgCache = {};
   }
 
@@ -155,7 +157,11 @@ export class Renderer {
     const cx = this.camX + Math.round((Math.random() - 0.5) * s), cy = this.camY + Math.round((Math.random() - 0.5) * s);
     this.drawBackground(world, th, cx, cy);
     l.save(); l.translate(-cx, -cy);
-    l.drawImage(this.levelCanvas(world, th), 0, 0);
+    {   // only the part of the level that is on screen
+      const lc = this.levelCanvas(world, th), sx = Math.max(0, cx), sy = Math.max(0, cy);
+      const sw = Math.min(lc.width - sx, this.lo.width), sh = Math.min(lc.height - sy, this.lo.height);
+      if (sw > 0 && sh > 0) l.drawImage(lc, sx, sy, sw, sh, sx, sy, sw, sh);
+    }
     const below = cy + this.lo.height - world.h * TILE;
     if (below > 0) {   // under the level (behind the buttons): the bottom row of the level carries on downward
       const soil = this.bg('soil' + world.level.theme, () => {   // deep earth: plain soil with a few specks
@@ -170,7 +176,7 @@ export class Renderer {
     }
     this.drawWater(world, cx);
     this.drawPlatforms(world);
-    this.drawAmbient(world, cx, cy);
+    if (!this.lite) this.drawAmbient(world, cx, cy);
     this.drawProps(world);
     for (const t of world.traps) this.drawTrap(t, th);
     this.drawGlue(world, o);
@@ -202,15 +208,13 @@ export class Renderer {
     if (this.flash > 0) { this.flash -= dt; l.fillStyle = '#ffffff55'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (world.slowmo > 0) { l.fillStyle = '#5ab4ff22'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (o.runnerView && world.player.fog > 0) this.drawFog(world, cx, cy);
-    l.drawImage(this.bg('vignette', () => {
+    if (!this.lite) l.drawImage(this.bg('vignette', () => {
       const c = canvasOf(this.lo.width, this.lo.height), v = c.getContext('2d'), W = c.width, H = c.height;
       const g = v.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.45, W / 2, H * 0.45, Math.max(W, H) * 0.75);
       g.addColorStop(0, 'rgba(28,20,36,0)'); g.addColorStop(1, 'rgba(28,20,36,0.28)'); v.fillStyle = g; v.fillRect(0, 0, W, H);
       return c;
     }), 0, 0);
     if (o.trapper) this.drawUpcoming(world, cx, cy, o);
-    const ctx = this.ctx; ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(this.lo, 0, 0, this.lo.width * this.k, this.lo.height * this.k);
   }
 
   // ---------- background: dithered sky, far layer, near layer, clouds
@@ -255,7 +259,7 @@ export class Renderer {
       }), -Math.round((cx * 0.3) % 480), 0);
       l.drawImage(this.bg('stalactites'), 480 - Math.round((cx * 0.3) % 480), 0);
     }
-    if (theme === 'day' || theme === 'sunset' || theme === 'sky' || theme === 'ice' || theme === 'pirate') {   // soft sun rays
+    if (!this.lite && (theme === 'day' || theme === 'sunset' || theme === 'sky' || theme === 'ice' || theme === 'pirate')) {   // soft sun rays
       l.save(); l.globalAlpha = 0.07 + 0.02 * Math.sin(this.t * 0.7);
       l.fillStyle = theme === 'sunset' ? '#fff0b0' : '#ffffff';
       for (let i = 0; i < 4; i++) {
@@ -1004,6 +1008,7 @@ export class Renderer {
 
   drawParticles(dt) {
     const l = this.l;
+    if (this.parts.length > (this.lite ? 60 : 400)) this.parts.splice(0, this.parts.length - (this.lite ? 60 : 400));   // a cap keeps big moments light
     for (let i = this.parts.length - 1; i >= 0; i--) {
       const q = this.parts[i];
       q.life -= dt; if (q.life <= 0) { this.parts.splice(i, 1); continue; }
