@@ -83,6 +83,100 @@ IDEAS.versus = (() => { const [c, x] = mk();
   R(x, 21, 27, 7, 2, ink);
   return c; })();
 
+// ---------- round two: in the spirit of 1 (a leap over danger, a big sky) and 5 (night, moon, one big hazard)
+const stars = (x, n, seed = 1, maxY = 20) => { for (let i = 0; i < n; i++) R(x, (i * 13 + seed * 7) % 32, (i * 7 + seed * 3) % maxY, 1, 1, i % 4 ? '#8f95d6' : '#ffffff'); };
+const moon = (x, cx, cy, r) => { disc(x, cx, cy, r + 1, '#fff6d055'); disc(x, cx, cy, r, '#fff6d0'); R(x, cx - 2, cy - 1, 2, 2, '#e3d39c'); R(x, cx + 1, cy + 2, 1, 1, '#e3d39c'); };
+const saw = (x, cx, cy, r) => {
+  for (let a = 0; a < 18; a++) { const ang = a / 18 * Math.PI * 2; R(x, Math.round(cx + Math.cos(ang) * (r + 1)), Math.round(cy + Math.sin(ang) * (r + 1)), 2, 2, '#c3c9d6'); }
+  disc(x, cx, cy, r, '#9aa3b5'); disc(x, cx, cy, r - 2, '#c3c9d6'); disc(x, cx, cy, 2, '#5d6475'); R(x, cx - r + 3, cy - r + 2, 3, 1, '#ffffff');
+};
+const spikes = (x, x0, y, n, glow) => { for (let i = 0; i < n; i++) { const sx = x0 + i * 4; R(x, sx + 1, y, 1, 1, '#fff'); R(x, sx, y + 1, 3, 1, '#c8ccd8'); R(x, sx - 1, y + 2, 5, 2, '#9aa3b5'); R(x, sx - 1, y + 3, 5, 1, ink); } if (glow) R(x, x0 - 2, y + 2, n * 4 + 2, 1, glow); };
+const trail = (x, char, frame, X, Y, dx, dy) => { for (let k = 3; k >= 1; k--) { x.globalAlpha = 0.16 * k; x.drawImage(charFrame(ch(char), frame, 1, 0), X - k * dx, Y + k * dy); } x.globalAlpha = 1; x.drawImage(charFrame(ch(char), frame, 1, 0), X, Y); };
+const ground = (x, y, top, mid, dirt) => { R(x, 0, y, 32, 1, ink); R(x, 0, y + 1, 32, 2, top); R(x, 0, y + 3, 32, 32 - y, dirt); R(x, 0, y + 3, 32, 1, mid); };
+
+// 7. Sunset Saw: the ninja leaps a big saw at sunset (1 meets 5)
+IDEAS.sunsetSaw = (() => { const [c, x] = mk();
+  sky(x, ['#ff6f61', '#ff9466', '#ffbb7a', '#ffdfa0']); disc(x, 24, 8, 4, '#fff1b8'); disc(x, 24, 8, 3, '#ffe27a');
+  ground(x, 26, '#55a83a', '#2f7a2c', '#62331f'); saw(x, 17, 26, 7);
+  trail(x, 'ninja', 'jump', 9, 2, 3, 1); return c; })();
+
+// 8. Flame Night: the knight jumps a roaring flame column under the moon
+IDEAS.flameNight = (() => { const [c, x] = mk();
+  sky(x, ['#121330', '#191c42', '#222759', '#2e3470']); stars(x, 14, 2); moon(x, 25, 6, 4);
+  ground(x, 27, '#357a72', '#245452', '#1f1833');
+  const F = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
+  for (let j = 0; j < 14; j++) { const w = Math.max(1, Math.round(6 - j * 0.35 + Math.sin(j * 1.7) * 1.2)); for (let i = -w; i <= w; i++) R(x, 18 + i, 26 - j, 1, 1, F[Math.min(4, Math.floor((w - Math.abs(i)) / w * 4.5 + j / 10))]); }
+  R(x, 15, 27, 7, 2, '#5d6475'); R(x, 12, 12, 13, 15, '#ff7a1a14');
+  x.drawImage(charFrame(ch('knight'), 'jump', 1, 0), 4, 5); return c; })();
+
+// 9. Lava Leap: the robot dashes over a lava pit, embers rising
+IDEAS.lavaLeap = (() => { const [c, x] = mk();
+  sky(x, ['#1a0d0d', '#2b1210', '#3d1812', '#5a2214']);
+  for (let i = 0; i < 6; i++) { const cx0 = (i * 9 + 3) % 32, h = 4 + (i * 5) % 6; for (let j = 0; j < h; j++) R(x, cx0 - Math.round((h - j) / 3), j, Math.round((h - j) / 1.5) + 1, 1, '#2a1414'); }
+  R(x, 0, 25, 9, 1, ink); R(x, 0, 26, 9, 6, '#3a2a2a'); R(x, 0, 26, 9, 1, '#ff7a1a'); R(x, 24, 25, 8, 1, ink); R(x, 24, 26, 8, 6, '#3a2a2a'); R(x, 24, 26, 8, 1, '#ff7a1a');
+  for (let i = 9; i < 24; i++) { const t = 27 + Math.round(Math.sin(i / 2) * 0.8); R(x, i, t, 1, 32 - t, '#c2361b'); R(x, i, t, 1, 1, '#ffd84a'); R(x, i, t - 3, 1, 3, '#ff7a1a22'); }
+  for (const [a, b] of [[12, 20], [16, 16], [20, 22], [14, 12], [22, 14]]) { R(x, a, b, 1, 1, '#ffd84a'); R(x, a - 1, b - 1, 3, 3, '#ff7a1a33'); }
+  trail(x, 'robot', 'jump', 14, 5, 3, 0); return c; })();
+
+// 10. Cannon Cove: the pirate hops a cannonball over the sea at sunset
+IDEAS.cannonCove = (() => { const [c, x] = mk();
+  sky(x, ['#ff7b6a', '#ff9e78', '#ffc58a']); disc(x, 8, 12, 5, '#fff1b8');
+  R(x, 0, 17, 32, 9, '#1f5f9e'); for (let j = 18; j < 26; j += 2) for (let i = (j * 3) % 7; i < 32; i += 7) R(x, i, j, 3, 1, '#3d8be0'); R(x, 2, 17, 12, 1, '#ffd0b0');
+  R(x, 0, 26, 32, 1, ink); R(x, 0, 27, 32, 5, '#7a4b26'); for (let i = 0; i < 32; i += 6) R(x, i, 28, 1, 4, '#5a3a20'); R(x, 0, 27, 32, 1, '#d9a066');
+  R(x, 24, 21, 8, 5, ink); R(x, 25, 22, 7, 3, '#3b3f52'); R(x, 23, 22, 2, 3, ink);
+  disc(x, 16, 23, 3, ink); R(x, 15, 21, 2, 1, '#9aa3b5'); for (let k = 1; k <= 3; k++) R(x, 19 + k * 2, 23, 1, 1, '#ffffffaa');
+  trail(x, 'pirate', 'jump', 12, 2, 3, 1); return c; })();
+
+// 11. Laser Space: the astronaut jumps a laser beam, a ringed planet behind
+IDEAS.laser = (() => { const [c, x] = mk();
+  sky(x, ['#0c0a1e', '#14112c', '#1d1840']); stars(x, 18, 3, 26);
+  disc(x, 7, 9, 5, '#b48cff'); disc(x, 7, 9, 4, '#c9a8ff'); R(x, 0, 9, 15, 1, '#ffd84a'); R(x, 1, 10, 13, 1, '#e0a50e');
+  R(x, 0, 27, 32, 5, '#3b3f52'); R(x, 0, 27, 32, 1, '#9aa3b5'); for (let i = 2; i < 32; i += 8) R(x, i, 29, 4, 1, '#5d6475');
+  R(x, 27, 21, 5, 6, ink); R(x, 28, 22, 4, 4, '#5d6475'); R(x, 27, 23, 1, 2, '#ff5d6a');
+  R(x, 0, 23, 27, 2, '#ff5d6a55'); R(x, 0, 23, 27, 1, '#ff5d6a'); R(x, 0, 24, 27, 1, '#ffd0d4');
+  trail(x, 'astronaut', 'jump', 9, 3, 3, 1); return c; })();
+
+// 12. Moon Silhouette: the ninja's leap against a huge full moon over spikes
+IDEAS.moonLeap = (() => { const [c, x] = mk();
+  sky(x, ['#121330', '#1b1e48', '#272c64']); stars(x, 12, 5);
+  disc(x, 16, 14, 11, '#fff6d033'); disc(x, 16, 14, 10, '#fff6d0'); R(x, 10, 9, 3, 2, '#e3d39c'); R(x, 20, 17, 3, 2, '#e3d39c'); R(x, 13, 19, 2, 1, '#e3d39c');
+  R(x, 0, 27, 32, 5, '#140f22'); spikes(x, 6, 24, 6, null);
+  for (let j = 0; j < 16; j++) for (let i = 0; i < 12; i++) { /* the ninja as a dark silhouette */ }
+  x.drawImage(charFrame(ch('ninja'), 'jump', 1, 0), 10, 4);
+  return c; })();
+
+// 13. Rope Swing: the explorer swings on a rope over a pit of saws at dusk
+IDEAS.ropeSwing = (() => { const [c, x] = mk();
+  sky(x, ['#2d2152', '#4a3075', '#83508f', '#d67896']); stars(x, 8, 4, 12);
+  R(x, 12, 0, 10, 3, ink); R(x, 13, 0, 8, 2, '#5d6475');
+  for (let k = 0; k < 14; k++) { const px = Math.round(17 - k * 0.62), py = 3 + k; R(x, px, py, 1, 1, k % 3 ? '#c99a5e' : '#9a6a3a'); R(x, px + 1, py, 1, 1, '#5a3418'); }
+  R(x, 0, 30, 32, 2, '#3d2260'); saw(x, 10, 30, 5); saw(x, 24, 31, 5);
+  x.drawImage(charFrame(ch('explorer'), 'jump', 1, 0), 3, 13); return c; })();
+
+// 14. Aurora: the knight leaps over ice spikes under the northern lights
+IDEAS.aurora = (() => { const [c, x] = mk();
+  sky(x, ['#0e1a33', '#13264a', '#1b3560', '#264a7a']); stars(x, 12, 6, 14);
+  for (let i = 0; i < 32; i++) { const y = 6 + Math.round(Math.sin(i / 5) * 3); R(x, i, y, 1, 4, '#5ad1c855'); R(x, i, y + 1, 1, 2, '#7bd65a66'); R(x, i, y - 2, 1, 2, '#b48cff33'); }
+  R(x, 0, 27, 32, 5, '#a8c8e8'); R(x, 0, 27, 32, 1, '#ffffff'); R(x, 0, 26, 32, 1, '#1c2a44');
+  for (let i = 0; i < 4; i++) { const sx = 15 + i * 4; R(x, sx + 1, 21, 1, 2, '#ffffff'); R(x, sx, 23, 3, 2, '#bfe9ff'); R(x, sx - 1, 25, 5, 1, '#9ad7ff'); }
+  trail(x, 'knight', 'jump', 7, 3, 3, 1); return c; })();
+
+// 15. Red Alert: the ninja flies between two saws, warning stripes in the sky
+IDEAS.redAlert = (() => { const [c, x] = mk();
+  for (let j = 0; j < 32; j++) for (let i = 0; i < 32; i++) R(x, i, j, 1, 1, ((i + j) >> 2) % 2 ? '#e8414f' : '#c22b3b');
+  disc(x, 16, 15, 12, '#1c142455'); saw(x, 4, 26, 6); saw(x, 28, 26, 6); R(x, 0, 30, 32, 2, ink);
+  R(x, 13, 1, 6, 2, '#ffd84a'); R(x, 15, 3, 2, 4, '#ffd84a'); R(x, 15, 8, 2, 2, '#ffd84a');
+  x.drawImage(charFrame(ch('ninja'), 'jump', 1, 0), 10, 10); return c; })();
+
+// 16. Bomb Drop: a bomb with a lit fuse falls toward the robot under a haunted moon
+IDEAS.bombDrop = (() => { const [c, x] = mk();
+  sky(x, ['#120d1e', '#1c1430', '#2a1f45', '#3a2a5a']); stars(x, 10, 8); moon(x, 6, 6, 4);
+  R(x, 0, 27, 32, 5, '#2c2638'); R(x, 0, 27, 32, 1, '#566656'); R(x, 0, 26, 32, 1, ink);
+  R(x, 24, 21, 5, 6, '#8a8a9a'); R(x, 25, 20, 3, 1, '#8a8a9a'); R(x, 25, 22, 3, 1, '#5a5a6a');
+  disc(x, 21, 8, 4, ink); disc(x, 21, 8, 3, '#3b3f52'); R(x, 19, 6, 2, 1, '#9aa3b5'); R(x, 22, 3, 1, 2, '#c99a5e'); R(x, 23, 1, 2, 2, '#ffd84a'); R(x, 24, 0, 1, 1, '#ff5a2a');
+  for (const [a, b] of [[21, 14], [21, 16], [21, 18]]) R(x, a, b, 1, 1, '#ffffff66');
+  trail(x, 'robot', 'run1', 6, 11, 3, 0); return c; })();
+
 window.ideas = Object.keys(IDEAS);
 window.draw = (id, size) => { const c = document.querySelector('canvas'); c.width = c.height = size; const k = c.getContext('2d'); k.imageSmoothingEnabled = false; k.drawImage(IDEAS[id], 0, 0, size, size); };
 window.ready = true;
