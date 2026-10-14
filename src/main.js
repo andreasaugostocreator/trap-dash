@@ -902,7 +902,7 @@ function updateTrapScore(bump) {
 }
 
 // ---------- level preview: the camera flies to the flag and back while a banner shows the level and the gadgets
-const PREVIEW = 8;
+const PREVIEW = 12;   // seconds; tap ready to skip (online: both players)
 // One line per gadget, for the preview banner.
 const GAD_DESC = {
   dash: 'burst forward', blink: 'teleport 3 tiles', haste: 'run faster', feather: 'jump again in the air', boots: 'jump higher', glider: 'hold jump to float',

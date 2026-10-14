@@ -22,7 +22,7 @@ await h.waitForFunction(() => window.__td.run.phase === 'play', null, { timeout:
 console.log('after preview + count:', (await ph()).join(', '));
 await h.evaluate(() => { const w = window.__td.run.world; w.player.x = w.goal.x; w.player.y = w.goal.y; }); await h.waitForTimeout(2200);
 await h.click('#go2'); await h.waitForTimeout(1000);
-await h.waitForTimeout(9500);
+await h.waitForTimeout(13500);
 console.log('run 2: guest runs with ghost:', await g.evaluate(() => !!window.__td.run.ghost && window.__td.run.runnerHere), '| host sees ghost:', await h.evaluate(() => !!window.__td.run.ghost));
 console.log(errs.length ? 'ERRORS\n' + errs.join('\n') : 'no errors');
 await b.close();
