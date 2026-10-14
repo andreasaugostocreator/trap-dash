@@ -73,7 +73,9 @@ export class Renderer {
   follow(world, dt, wide, snap) {
     this.setZoom(!!wide);
     if (!this.lo.width) return;
-    const p = world.player, vw = this.lo.width, vh = this.lo.height;
+    // While the runner's decoy is out, the trapper's camera chases the decoy (that's the trick); the real runner stays
+    // drawn wherever they are, and the camera glides back to them when the decoy is gone.
+    const p = wide && world.decoy ? world.decoy : world.player, vw = this.lo.width, vh = this.lo.height;
     // The trapper's camera looks far ahead (toward the flag), so they see the traps coming before the runner reaches them.
     const ahead = Math.sign(world.goal.x - p.x) || p.face, up = wide && world.goal.y < p.y - 3 * TILE;
     const lead = wide ? ahead * vw * 0.27 : p.face * 36 + p.vx * 0.25;

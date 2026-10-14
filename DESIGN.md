@@ -266,7 +266,8 @@ ahead stay in that band while only sky and deep ground sit behind the buttons. B
 pit) carries on to the screen edge.
 
 The **decoy** is a real fake runner now: it runs on with the runner's physics, lands on floors and platforms, hops over walls
-and gaps on its own, vanishes in pits, and bursts with "FOOLED!" when a trap hits it.
+and gaps on its own, vanishes in pits, and bursts with "FOOLED!" when a trap hits it. While it is out, the trapper's camera chases
+the decoy (the real runner is still drawn wherever they are) and glides back to the runner when the decoy is gone.
 
 ## 11. Performance
 
