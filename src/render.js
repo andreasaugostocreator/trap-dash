@@ -24,18 +24,25 @@ export class Renderer {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
     const r = this.c.getBoundingClientRect();   // the canvas fills the space the control panels leave
     this.dpr = dpr; this.vw = r.width || window.innerWidth; this.vh = r.height || window.innerHeight; this.ox = r.left; this.oy = r.top;
+    this.insets = this.insets || { top: 0, bottom: 0 };
     this.c.width = Math.round(this.vw * dpr); this.c.height = Math.round(this.vh * dpr);
     this.wide = null;
   }
 
+  // The game fills the screen; the top bar and the button panels float over it. The camera keeps the action in the
+  // clear band between them (sizes in CSS px), so only sky and deep ground end up behind the buttons.
+  setInsets(top, bottom) { this.insets = { top: Math.max(0, top), bottom: Math.max(0, bottom) }; this.wide = null; }
+  get bandTop() { return this.insets.top * this.dpr / this.k; }            // in low-res pixels
+  get bandBottom() { return this.insets.bottom * this.dpr / this.k; }
   // Whole-number zoom so about 15 tiles fit vertically (17 for the trapper), keeping at least ~13 across.
   setZoom(wide) {
     if (this.wide === wide) return;
     this.wide = wide;
     const W = this.c.width, H = this.c.height;
     // Short views (phones) show fewer, bigger tiles: about one tile per 22 CSS px of height, 10 to 15 tiles.
-    const tiles = Math.max(10, Math.min(15, this.vh / 22)) + (wide ? 3 : 0);
-    let k = Math.round(H / (TILE * tiles));
+    const band = Math.max(120, this.vh - this.insets.top - this.insets.bottom);
+    const tiles = Math.max(10, Math.min(15, band / 22)) + (wide ? 3 : 0);
+    let k = Math.round(band * this.dpr / (TILE * tiles));
     k = Math.max(1, Math.min(k, Math.floor(W / (TILE * 13))));
     this.k = k;
     this.lo.width = Math.ceil(W / k); this.lo.height = Math.ceil(H / k);
@@ -51,10 +58,11 @@ export class Renderer {
     const ahead = Math.sign(world.goal.x - p.x) || p.face, up = wide && world.goal.y < p.y - 3 * TILE;
     const lead = wide ? ahead * vw * 0.27 : p.face * 36 + p.vx * 0.25;
     this.lookX = snap ? lead : (this.lookX ?? 0) + (lead - (this.lookX ?? 0)) * Math.min(1, dt * (wide ? 1.5 : 3));
-    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - vh * (up ? 0.7 : 0.55);
+    const bt = this.bandTop, bb = this.bandBottom, band = vh - bt - bb;
+    let tx = p.x + PHYS.w / 2 + this.lookX - vw / 2, ty = p.y + PHYS.h / 2 - bt - band * (up ? 0.7 : 0.55);
     const W = world.w * TILE, H = world.h * TILE;
     tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
-    ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
+    ty = this.clampY(ty, H, vh, bt, bb);
     const k = snap ? 1 : Math.min(1, dt * 6);
     this.cam.x += (tx - this.cam.x) * k; this.cam.y += (ty - this.cam.y) * (snap ? 1 : k * 0.8);
   }
@@ -63,9 +71,10 @@ export class Renderer {
   pan(world, x, y, wide) {
     this.setZoom(!!wide);
     const vw = this.lo.width, vh = this.lo.height, W = world.w * TILE, H = world.h * TILE;
-    let tx = x - vw / 2, ty = y - vh * 0.55;
+    const bt = this.bandTop, bb = this.bandBottom;
+    let tx = x - vw / 2, ty = y - bt - (vh - bt - bb) * 0.55;
     tx = vw >= W ? (W - vw) / 2 : Math.max(0, Math.min(W - vw, tx));
-    ty = vh >= H ? H - vh : Math.max(0, Math.min(H - vh, ty));
+    ty = this.clampY(ty, H, vh, bt, bb);
     this.cam.x = tx; this.cam.y = ty; this.lookX = 0;
   }
 
@@ -85,6 +94,12 @@ export class Renderer {
     l.globalAlpha = 1;
   }
 
+  // The level may run under the bars: the band, not the screen, has to stay inside the level.
+  clampY(ty, H, vh, bt, bb) {
+    const lo = -bt, hi = H - vh + bb;
+    return hi < lo ? hi : Math.max(lo, Math.min(hi, ty));
+  }
+
   get camX() { return Math.round(this.cam.x); }
   get camY() { return Math.round(this.cam.y); }
   toWorld(cx, cy) { return { x: (cx - (this.ox || 0)) * this.dpr / this.k + this.camX, y: (cy - (this.oy || 0)) * this.dpr / this.k + this.camY }; }
@@ -102,6 +117,7 @@ export class Renderer {
     if (k === 'goal') this.say(x, y - 40, 'GOAL!', '#ffd84a', 1.6);
     if (k === 'die') this.closeAt = null;
     if (k === 'die') this.say(x, y - 14, ['CAUGHT!', 'OUCH!', 'GOTCHA!', 'BONK!'][Math.floor(Math.random() * 4)], '#ff5d6a');
+    if (k === 'fooled') { this.say(x, y - 14, 'FOOLED!', '#c58bff'); P(14, () => ({ x, y, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 90, life: 0.5, size: 2, color: Math.random() < 0.5 ? '#c58bff' : '#ffffff', g: 200 })); }
     if (k === 'block') this.say(x, y - 18, 'BLOCKED!', '#8fe8ff');
     if (k === 'stun') this.say(x, y - 14, 'ZAP!', '#ffd84a');
     if (k === 'pop') this.say(x, y - 10, 'POP!', '#ff9a3c');
@@ -141,9 +157,16 @@ export class Renderer {
     l.save(); l.translate(-cx, -cy);
     l.drawImage(this.levelCanvas(world, th), 0, 0);
     const below = cy + this.lo.height - world.h * TILE;
-    if (below > 0) {   // under the level (only the trapper's camera goes here): solid earth
-      l.fillStyle = th.dirt[0]; l.fillRect(cx, world.h * TILE, this.lo.width, below);
-      l.fillStyle = th.dirt[1]; for (let x = Math.floor(cx / 4) * 4; x < cx + this.lo.width; x += 4) l.fillRect(x, world.h * TILE + ((x / 4) % 3), 2, 1);
+    if (below > 0) {   // under the level (behind the buttons): the bottom row of the level carries on downward
+      const soil = this.bg('soil' + world.level.theme, () => {   // deep earth: plain soil with a few specks
+        const c = canvasOf(TILE, TILE), v = c.getContext('2d'), D = th.dirt;
+        for (let j = 0; j < TILE; j++) for (let i = 0; i < TILE; i++) { const n = hash(i * 7 + 3, j * 5 + 1); v.fillStyle = n < 0.08 ? D[0] : n > 0.96 ? D[2] : D[1]; v.fillRect(i, j, 1, 1); }
+        return c;
+      });
+      for (let tx = Math.max(0, Math.floor(cx / TILE)); tx <= Math.min(world.w - 1, Math.floor((cx + this.lo.width) / TILE)); tx++) {
+        if (world.tile(tx, world.h - 1) === 0) continue;   // a pit: the water carries on instead
+        for (let y = world.h * TILE; y < cy + this.lo.height; y += TILE) l.drawImage(soil, tx * TILE, y);
+      }
     }
     this.drawWater(world, cx);
     this.drawPlatforms(world);
@@ -160,7 +183,8 @@ export class Renderer {
     if (world.decoy) {   // the runner's decoy: the trapper can't tell it apart, the runner sees a ghost
       const d = world.decoy;
       l.globalAlpha = o.trapper ? 1 : 0.4;
-      l.drawImage(charFrame(o.colors, ['run0', 'run1', 'run2', 'run1'][Math.floor(this.t * 12) % 4], d.face, 0), Math.round(d.x + PHYS.w / 2 - 6), Math.round(d.y + PHYS.h - 16));
+      const df = d.onGround ? ['run0', 'run1', 'run2', 'run1'][Math.floor(this.t * 12) % 4] : d.vy < 0 ? 'jump' : 'fall';
+      l.drawImage(charFrame(o.colors, df, d.face, 0), Math.round(d.x + PHYS.w / 2 - 6), Math.round(d.y + PHYS.h - 16));
       l.globalAlpha = 1;
     }
     if (o.ghost) this.drawGhost(world, o.ghost);
@@ -972,7 +996,7 @@ export class Renderer {
       if (this.groundTop(world, x) < base) continue;
       const wave = Math.round(Math.sin(x / 7 + this.t * 2) * 1.5 + Math.sin(x / 3 - this.t * 3) * 0.6), top = base - 9 + wave;
       if (theme === 'lava') { l.fillStyle = '#ff7a1a22'; l.fillRect(x, top - 10, 1, 10); }
-      l.fillStyle = C[0]; l.fillRect(x, top, 1, base - top);
+      l.fillStyle = C[0]; l.fillRect(x, top, 1, base - top + this.lo.height);
       l.fillStyle = C[1]; l.fillRect(x, top, 1, 2);
       if ((x + Math.floor(this.t * 6)) % 11 === 0) { l.fillStyle = C[2]; l.fillRect(x, top, 1, 1); }
     }
@@ -1059,7 +1083,7 @@ export class Renderer {
     const slotOf = t => (o.slots || []).indexOf(t);
     const shown = [...list.filter(m => slotOf(m.t) >= 0), ...list.filter(m => slotOf(m.t) < 0).slice(0, 1)];
     for (const m of shown) {
-      let x = Math.max(1, Math.min(W - 18, m.tx - cx - 9)), y = Math.max(1, Math.min(H - 10, m.ty - cy - 5));
+      let x = Math.max(1, Math.min(W - 18, m.tx - cx - 9)), y = Math.max(Math.ceil(this.bandTop) + 2, Math.min(H - Math.ceil(this.bandBottom) - 12, m.ty - cy - 5));
       while (boxes.some(b => Math.abs(b.x - x) < 18 && Math.abs(b.y - y) < 10)) y += m.ty < cy ? 10 : -10;
       boxes.push({ x, y });
       const ready = m.t.state === 'idle' && m.t.cd <= 0, eta = Math.min(9, Math.ceil(m.ahead / PHYS.maxRun));

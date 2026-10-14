@@ -756,6 +756,15 @@ function useRunnerGadget(id) {
 
 // ---------- where the controls go. The bottom panel holds whoever plays on this device; on a shared touch screen
 // the trapper gets a panel at the top. The game view is whatever space is left, so nothing covers it.
+// Tell the renderer which parts of the screen the bars cover, so the camera keeps the action between them.
+function updateInsets() {
+  if (!run) { R.setInsets(0, 0); R.resize(); return; }
+  const hud = $('hud').getBoundingClientRect(), top = $('padTop'), pad = $('pad');
+  let t = hud.bottom, b = 0;
+  if (!top.classList.contains('hidden')) t = Math.max(t, top.getBoundingClientRect().bottom);
+  if (!pad.classList.contains('hidden')) b = innerHeight - pad.getBoundingClientRect().top;
+  R.setInsets(t, b); R.resize();
+}
 function layoutControls() {
   const parts = $('parts');
   for (const id of ['arrows', 'tJump', 'trapbar', 'gadbar', 'rgad']) parts.appendChild($(id));
@@ -774,7 +783,7 @@ function layoutControls() {
   document.body.classList.add('playing');
   document.body.classList.toggle('dualpad', hasTop);
   document.body.classList.toggle('nopad', !hasBottom);
-  R.resize();
+  updateInsets();
 }
 
 // ---------- a run
@@ -1153,7 +1162,7 @@ function confetti() {
 }
 
 function endRunView() {
-  run = null; hidePanel();
+  run = null; hidePanel(); R.setInsets(0, 0);
   for (const id of ['hud', 'hint', 'count', 'rotate', 'pad', 'padTop', 'preview']) $(id).classList.add('hidden');
   document.body.classList.remove('playing', 'dualpad');
 }
@@ -1196,7 +1205,7 @@ function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 
 function tick(dt, now) {
   const dpr = Math.min(devicePixelRatio || 1, 3);
-  if (canvas.width !== Math.round(canvas.clientWidth * dpr) || canvas.height !== Math.round(canvas.clientHeight * dpr)) R.resize();
+  if (canvas.width !== Math.round(canvas.clientWidth * dpr) || canvas.height !== Math.round(canvas.clientHeight * dpr)) updateInsets();
   paintEdges();
   if (!run) { drawAttract(dt); animateTitle(dt); return; }
   const w = run.world;
@@ -1294,7 +1303,7 @@ function drawAttract(dt) {
 }
 
 // ---------- boot
-R.resize(); addEventListener('resize', () => R.resize());
+R.resize(); addEventListener('resize', () => updateInsets());
 buildTitle();
 const q = new URLSearchParams(location.search);
 const session = store.get('session', null);

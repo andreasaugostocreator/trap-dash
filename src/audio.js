@@ -103,6 +103,7 @@ export const sfx = {
   crack: () => noise(0.08, { vol: 0.15, freq: 2500, q: 3 }),
   crumble: () => { noise(0.35, { vol: 0.3, freq: 500 }); tone(140, 0.25, { slide: -60, vol: 0.12, type: 'triangle' }); },
   grab: () => tone(500, 0.08, { slide: 200, vol: 0.08, type: 'triangle' }),
+  fooled: () => [880, 660, 990].forEach((f, i) => tone(f, 0.1, { vol: 0.07, delay: i * 0.06, type: 'triangle' })),
   click: () => tone(880, 0.05, { vol: 0.07, type: 'triangle' }),
   count: () => tone(660, 0.12, { vol: 0.12, type: 'square' }),
   go: () => tone(990, 0.3, { vol: 0.14, type: 'square' }),

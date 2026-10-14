@@ -257,3 +257,13 @@ button pops so you notice). Keys 1, 2, 3. The flame still burns while its button
 
 - **Items guide** (📖 Items on the title screen and in the pause menu): every trap, runner gadget and trapper gadget with an
   icon, a one-line description and its uses/cooldown, so new players know what a button does before trying it.
+
+## 10. Full-screen map
+
+The map fills the whole screen. The top bar and the button panels float over it, see-through, and the renderer knows how
+much of the screen they cover: zoom and camera work on the clear band between them, so the runner, the traps and the path
+ahead stay in that band while only sky and deep ground sit behind the buttons. Below the level the soil (or the water in a
+pit) carries on to the screen edge.
+
+The **decoy** is a real fake runner now: it runs on with the runner's physics, lands on floors and platforms, hops over walls
+and gaps on its own, vanishes in pits, and bursts with "FOOLED!" when a trap hits it.

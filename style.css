@@ -501,3 +501,12 @@ body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 .pvHold b { position: relative; font-size: 12px; line-height: 20px; padding: 0 8px; }
 .preview { cursor: default; }
 .screen.overlay { z-index: 7; }
+
+/* ---------- full-screen map: the bars float over it, see-through */
+body.playing canvas#game, body.playing.nopad canvas#game, body.playing.dualpad canvas#game { top: 0; height: 100%; }
+.hud { background: linear-gradient(rgba(18, 13, 26, .55), rgba(18, 13, 26, 0)); box-shadow: none; }
+.hud .who, .hud .tscore, .hud .deaths { text-shadow: 2px 0 var(--ink), -2px 0 var(--ink), 0 2px var(--ink), 0 -2px var(--ink), 0 3px var(--ink); }
+.pad { background: linear-gradient(rgba(18, 13, 26, 0), rgba(18, 13, 26, .35)); box-shadow: none; }
+.pad.top { background: linear-gradient(rgba(18, 13, 26, .35), rgba(18, 13, 26, 0)); box-shadow: none; }
+.pad .gbtn, .pad .tbtn, .arrows button, #tJump { box-shadow: var(--frame), 0 calc(var(--px) * 2) 0 var(--ink), 0 4px 10px rgba(0, 0, 0, .35); }
+.tbtn[data-state="empty"] { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .25); background: rgba(18, 13, 26, .25); }

@@ -257,7 +257,7 @@ export class World {
       case 'haste': p.haste = def.time; break;
       case 'slowmo': this.slowmo = def.time; break;
       case 'flag': if (!p.onGround) return false; p.cp = { x: p.x, y: p.y }; this.emit('cp', px, p.y + PHYS.h - TILE); break;
-      case 'decoy': this.decoy = { x: p.x, y: p.y, vx: p.face * PHYS.maxRun, face: p.face, t: def.time }; break;
+      case 'decoy': this.decoy = { x: p.x, y: p.y, vx: p.face * PHYS.maxRun * 1.05, vy: Math.min(0, p.vy), face: p.face, t: def.time, onGround: p.onGround }; break;
       case 'phase': p.phase = def.time; break;
       case 'magnet': p.anchor = def.time; p.gust = 0; break;
       case 'peek': p.radar = def.time; break;
@@ -268,6 +268,34 @@ export class World {
     g.cd = def.cd;
     this.emit('gadget', def.aim ? x : px, def.aim ? y : py, id);
     return true;
+  }
+
+  // The decoy: a fake runner that runs on ahead with the runner's physics, hopping over walls and gaps by itself,
+  // so the trapper may waste a trap on it. A trap that hits it bursts it (FOOLED!); a pit swallows it.
+  stepDecoy(dt) {
+    const d = this.decoy, W = PHYS.w, H = PHYS.h;
+    d.t -= dt;
+    if (d.t <= 0) { this.emit('poof', d.x + W / 2, d.y + H / 2, 'decoy'); this.decoy = null; return; }
+    const feet = d.y + H, tx = Math.floor((d.x + W / 2 + d.face * 10) / TILE), ty = Math.floor((feet + 2) / TILE);
+    if (d.onGround) {   // jump at a wall in the way or a gap ahead, like a runner would
+      const wall = !this.boxFree(d.x + d.face * 4, d.y);
+      const gap = !this.solidAt(tx, ty) && this.tile(tx, ty) !== ONEWAY;
+      if (wall || gap) { d.vy = -PHYS.jumpV; d.onGround = false; }
+    }
+    d.vy = Math.min(PHYS.maxFall, (d.vy || 0) + (d.vy < 0 ? PHYS.gravity : PHYS.fallGravity) * dt);
+    const nx = d.x + d.vx * dt;
+    if (this.boxFree(nx, d.y)) d.x = nx;
+    const ny = d.y + d.vy * dt, prevBottom = feet;
+    d.onGround = false;
+    if (d.vy >= 0) {
+      const fy = Math.floor((ny + H) / TILE);
+      for (const fx of [Math.floor(d.x / TILE), Math.floor((d.x + W - 0.01) / TILE)]) {
+        if (this.solidAt(fx, fy) || (this.tile(fx, fy) === ONEWAY && prevBottom <= fy * TILE + 0.5)) { d.y = fy * TILE - H; d.vy = 0; d.onGround = true; break; }
+      }
+      if (!d.onGround) d.y = ny;
+    } else if (this.boxFree(d.x, ny)) d.y = ny; else d.vy = 0;
+    if (d.y > this.h * TILE) { this.decoy = null; return; }
+    for (const z of this.dangers(true)) if (overlap(d.x, d.y, W, H, z)) { this.emit('fooled', d.x + W / 2, d.y + H / 2); this.decoy = null; return; }
   }
 
   boxFree(x, y) {
@@ -322,10 +350,7 @@ export class World {
         else if (f.t <= 0) { this.emit('poof', f.x, f.y, 'bat'); this.fx.splice(i, 1); }
       } else if (f.k === 'boom') { f.t -= dt; if (f.t <= 0) this.fx.splice(i, 1); }
     }
-    if (this.decoy) {
-      const d = this.decoy; d.t -= realDt; d.x += d.vx * realDt;
-      if (d.t <= 0 || !this.boxFree(d.x, d.y)) this.decoy = null;
-    }
+    if (this.decoy) this.stepDecoy(realDt);
   }
 
   // A non-deadly hit: stuns (a shield blocks it).
