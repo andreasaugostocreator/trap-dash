@@ -141,7 +141,7 @@ export class Renderer {
     if (k === 'die') this.say(x, y - 14, ['CAUGHT!', 'OUCH!', 'GOTCHA!', 'BONK!'][Math.floor(Math.random() * 4)], '#ff5d6a');
     if (k === 'fooled') { this.say(x, y - 14, 'FOOLED!', '#c58bff'); P(14, () => ({ x, y, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 90, life: 0.5, size: 2, color: Math.random() < 0.5 ? '#c58bff' : '#ffffff', g: 200 })); }
     if (k === 'block') this.say(x, y - 18, 'BLOCKED!', '#8fe8ff');
-    if (k === 'stun') this.say(x, y - 14, 'ZAP!', '#ffd84a');
+    if (k === 'stun') this.say(x, y - 14, extra === 'wall' ? 'SHOVED!' : 'ZAP!', '#ffd84a');
     if (k === 'pop') this.say(x, y - 10, 'POP!', '#ff9a3c');
     if (k === 'gadget' && extra && GADGETS.trapper[extra] && !GADGETS.trapper[extra].aim) this.say(x, y - 20, GADGETS.trapper[extra].name.toUpperCase() + '!', '#c58bff');
     if (k === 'die') {
@@ -713,7 +713,7 @@ export class Renderer {
       l.drawImage(t.dir > 0 ? SPR.turret : mirror(SPR.turret, 'turretL'), x + recoil, y);
       if (warn) { l.fillStyle = Math.floor(this.t * 30) % 2 ? '#ffd84a' : '#ffffff'; l.fillRect(t.dir > 0 ? x + 15 : x, y + 7, 1, 1); }
     } else if (t.kind === 'wall') {
-      const up = t.state === 'active' ? Math.min(1, t.t / 0.08) : 0, h = Math.round(32 * up);
+      const up = t.state === 'active' ? Math.min(1, t.t / 0.08) : 0, h = Math.round(((t.tall || 2) * 16) * up);
       if (warn) { l.fillStyle = '#9aa3b5'; for (let i = 0; i < 4; i++) l.fillRect(x + 2 + i * 4 + jig, y + 13 + (i % 2), 2, 1); }
       l.fillStyle = '#5d6475'; l.fillRect(x + 1, y + 14, 14, 2); l.fillStyle = th.line; l.fillRect(x + 1, y + 15, 14, 1);
       if (h > 0) {
@@ -964,7 +964,7 @@ export class Renderer {
     for (const t of world.traps) {
       if (!(t.state === 'warn' || (t.state === 'active' && t.t < 0.2))) continue;
       const ceiling = t.kind === 'crusher' || t.kind === 'dropper';
-      const X = Math.round((t.x0 + t.x1 + 1) * TILE / 2) - 3, Y = ceiling ? t.y * TILE + 18 + (t.oy || 0) : t.y * TILE - 22 - (t.kind === 'wall' ? 16 : 0);
+      const X = Math.round((t.x0 + t.x1 + 1) * TILE / 2) - 3, Y = ceiling ? t.y * TILE + 18 + (t.oy || 0) : t.y * TILE - 22 - (t.kind === 'wall' ? ((t.tall || 2) - 1) * 16 : 0);
       const b = Math.floor(this.t * 16) % 2;
       l.fillStyle = '#1c1424'; l.fillRect(X - 1, Y - 1 - b, 9, 12); l.fillRect(X + 2, Y + 11 - b, 3, 2);
       l.fillStyle = '#ffffff'; l.fillRect(X, Y - b, 7, 10); l.fillRect(X + 3, Y + 10 - b, 1, 1);
@@ -1047,7 +1047,7 @@ export class Renderer {
     if (t.kind === 'cannon') y = t.y * TILE - 6;
     if (t.kind === 'flame' || t.kind === 'fan') y = t.y * TILE + 10;
     if (t.kind === 'arrows') y = t.y * TILE - 6;
-    if (t.kind === 'wall') y = t.y * TILE - 20;
+    if (t.kind === 'wall') y = t.y * TILE - 20 - ((t.tall || 2) - 2) * TILE;
     if (t.kind === 'laser') y = t.y * TILE - 6;
     if (t.kind === 'dropper') y = t.y * TILE + 22;
     if (t.kind === 'conveyor' || t.kind === 'ice') y = t.y * TILE + 22;
@@ -1065,7 +1065,7 @@ export class Renderer {
       let x = t.x0 * TILE - 2, y = t.y * TILE - 2, w = (t.x1 - t.x0 + 1) * TILE + 4, h = TILE + 4;
       if (t.kind === 'crusher') y += Math.round(t.oy);
       if (t.kind === 'spikes' || t.kind === 'saw') { y += 4; h -= 4; }
-      if (t.kind === 'wall') { y -= TILE; h += TILE; }
+      if (t.kind === 'wall') { y -= ((t.tall || 2) - 1) * TILE; h += ((t.tall || 2) - 1) * TILE; }
       if (t.kind === 'trapdoor' || t.kind === 'conveyor' || t.kind === 'ice') h = 10;
       l.globalAlpha = ready ? 0.18 + 0.14 * pulse : 0.1;
       l.fillStyle = col; l.fillRect(x, y, w, h);

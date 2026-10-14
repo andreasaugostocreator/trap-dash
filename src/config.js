@@ -29,7 +29,7 @@ export const TRAPS = {
   cannon:   { name: 'Cannon',   family: 'emitter', warn: 0.1,  active: 0,   cd: 1.2, shot: { speed: 230, w: 8, h: 8 } },
   arrows:   { name: 'Arrows',   family: 'emitter', warn: 0.06, active: 0,   cd: 0.8, shot: { speed: 320, w: 10, h: 3 } },
   trapdoor: { name: 'Trapdoor', family: 'floor',   warn: 0.12, active: 1.6, cd: 2.6 },
-  wall:     { name: 'Wall',     family: 'floor',   warn: 0.1,  active: 1.6, cd: 2.4 },
+  wall:     { name: 'Wall',     family: 'floor',   warn: 0.1,  active: 1.4, cd: 2.6, shove: { reach: 34, vx: 210, vy: 200, stun: 0.35 } },
   fan:      { name: 'Fan',      family: 'force',   warn: 0.15, active: 1.3, cd: 2.4, reach: 5, push: 2800, maxUp: 320 },
   // newer kinds
   saw:      { name: 'Saw',      family: 'zone',    warn: 0.15, active: 0,   cd: 2.0, speed: 190 },        // a blade runs along its rail and back

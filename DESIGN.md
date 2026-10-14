@@ -24,7 +24,10 @@ and jump in advance.
 - *Force* (fan): non-lethal by itself, but it turns the level into the weapon. A fan under ceiling spikes is deadly, a fan
   in the open just knocks your jump off course. It can even help the runner across a gap if the trapper misfires.
 - *Floor that adds* (pop-up wall): it doesn't kill, it costs time and breaks rhythm. If it rises under you it bumps you up
-  instead of trapping you.
+  instead of trapping you. It stands 3 tiles tall (only a full jump clears it, 1.4 s up, 2.6 s cooldown), and when it
+  rises within 2 tiles of the runner it **shoves** them back with a short stun ("SHOVED!"; a shield blocks it, an anchor
+  holds them). Fired well it costs 0.7–1.4 s or knocks the runner into a trap or pit behind them; fired badly it costs
+  about 0.1–0.3 s. `node tools/wall-feel.mjs` prints the table.
 - Added since then, one per family:
   - **Saw** (zone that moves): a blade runs along its rail and back. You hop it, but you must time the hop to where the blade is.
   - **Laser** (emitter, instant): a long 0.35 s aim, then a beam across the whole room. Easy to read, but it covers everything.

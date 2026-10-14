@@ -934,7 +934,7 @@ const TRAP_DESC = {
   cannon: 'Shoots a cannonball along the floor. Jump over it.',
   arrows: 'Fires fast arrows. Hard to dodge: watch the rhythm.',
   trapdoor: 'The floor opens up for a moment. Fall in and you lose a life.',
-  wall: 'A wall pops up and blocks the way for a moment. It never kills, it costs time.',
+  wall: 'A 3-tile wall pops up for a moment: only a full jump clears it. Fired right in front of the runner, it shoves them back (into whatever is behind them). Never kills by itself.',
   fan: 'Blows the runner upward. Dangerous under ceiling spikes.',
   saw: 'A blade runs along its rail and back. Jump over it as it passes.',
   laser: 'Aims for a moment, then fires a beam across the room.',

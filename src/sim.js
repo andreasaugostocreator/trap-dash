@@ -40,13 +40,18 @@ export class World {
       if ((c === 'M' || c === 'N') && ch(x - 1, y) !== c) { let x1 = x; while (ch(x1 + 1, y) === c) x1++; this.movers.push({ axis: c === 'M' ? 'x' : 'y', x0: x * TILE, y0: y * TILE, w: (x1 - x + 1) * TILE, tx0: x, tx1: x1, ty: y }); }
       if (c === 'L') { this.crumbleAt[i] = this.crumbles.length; this.crumbles.push({ x, y, state: 'ok', t: 0 }); }
       if (c === 'R') this.ropes.push({ ax: x * TILE + 8, ay: (y + 1) * TILE, tx: x, ty: y });
-      if (c === 'U') { this.addTrap('wall', x, x, y); if (y > 0) this.tiles[i - this.w] = WALL; }
+      if (c === 'U') {   // three tiles tall once it is up: only a full, well-timed jump clears it
+        let tall = 1;
+        if (y > 0) { this.tiles[i - this.w] = WALL; tall = 2; }
+        if (y > 1 && this.tiles[i - 2 * this.w] === EMPTY) { this.tiles[i - 2 * this.w] = WALL; tall = 3; }
+        this.addTrap('wall', x, x, y, { tall });
+      }
       const kind = GROUPED[c];
       if (kind && ch(x - 1, y) !== c) { let x1 = x; while (ch(x1 + 1, y) === c) x1++; this.addTrap(kind, x, x1, y); }
     }
     for (const t of this.traps) {
       for (let x = t.x0; x <= t.x1; x++) this.trapAt[t.y * this.w + x] = t.id;
-      if (t.kind === 'wall' && t.y > 0) this.trapAt[(t.y - 1) * this.w + t.x0] = t.id;
+      if (t.kind === 'wall') for (let k = 1; k <= 2 && t.y - k >= 0; k++) if (this.tiles[(t.y - k) * this.w + t.x0] === WALL) this.trapAt[(t.y - k) * this.w + t.x0] = t.id;
       if (t.kind === 'crusher') {           // falls until it meets the first solid tile under any of its columns
         let fy = this.h;
         for (let x = t.x0; x <= t.x1; x++) for (let y = t.y + 1; y < this.h; y++) if (this.solidAt(x, y)) { fy = Math.min(fy, y); break; }
@@ -171,8 +176,17 @@ export class World {
           t.state = 'idle';
         }
         if (t.kind === 'wall') {   // if the runner stands where the wall comes up, it bumps them up instead of trapping them
-          t.pass = overlap(P.x, P.y, P.w, P.h, { x: t.x0 * TILE, y: (t.y - 1) * TILE, w: TILE, h: 2 * TILE });
+          const top = (t.y + 1 - t.tall) * TILE, wx = t.x0 * TILE + TILE / 2;
+          t.pass = overlap(P.x, P.y, P.w, P.h, { x: t.x0 * TILE, y: top, w: TILE, h: t.tall * TILE });
           if (t.pass && !p.dead && !(p.anchor > 0)) { p.vy = -330; p.onGround = false; }
+          // Rising right in front of the runner, it shoves them back (a shield blocks it, an anchor holds them):
+          // never deadly by itself, but it can knock them into whatever is behind them.
+          const dx = P.x + P.w / 2 - wx;
+          if (!t.pass && !p.dead && Math.abs(dx) < C.shove.reach && P.y + P.h > top && P.y < (t.y + 1) * TILE) {
+            const had = p.shield > 0;
+            this.hit('wall', C.shove.stun);
+            if (!had && !(p.anchor > 0)) { p.vx = Math.sign(dx || -p.face) * C.shove.vx; p.vy = Math.min(p.vy, -C.shove.vy); p.onGround = false; p.dash = 0; }
+          }
         }
         this.emit('fire', cx, t.y * TILE, t.kind);
       } else if (t.state === 'active') {
