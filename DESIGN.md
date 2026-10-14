@@ -226,9 +226,10 @@ of the row follows the runner. Other trap kinds still wait out the lock.
 - **Best of 3:** the first to win two levels gets the trophy screen.
 - **Ghost:** the runner's device records its position 10 times a second and sends it with the result; in the second run of
   the same level both devices draw it. Off in Settings.
-- **Level preview:** before a round, 12 s: the camera holds on the start, flies to the flag, looks around and flies back, while a
-  banner lists the level's traps and each side's gadgets with a line on what each does (your side highlighted). Tap when you're
-  ready; online the round starts when both players are ready or the time is up. Off in Settings.
+- **Level preview:** before a round, 16 s: the camera holds on the start, flies to the flag, looks around and flies back, while a
+  banner lists the level's traps and each side's gadgets with a line on what each does (your side highlighted). To skip, hold Space
+  (or Enter) on PC or press the Skip button on a phone; online it is only skipped once both players want to. The camera
+  moves at a nearly even speed over about 12 s, so every part of the level gets the same look. Off in Settings.
 - **Achievements** (`src/achievements.js`): 18, kept on the device.
 - **Reconnect:** the host keeps a dropped guest's place for 60 s; the guest retries with the same id, and a guest whose page
   reloads within 5 minutes rejoins the same party. The round restarts, the score is kept.
@@ -253,3 +254,6 @@ still counts). Each slot has a colour (red, blue, yellow); its trap is tinted an
 numbered tag, and if it's off screen, an edge marker in the same colour points to it. A trap keeps its slot while it is in
 range, so buttons don't jump under your thumb; as the runner moves on, passed traps leave and the next ones drop in (the
 button pops so you notice). Keys 1, 2, 3. The flame still burns while its button is held.
+
+- **Items guide** (📖 Items on the title screen and in the pause menu): every trap, runner gadget and trapper gadget with an
+  icon, a one-line description and its uses/cooldown, so new players know what a button does before trying it.

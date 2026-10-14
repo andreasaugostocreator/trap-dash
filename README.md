@@ -24,6 +24,7 @@ Six runners to pick from: Explorer, Knight, Astronaut, Ninja, Robot and Pirate. 
 - **Best of 3 matches** with a trophy screen, **achievements** (🏆 Trophies on the title screen), a **level preview** before each round,
   the **ghost** of the last run, **vibration**, and **reconnecting** after a dropped connection (or a reload) without losing the score.
 - **Training** for each role (How to play → Runner / Trapper training).
+- 📖 **Items**: a guide to every trap and gadget with what it does.
 - Settings (⚙): sound, music, vibration, ghost, level preview, screen shake.
 - See [DESIGN.md](DESIGN.md) for the trap families, the difficulty model and how random levels are built.
 - Phone friendly (landscape is best), installable as a home-screen app, chiptune music and sound effects.

@@ -875,6 +875,57 @@ function openTrophies() {
 }
 $('troBtn').onclick = () => { sfx.click(); openTrophies(); };
 
+// ---------- the item guide: every trap and gadget with a short description, so new players know what the buttons do
+const TRAP_DESC = {
+  spikes: 'Spikes pop out of the floor for a moment. Hop over them or wait until they drop.',
+  flame: 'A column of fire. It burns as long as the trapper holds the button; several flames in a row can be chained.',
+  crusher: 'A heavy block slams down from the ceiling. Don\'t stand under it.',
+  cannon: 'Shoots a cannonball along the floor. Jump over it.',
+  arrows: 'Fires fast arrows. Hard to dodge: watch the rhythm.',
+  trapdoor: 'The floor opens up for a moment. Fall in and you lose a life.',
+  wall: 'A wall pops up and blocks the way for a moment. It never kills, it costs time.',
+  fan: 'Blows the runner upward. Dangerous under ceiling spikes.',
+  saw: 'A blade runs along its rail and back. Jump over it as it passes.',
+  laser: 'Aims for a moment, then fires a beam across the room.',
+  dropper: 'Drops a bomb from the ceiling that blasts where it lands.',
+  conveyor: 'The floor runs backwards. Hard to jump far from it.',
+  ice: 'The floor freezes over: slippery, hard to stop.',
+};
+const GAD_LONG = {
+  dash: 'A quick burst forward, about two tiles.', blink: 'Teleports you up to 3 tiles forward, even through traps.', haste: 'Run 35% faster for 3 s.',
+  feather: 'Jump a second time in mid-air. Used just by jumping again.', boots: 'Jump much higher for 5 s.', glider: 'Hold jump while falling to float down slowly.',
+  shield: 'For 2 s, the next hit is blocked and bounces you up.', phase: 'For 2 s, traps and shots pass right through you.', jam: 'Stops every trap and the trapper\'s gadgets for 2 s.',
+  slowmo: 'Slows all traps and shots down for 2.5 s.', flag: 'Places a checkpoint where you stand.', decoy: 'Sends a fake runner ahead to fool the trapper.',
+  magnet: 'For 3 s nothing can push you: wind, fans, belts.', peek: 'Shows hidden mines and which traps are ready, for 3 s.',
+  bolt: 'Aim it: a lightning bolt strikes after a short warning and stuns the runner.', glue: 'Aim it: a sticky puddle on the floor slows the runner and lowers their jumps.',
+  mine: 'Aim it: a hidden mine that pops the runner up and stuns them.', bat: 'Aim it: a bat flies at the runner and stuns on contact.',
+  gust: 'A strong wind blows the runner back for 1.8 s; jumps fall short.', hex: 'Swaps the runner\'s left and right for 2.6 s.',
+  frost: 'The runner\'s feet go icy for 3 s: slippery everywhere.', fog: 'The runner can only see close around them for 4 s.',
+  anvil: 'Makes the runner heavy for 3 s: low jumps, fast falls.', moon: 'Floaty low gravity for 3 s: hard to land precisely.',
+  rewind: 'Sends the runner back to where they were 2 s ago.', squash: 'Shrinks the runner for 3 s: slower and lower jumps.',
+};
+function gadStats(g) {
+  const bits = [g.passive ? 'automatic' : g.charges < 0 ? 'unlimited' : `${g.charges} per run`];
+  if (g.cd) bits.push(`${g.cd} s cooldown`);
+  return bits.join(' · ');
+}
+function openGuide(back, tab = 'traps') {
+  const tabs = [['traps', 'Traps'], ['runner', 'Runner gadgets'], ['trapper', 'Trapper gadgets']];
+  const rows = tab === 'traps'
+    ? Object.keys(TRAPS).map(k => [k, TRAPS[k].name, TRAP_DESC[k], TRAPS[k].hold ? 'hold the button' : `${TRAPS[k].cd} s cooldown`])
+    : Object.keys(GADGETS[tab]).map(id => [id, GADGETS[tab][id].name, GAD_LONG[id], gadStats(GADGETS[tab][id])]);
+  panel(`<h2>Items</h2>
+    <p class="status">${tab === 'traps' ? 'The trapper fires these from the coloured buttons.' : tab === 'runner' ? 'Each map gives the runner four of these.' : 'Each map gives the trapper four of these.'}</p>
+    <div class="seg guideTabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
+    <div class="guide">${rows.map(([id, name, desc, stat]) => `<div class="gRow ${tab}"><canvas class="pix" width="7" height="7" data-icon="${id}"></canvas><div><b>${esc(name)}</b><small>${esc(desc || '')}</small><i>${esc(stat)}</i></div></div>`).join('')}</div>
+    <div class="buttons"><button class="big pink" id="guideDone">Back</button></div>`);
+  $('panelCard').classList.add('wide');
+  for (const c of $('panelCard').querySelectorAll('canvas[data-icon]')) c.getContext('2d').drawImage(SPR.icon[c.dataset.icon], 0, 0);
+  for (const b of $('panelCard').querySelectorAll('[data-tab]')) b.onclick = () => { sfx.click(); openGuide(back, b.dataset.tab); };
+  $('guideDone').onclick = () => { sfx.click(); back(); };
+}
+$('itemsBtn').onclick = () => { sfx.click(); openGuide(hidePanel); };
+
 // ---------- the trapper's score: a big gold popup for every catch, combos stack up
 function onCatch(credit) {
   const r = run.score.catch(credit, run.world.time), mine = run.trapperHere;
@@ -902,7 +953,7 @@ function updateTrapScore(bump) {
 }
 
 // ---------- level preview: the camera flies to the flag and back while a banner shows the level and the gadgets
-const PREVIEW = 12;   // seconds; tap ready to skip (online: both players)
+const PREVIEW = 16;   // seconds; skipping needs both players online (hold Space on PC, the Skip button on phones)
 // One line per gadget, for the preview banner.
 const GAD_DESC = {
   dash: 'burst forward', blink: 'teleport 3 tiles', haste: 'run faster', feather: 'jump again in the air', boots: 'jump higher', glider: 'hold jump to float',
@@ -922,7 +973,7 @@ function showPreview() {
     <div class="pvTraps">${kinds.map(k => `<span class="pvTrap"><canvas class="pix" width="7" height="7" data-icon="${k}"></canvas>${esc(TRAPS[k].name)}</span>`).join('')}</div>
     <div class="pvRow${mine('runner') ? ' mine' : ''}"><b class="pvSide run">RUNNER</b>${icons('runner')}</div>
     <div class="pvRow${mine('trapper') ? ' mine' : ''}"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
-    <small id="pvT"></small>`;
+    <div class="pvSkip"><small id="pvT"></small>${touchDevice ? '<button class="chip" id="pvSkipBtn">⏭ Skip</button>' : '<div class="pvHold"><span id="pvHoldBar"></span><b>Hold SPACE to skip</b></div>'}</div>`;
   for (const c of el.querySelectorAll('canvas[data-icon]')) c.getContext('2d').drawImage(SPR.icon[c.dataset.icon], 0, 0);
   el.classList.remove('hidden');
   run.meReady = false; run.peerReady = !!run.peerReadyEarly;
@@ -939,17 +990,24 @@ function readyPreview() {
   if (mode === 'online') net.send({ t: 'ready' });
   if (mode !== 'online' || run.peerReady) endPreview();
 }
-$('preview').addEventListener('pointerdown', e => { e.preventDefault(); readyPreview(); });
-addEventListener('keydown', e => { if (run && run.phase === 'preview' && !e.repeat) readyPreview(); });
+$('preview').addEventListener('pointerdown', e => { if (e.target.closest('#pvSkipBtn')) { e.preventDefault(); readyPreview(); } });
+const HOLD_SKIP = 0.7;   // seconds a key has to be held to skip on PC
+function holdingSkip() { return run && run.phase === 'preview' && !run.meReady && (keys.has('Space') || keys.has('Enter')); }
 function panPreview(dt) {
   run.previewT -= dt;
   if (run.previewT <= 0) return endPreview();
   const left = Math.ceil(run.previewT), other = players[mySide() === 'a' ? 'b' : 'a'];
-  const txt = run.meReady ? `Waiting for ${esc(other ? other.name : 'your friend')}… ${left}` : `Starts in ${left} · ${touchDevice ? 'tap' : 'click or press a key'} when you're ready${run.peerReady && other ? ` (${esc(other.name)} is ready)` : ''}`;
+  run.skipHold = holdingSkip() ? (run.skipHold || 0) + dt : 0;
+  const bar = $('pvHoldBar'); if (bar) bar.style.width = (run.meReady ? 100 : Math.min(100, run.skipHold / HOLD_SKIP * 100)).toFixed(0) + '%';
+  if (run.skipHold >= HOLD_SKIP) readyPreview();
+  if (run.phase !== 'preview') return;
+  const online = mode === 'online', friend = esc(other ? other.name : 'your friend');
+  const txt = run.meReady ? `Skipping… waiting for ${friend} (${left})` : `Starts in ${left}${online && run.peerReady ? ` · ${friend} wants to skip` : ''}`;
   const pv = $('pvT'); if (pv && pv.textContent !== txt) pv.textContent = txt;
   // hold on the start, fly to the flag, look around there, fly back
   const w = run.world, u = 1 - run.previewT / PREVIEW, ease = v => v * v * (3 - 2 * v);
-  const k = u < 0.1 ? 0 : u < 0.6 ? ease((u - 0.1) / 0.5) : u < 0.75 ? 1 : 1 - ease((u - 0.75) / 0.25);
+  const even = v => 0.8 * v + 0.2 * ease(v);   // nearly constant speed, so the whole level gets the same attention
+  const k = u < 0.06 ? 0 : u < 0.84 ? even((u - 0.06) / 0.78) : u < 0.92 ? 1 : 1 - ease((u - 0.92) / 0.08);
   R.pan(w, w.start.x + (w.goal.x - w.start.x) * k, w.start.y + (w.goal.y - w.start.y) * k, run.trapperHere && !run.runnerHere);
 }
 
@@ -1117,12 +1175,13 @@ function togglePause() {
     ${E && mode !== 'practice' ? `<button class="big blue" id="swapBtn">Swap sides (new level)</button>` : ''}
     ${canLobby ? `<button class="mid" id="endBtn">End run · lobby</button>` : ''}
     <button class="mid" id="quitRun">${online ? 'Leave the party' : 'Quit to lobby'}</button>
-    <div class="row"><button class="chip" id="pSet">⚙ Settings</button></div></div>`);
+    <div class="row"><button class="chip" id="pItems">📖 Items</button><button class="chip" id="pSet">⚙ Settings</button></div></div>`);
   $('resume').onclick = () => { sfx.click(); hidePanel(); if (run) run.paused = false; };
   if ($('swapBtn')) $('swapBtn').onclick = () => { sfx.click(); swapSides(); };
   if ($('endBtn')) $('endBtn').onclick = () => { sfx.click(); if (online) net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
   $('quitRun').onclick = () => { sfx.click(); if (online || mode === 'tutorial') nav('title'); else { endRunView(); openLobby(); } };
   $('pSet').onclick = () => { sfx.click(); openSettings(() => { hidePanel(); togglePause(); }); };
+  $('pItems').onclick = () => { sfx.click(); openGuide(() => { hidePanel(); togglePause(); }); };
 }
 $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
 

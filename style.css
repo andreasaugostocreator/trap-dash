@@ -483,3 +483,21 @@ body.dualpad .preview { top: calc(var(--hudH) + var(--padTopH) + 8px); }
 .pvRow { flex-wrap: nowrap; }
 .pvGad { padding: 2px 5px 2px 3px; }
 @media (max-width: 700px) { .pvRow { flex-wrap: wrap; } }
+
+/* ---------- item guide */
+.guideTabs { margin: 4px 0 8px; flex-wrap: wrap; justify-content: center; } .guideTabs button { font-size: 14px; }
+.guide { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px; text-align: left; }
+.gRow { display: flex; gap: 8px; align-items: flex-start; background: #fff; padding: 6px 8px; box-shadow: 0 0 0 2px var(--ink); }
+.gRow canvas { position: static; width: 28px; height: 28px; flex: none; background: var(--pink); box-shadow: 0 0 0 2px var(--ink); margin-top: 2px; }
+.gRow.runner canvas { background: #2aa08a; } .gRow.trapper canvas { background: #7a4bd1; }
+.gRow b { display: block; font-size: 16px; } .gRow small { display: block; font-size: 13px; color: #3a2f48; line-height: 1.25; } .gRow i { display: block; font-style: normal; font-size: 12px; color: var(--muted); margin-top: 2px; }
+@media (max-height: 500px) { .guide { grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); } .gRow small { font-size: 12px; } }
+/* ---------- preview skip */
+.pvSkip { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 4px; flex-wrap: wrap; }
+.preview .pvSkip small { margin: 0; }
+#pvSkipBtn { font-size: 14px; padding: 5px 12px; background: #ffd84a; }
+.pvHold { position: relative; min-width: 170px; height: 20px; background: #fff; box-shadow: 0 0 0 2px var(--ink); overflow: hidden; }
+.pvHold span { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #ffd84a; }
+.pvHold b { position: relative; font-size: 12px; line-height: 20px; padding: 0 8px; }
+.preview { cursor: default; }
+.screen.overlay { z-index: 7; }

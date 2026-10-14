@@ -12,7 +12,7 @@ const ph = await p.evaluate(() => ({ phase: window.__td.run.phase, camX: Math.ro
 await p.screenshot({ path: 'shots/99-preview.png' });
 await p.waitForTimeout(800);
 console.log('preview:', JSON.stringify(ph), '-> camera moved to', Math.round(await p.evaluate(() => window.__td.R.camX)));
-await p.tap('#preview'); await p.waitForTimeout(100);
+await p.tap('#pvSkipBtn'); await p.waitForTimeout(100);
 console.log('tap skips to:', await p.evaluate(() => window.__td.run.phase));
 const finish = async () => { await p.waitForFunction(() => window.__td.run && window.__td.run.phase === 'play', null, { timeout: 9000 });
   await p.evaluate(() => { const w = window.__td.run.world; w.player.x = w.goal.x; w.player.y = w.goal.y; }); await p.waitForTimeout(1900); };
@@ -21,7 +21,7 @@ for (let lv = 0; lv < 3; lv++) {
   await finish();                                    // run 1
   if (!(await p.isVisible('#go2'))) break;
   await p.tap('#go2'); await p.waitForTimeout(300);
-  if (await p.isVisible('#preview')) await p.tap('#preview');
+  if (await p.isVisible('#preview')) await p.tap('#pvSkipBtn');
   await p.waitForFunction(() => window.__td.run.phase === 'play', null, { timeout: 9000 });
   if (lv === 0) { await p.waitForTimeout(400); await p.screenshot({ path: 'shots/99-ghost.png' }); console.log('ghost shown in run 2:', await p.evaluate(() => !!window.__td.run.ghost)); }
   await p.waitForTimeout(lv === 0 ? 600 : 1200);       // run 2 is slower
@@ -29,7 +29,7 @@ for (let lv = 0; lv < 3; lv++) {
   const trophy = await p.isVisible('.trophy');
   console.log(`level ${lv + 1}: score`, JSON.stringify(await p.evaluate(() => window.__td.score)), trophy ? '-> TROPHY' : '');
   if (trophy) { await p.waitForTimeout(600); await p.screenshot({ path: 'shots/99-trophy.png' }); break; }
-  await p.tap('#nextLv'); await p.waitForTimeout(300); if (await p.isVisible('#preview')) await p.tap('#preview');
+  await p.tap('#nextLv'); await p.waitForTimeout(300); if (await p.isVisible('#preview')) await p.tap('#pvSkipBtn');
 }
 console.log(errs.length ? 'ERRORS\n' + errs.join('\n') : 'no errors');
 await b.close();
