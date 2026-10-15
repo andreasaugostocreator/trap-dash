@@ -330,7 +330,7 @@ the same pixels as the world, not as web buttons laid over it.
 
 ## 15. The menu world, the ring, and a round of balance
 
-- **Title and menus** sit in their own living landscape (`src/scene.js`), not a level. A day passes in 150 s (day,
+- **Title and menus** sit in their own living landscape (`src/scene.js`), not a level. A day passes in 240 s (day,
   sunset, a starry night with fireflies and lit cottage windows, dawn). There are drifting clouds in two layers, hazy
   snow-capped mountains (dithered shading, haze at the foot), hills with trees, a cottage with chimney smoke, the
   goal flag waving on a hill, a fence along a dirt path, swaying grass, petals, and birds. Every 7-14 s a runner dashes

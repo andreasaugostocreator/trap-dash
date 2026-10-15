@@ -54,7 +54,7 @@ function dayAt(d) {
   const A = DAY[i], B = DAY[i + 1], t = (d - A.at) / (B.at - A.at || 1);
   return { top: mix(A.top, B.top, t), bot: mix(A.bot, B.bot, t), tint: mix(A.tint, B.tint, t), k: A.k + (B.k - A.k) * t };
 }
-const DAY_LENGTH = 150;
+const DAY_LENGTH = 240;   // seconds for a whole day: day, sunset, night, dawn
 
 // ---------- the places
 const PLACES = [
@@ -98,7 +98,7 @@ export class Scene {
     this.hillL = this.paintHills(LW, Hh);
     this.meadowL = this.paintMeadow(LW, Hh);
     this.clouds = Array.from({ length: Math.ceil(W / 80) + 3 }, (_, i) => ({
-      s: this.paintCloud(30 + Math.floor(hash(i, 3) * 50), i), x: hash(i, 5) * (W + 140) - 70, y: Hh * (0.05 + hash(i, 7) * 0.28), v: 2 + hash(i, 9) * 4, far: hash(i, 11) < 0.45,
+      s: this.paintCloud(30 + Math.floor(hash(i, 3) * 50), i), x: hash(i, 5) * (W + 140) - 70, y: Hh * (0.05 + hash(i, 7) * 0.28), v: 1.2 + hash(i, 9) * 2.4, far: hash(i, 11) < 0.45,
     }));
     this.stars = Array.from({ length: Math.round(W * Hh / 240) }, (_, i) => ({ x: hash(i, 21) * W, y: hash(i, 23) * this.hz * 0.95, p: hash(i, 25) * 6.28, b: hash(i, 27) }));
     this.skyKey = '';
@@ -313,7 +313,7 @@ export class Scene {
     this.day = (this.day + dt / DAY_LENGTH) % 1;
     if (before > 0.96 && this.day < 0.5) this.nextPlace(W, Hh);   // a new place every dawn
     const D = dayAt(this.day), night = Math.max(0, Math.min(1, (this.day - 0.68) / 0.08)) * Math.max(0, Math.min(1, (0.97 - this.day) / 0.06));
-    const pan = (1 - ease(this.intro)) * Hh * 0.9, cx = this.t * 3;
+    const pan = (1 - ease(this.intro)) * Hh * 0.9, cx = this.t * 1.8;   // the slow drift of the land (px per second, before parallax)
     this.drawSky(g, W, Hh, D, pan, night);
     this.drawSun(g, W, Hh, pan);
     this.drawClouds(g, W, Hh, dt, pan, night);
