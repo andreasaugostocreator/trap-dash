@@ -18,10 +18,11 @@ const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { pollPads, BTN } from './gamepad.js';
-import { drawKnob, drawStick, KICON, TICON, pixURL, woodFrame } from './knobs.js';
+import { drawKnob, drawStick, KICON, TICON, PLANK, pixURL, woodFrame } from './knobs.js';
 // the pixel wood every frame in the menus is cut from (see style.css: --woodImg)
 document.documentElement.style.setProperty('--woodImg', `url(${woodFrame()})`);
 document.documentElement.style.setProperty('--woodImgDark', `url(${woodFrame('#3a2a1e')})`);
+// the tagline sign's pixel stars (see PLANK.star) — set once the icons are drawn, below
 // Pixel icons inside menu text: colour ones (PI) and the white button icons (PIW, darkened on paper buttons).
 const PI = (name, cls = 'pi') => `<img class="${cls}" alt="" src="${pixURL(name)}">`;
 const piwCache = {};
@@ -40,7 +41,7 @@ function medal(id, got = true) {
   }
   return `<img class="medal" alt="" src="${medalCache[key]}">`;
 }
-const PIW = name => `<img class="pi bicon" alt="" src="${piwCache[name] || (piwCache[name] = (SPR.icon[name] || KICON[name]).toDataURL())}">`;
+const PIW = name => PLANK[name] ? `<img class="pi picon" alt="" src="${piwCache[name] || (piwCache[name] = PLANK[name].toDataURL())}">` : `<img class="pi bicon" alt="" src="${piwCache[name] || (piwCache[name] = (SPR.icon[name] || KICON[name]).toDataURL())}">`;
 import { TrapScore, titleFor } from './score.js';
 import { TRAINING, Tutorial } from './tutorial.js';
 import { ACHIEVEMENTS, unlock, has, count as achCount, bump } from './achievements.js';
@@ -129,12 +130,13 @@ function logoLetter(word, k) {
     b.addEventListener('pointerdown', () => { drawKnob(c, { r: 12, pal, icon: TICON[icon], pressed: true }); });
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => drawKnob(c, { r: 12, pal, icon: TICON[icon] }));
   }
+  document.documentElement.style.setProperty('--starImg', `url(${PLANK.star.toDataURL()})`);
   $('profileBtn').onclick = () => { sfx.click(); show('profile'); };
   $('profileDone').onclick = () => { sfx.click(); show('title'); buildTitle(); };
   // the small buttons get pixel icons too (no emoji: they'd break the pixel look)
   for (const [id, icon, text] of [['howBtn', 'help', 'How to play'], ['setBtn', 'gear', 'Settings'], ['itemsBtn', 'book', 'Items'], ['troBtn', 'trophy', 'Trophies']]) {
-    const b = $(id), c = document.createElement('canvas');
-    c.width = c.height = 7; c.className = 'pix bicon'; c.getContext('2d').drawImage(KICON[icon], 0, 0);
+    const b = $(id), c = document.createElement('canvas'), art = PLANK[icon];
+    c.width = art.width; c.height = art.height; c.className = 'pix picon'; c.getContext('2d').drawImage(art, 0, 0);
     b.textContent = text; b.prepend(c);
   }
 })();

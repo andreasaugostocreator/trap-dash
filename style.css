@@ -771,3 +771,15 @@ button.blue img.pi.bicon, button.blue canvas.bicon { filter: brightness(.25); }
 #title:not(.intro) .tCorner, #title:not(.intro) .profile { animation: titleBack .25s ease-out both; }
 @keyframes titleBack { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
 @keyframes tilesBack { from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)); } to { opacity: 1; transform: translate(-50%, -50%); } }
+/* the planks' colour icons (no darkening filter: they carry their own colours and outline) */
+button.plank canvas.picon, canvas.picon { position: static; display: inline-block; width: 22px; height: 22px; image-rendering: pixelated; filter: none; flex: none; }
+img.pi.picon { filter: none; width: 1.3em; height: 1.3em; }
+@container app (max-height: 500px) { button.plank canvas.picon { width: 18px; height: 18px; } }
+button.plank canvas.picon[width="13"] { width: 24px; height: 24px; margin: -1px; }
+/* the tagline: a small wooden sign hanging under the logo, walnut letters on parchment, pixel stars either side */
+#title .tag { display: inline-flex; align-items: center; gap: 8px; margin-top: 8px; padding: 0 6px 1px; color: var(--ink); text-shadow: none; font-weight: 700;
+  border: 10px solid transparent; border-image: var(--woodImg) 5 fill / 10px round; box-shadow: 0 5px 0 -1px rgba(58, 36, 23, .35); position: relative; }
+#title .tag::before, #title .tag::after { content: ''; width: 22px; height: 22px; margin: 0; background: var(--starImg) center / contain no-repeat; image-rendering: pixelated; color: transparent; }
+/* two little ropes from the logo */
+#title .tag { overflow: visible; }
+#title .tTop .tag { background-image: none; }

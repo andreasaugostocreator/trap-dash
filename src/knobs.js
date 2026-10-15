@@ -300,3 +300,65 @@ export const TICON = {
     '....KKKKKKK..',
   ]),
 };
+
+// ---------- the small planks' icons (How to play, Settings, Items, Trophies): 11x11, in colour, walnut outlines.
+Object.assign(TI, { B: '#4aa3b2', b: '#2f6a78', n: '#7a4a26' });
+const QMARK = ['.WWW.', 'W...W', '....W', '...W.', '..W..', '.....', '..W..'];
+// an icon from a shape test: inside pixels get fill(x, y), and every pixel touching the shape gets the walnut outline
+function shapeIcon(n, inside, fill) {
+  const c = (n - 1) / 2, rows = [];
+  for (let y = 0; y < n; y++) {
+    let r = '';
+    for (let x = 0; x < n; x++) {
+      const X = x - c, Y = y - c;
+      if (inside(X, Y)) r += fill(X, Y);
+      else r += [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inside(X + dx, Y + dy)) ? 'K' : '.';
+    }
+    rows.push(r);
+  }
+  return tIcon(rows);
+}
+export const PLANK = {
+  help: ringIcon((x, y) => {   // a teal coin with a question mark
+    const d = Math.hypot(x, y);
+    if (d > 5.6) return '.'; if (d > 4.6) return 'K';
+    const qx = x + 2, qy = y + 3;
+    if (qx >= 0 && qx < 5 && qy >= 0 && qy < 7 && QMARK[qy][qx] === 'W') return 'W';
+    return x + y > 3 ? 'b' : 'B';
+  }, 11),
+  gear: shapeIcon(13, (x, y) => {   // a brass gear: body, 4 straight and 4 diagonal teeth, a hole in the hub
+    const d = Math.hypot(x, y), ax = Math.abs(x), ay = Math.abs(y);
+    if (d < 1.6) return false;
+    return d <= 3.9 || (ax <= 1 && ay <= 5) || (ay <= 1 && ax <= 5) || (ax >= 3 && ax <= 4 && ay >= 3 && ay <= 4);
+  }, (x, y) => x + y < -5 ? 'W' : x + y > 2 ? 'O' : 'A'),
+  star: shapeIcon(11, (x, y) => {   // a five-point honey star for the tagline sign
+    const a = Math.atan2(x, -y), d = Math.hypot(x, y), k = Math.cos(a * 5);
+    return d <= 2.2 + 2.6 * Math.max(0, k) ** 1.6;
+  }, (x, y) => x + y < -2 ? 'W' : x + y > 1 ? 'O' : 'A'),
+  book: tIcon([   // a red book: gold title band, cream page edges, a teal bookmark
+    '.KKKKKKKKK.',
+    'KrRRRRRRRRK',
+    'KrRAAAAAARK',
+    'KrRRRRRRRRK',
+    'KrRRRRRRRRK',
+    'KrRRRRRRRRK',
+    'KrRRRRRRRRK',
+    'KrKKKKKKKKK',
+    'KrWWWWWBWLK',
+    'KKKKKKKBKKK',
+    '.......K...',
+  ]),
+  trophy: tIcon([   // a gold cup with handles, a highlight and a base
+    '..KKKKKKK..',
+    'KKKWAAAAOKKK'.slice(0, 11),
+    'KAKWAAAAOKA',
+    'KAKWAAAAOKA',
+    '.KKWAAAAOK.',
+    '..KAAAAOK..',
+    '...KAAOK...',
+    '....KOK....',
+    '...KKOKK...',
+    '..KAAAAOK..',
+    '..KKKKKKK..',
+  ]),
+};
