@@ -1571,6 +1571,9 @@ setInterval(() => { if (!document.hidden) checkForUpdate(); }, 5 * 60 * 1000);
 if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', reloadWhenIdle);
 setInterval(() => { if (wantReload && (!run || run.phase === 'end')) location.reload(); }, 2000);
 
+// the long title entrance plays once, on launch; after that, coming back to the title is quick
+setTimeout(() => $('title').classList.remove('intro'), 3300);
+
 // ---------- boot
 R.resize(); addEventListener('resize', () => updateInsets());
 buildTitle();
