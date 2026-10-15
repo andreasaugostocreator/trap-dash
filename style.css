@@ -746,3 +746,4 @@ button.profile b { display: block; font-family: 'Jersey 10', 'Pixelify Sans', sa
   body .pad.top { padding-top: 10px; }
   body .pad .tbtn .eta { top: -8px; }
 }
+.ver { margin: 4px 0 0; font-size: 13px; color: var(--muted); text-align: center; }

@@ -183,7 +183,8 @@ function openSettings(back) {
   const GFX = { auto: 'Auto', high: 'High', low: 'Low' }, nextGfx = { auto: 'high', high: 'low', low: 'auto' };
   panel(`<h2>Settings</h2><div class="settings">${rows.map(([label, get], i) => `<div class="setRow"><span>${label}</span><button class="chip tog${get() ? ' on' : ''}" data-i="${i}">${get() ? 'On' : 'Off'}</button></div>`).join('')}</div>
     <div class="setRow"><span>Graphics <small>(Low = lighter, for slow phones)</small></span><button class="chip tog on" id="gfxBtn">${GFX[settings.graphics] || 'Auto'}</button></div>
-    <div class="buttons"><button class="big pink" id="setDone">Done</button></div>`);
+    <div class="buttons"><button class="big pink" id="setDone">Done</button></div>
+    <p class="ver">Version <span id="appVersion">${bootVersion ? bootVersion.replace('trap-dash-', '') : '…'}</span></p>`);
   $('gfxBtn').onclick = () => { settings.graphics = nextGfx[settings.graphics] || 'auto'; applyGraphics(); saveSettings(); sfx.click(); openSettings(back); };
   for (const b of $('panelCard').querySelectorAll('.tog')) b.onclick = () => { const r = rows[+b.dataset.i]; r[2](!r[1]()); saveSettings(); sfx.click(); openSettings(back); };
   $('setDone').onclick = () => { sfx.click(); back(); };
@@ -1560,6 +1561,23 @@ function drawMenuScene(dt) {
   R.wide = 'scene';   // the game sets its own zoom again when a round starts
   scene.draw(R.l, W, H, dt, R.lite);
 }
+
+// ---------- staying up to date. A home-screen app is often resumed from memory instead of reloaded, so it could run
+// an old version for days. When the app comes back to the front (or a new version takes over), it compares the
+// version it booted with against the server's and reloads itself if it's behind, but never in the middle of a round.
+let bootVersion = null, wantReload = false;
+const serverVersion = () => fetch('sw.js', { cache: 'no-store' }).then(r => r.text()).then(t => (/VERSION = '([^']+)'/.exec(t) || [])[1] || null).catch(() => null);
+serverVersion().then(v => { bootVersion = v; const el = $('appVersion'); if (el && v) el.textContent = v.replace('trap-dash-', ''); });
+const reloadWhenIdle = () => { if (!run || run.phase === 'end') location.reload(); else wantReload = true; };
+async function checkForUpdate() {
+  if (!bootVersion || (location.protocol !== 'https:' && location.hostname !== 'localhost')) return;
+  const v = await serverVersion();
+  if (v && v !== bootVersion) reloadWhenIdle();
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { checkForUpdate(); navigator.serviceWorker?.getRegistration().then(r => r && r.update()).catch(() => {}); } });
+setInterval(() => { if (!document.hidden) checkForUpdate(); }, 5 * 60 * 1000);
+if (navigator.serviceWorker && navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', reloadWhenIdle);
+setInterval(() => { if (wantReload && (!run || run.phase === 'end')) location.reload(); }, 2000);
 
 // ---------- boot
 R.resize(); addEventListener('resize', () => updateInsets());

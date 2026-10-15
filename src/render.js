@@ -14,6 +14,19 @@ const FIRE = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
 // iPhone home-screen apps sometimes start with a page that is shorter than the screen (by about the status bar), which
 // leaves a strip of bare background along the bottom. Measure the real screen and stretch the page over the gap.
 const IPHONE_APP = /iPhone|iPod/.test(navigator.userAgent) && navigator.standalone === true;
+// The real fix: make iOS measure the screen again. Rewriting the viewport tag (and scrolling to the top) does that; a
+// few tries, spaced out, then the stretch below stays as the fallback.
+let nudges = 0, nudgeAt = 0, lastW = 0;
+function nudgeViewport() {
+  const now = performance.now();
+  if (innerWidth !== lastW) { lastW = innerWidth; nudges = 0; }   // a new orientation gets fresh tries
+  if (nudges >= 3 || now - nudgeAt < 700) return;
+  nudges++; nudgeAt = now;
+  const meta = document.querySelector('meta[name="viewport"]'); if (!meta) return;
+  const base = meta.getAttribute('content');
+  meta.setAttribute('content', base.replace(/,\s*viewport-fit=cover/, ''));
+  requestAnimationFrame(() => requestAnimationFrame(() => { meta.setAttribute('content', base); window.scrollTo(0, 0); dispatchEvent(new Event('resize')); }));
+}
 export function viewH() {
   const h = window.innerHeight;
   let gap = 0;
@@ -22,6 +35,7 @@ export function viewH() {
     gap = Math.max(0, Math.min(80, full - h));
   }
   const de = document.documentElement;
+  if (gap > 0) nudgeViewport();
   if (gap !== (+de.dataset.gap || 0)) {
     de.dataset.gap = gap; de.classList.toggle('vfix', gap > 0);
     de.style.setProperty('--appH', (h + gap) + 'px');

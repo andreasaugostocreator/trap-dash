@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#2a1f3d">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="Trap Dash">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon2-192.png">
@@ -123,7 +123,8 @@
 <script src="lib/peerjs.min.js"></script>
 <script type="module" src="src/main.js"></script>
 <script>
-  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js');
+  // updateViaCache 'none': the browser always asks the server for sw.js, so a new release is seen on the next launch
+  if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(r => r.update()).catch(() => {});
 </script>
 </body>
 </html>
