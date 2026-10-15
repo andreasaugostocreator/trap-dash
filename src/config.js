@@ -46,13 +46,13 @@ export const TIME_LIMIT = 100;
 export const GADGETS = {
   // Each level hands out four of these to each side (see src/loadout.js). type: aim (pick a spot), now (instant), passive.
   trapper: {
-    bolt:   { name: 'Lightning', charges: 4,  cd: 4,  aim: true, warn: 0.45, stun: 1.2, width: 16 },
+    bolt:   { name: 'Lightning', charges: 4,  cd: 4,  aim: true, warn: 0.45, stun: 1.2, width: 32 },
     glue:   { name: 'Glue',      charges: -1, cd: 10, aim: true, life: 7, slow: 0.4 },
     mine:   { name: 'Mine',      charges: 3,  cd: 4,  aim: true, life: 12, pop: 380, stun: 0.5 },
     bat:    { name: 'Bat',       charges: 2,  cd: 8,  aim: true, life: 5, speed: 78, stun: 0.8 },
     gust:   { name: 'Gust',      charges: 3,  cd: 8,  time: 1.8, wind: 95, windAir: 100 },   // blows you back: px/s, on the ground / in the air
     hex:    { name: 'Hex',       charges: 2,  cd: 12, time: 2.6 },
-    frost:  { name: 'Frost',     charges: 2,  cd: 10, time: 3 },
+    frost:  { name: 'Frost',     charges: 2,  cd: 12, time: 1.4 },
     fog:    { name: 'Fog',       charges: 2,  cd: 12, time: 4 },
     anvil:  { name: 'Anvil',     charges: 2,  cd: 10, time: 3, grav: 1.5, jump: 0.82 },
     moon:   { name: 'Moon',      charges: 2,  cd: 10, time: 3, grav: 0.45 },

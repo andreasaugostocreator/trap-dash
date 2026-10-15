@@ -186,3 +186,28 @@ export function pixURL(name) {
   return (urls[name] = c.toDataURL());
 }
 export const canvasURL = c => c.toDataURL();
+
+// A wooden frame as a 9-slice image (12x12, slices of 5): an ink edge with notched corners, three pixels of wood
+// with grain (lit along the top and left, shaded along the bottom and right), brass nails, a dark inner lip, and a
+// parchment middle. Used through CSS border-image by the title tiles, the planks and the cards.
+export function woodFrame(inner = '#f6e7c8') {
+  const c = document.createElement('canvas'); c.width = c.height = 12;
+  const g = c.getContext('2d'), I = hex(inner);
+  const put = (x, y, col) => { g.fillStyle = typeof col === 'string' ? col : `rgb(${col.join(',')})`; g.fillRect(x, y, 1, 1); };
+  const h2 = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+  for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
+    const d = Math.min(x, y, 11 - x, 11 - y), corner = (x === 0 || x === 11) && (y === 0 || y === 11);
+    if (corner) continue;
+    if (d === 0) { put(x, y, '#1c1424'); continue; }
+    if (d <= 3) {
+      const top = y === d && y <= x && y <= 11 - x, left = x === d && x < y && x < 11 - y, bottom = 11 - y === d, right = 11 - x === d && !bottom;
+      let col = top ? (d === 1 ? '#f0bd78' : '#d7984f') : left ? '#c98a49' : bottom ? (d === 1 ? '#6e3f1e' : '#86502a') : right ? '#965c30' : '#b8763f';
+      if (!top && !bottom && h2(x, y) < 0.25) col = '#a2652f';
+      put(x, y, col); continue;
+    }
+    if (d === 4) { put(x, y, y === 4 || x === 4 ? '#6b3f1f' : '#d9bf8f'); continue; }
+    put(x, y, I);
+  }
+  for (const [x, y] of [[2, 2], [9, 2], [2, 9], [9, 9]]) { put(x, y, '#ffe9b0'); put(x + 1, y + 1, '#5a3418'); }
+  return c.toDataURL();
+}

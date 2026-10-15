@@ -327,3 +327,31 @@ the same pixels as the world, not as web buttons laid over it.
 - **Landscape only.** Upright phones and tablets get a pixel "turn your phone" screen and a running game pauses; the
   installed app asks for landscape.
 - Scale: `--k` screen px per art pixel (3 on big screens, 2.2 on phones held sideways, 2 on very short ones).
+
+## 15. The menu world, the ring, and a round of balance
+
+- **Title and menus** sit in their own living landscape (`src/scene.js`), not a level. A day passes in 150 s (day,
+  sunset, a starry night with fireflies and lit cottage windows, dawn). There are drifting clouds in two layers, hazy
+  snow-capped mountains (dithered shading, haze at the foot), hills with trees, a cottage with chimney smoke, the
+  goal flag waving on a hill, a fence along a dirt path, swaying grass, petals, and birds. Every 7-14 s a runner dashes
+  along the path, sometimes chased by a bat. It opens with a slow tilt down from the sky, then the logo drops in and
+  the tiles rise.
+  The title has big wooden tiles (Host / Join / Same screen / Practice, plus a glowing gold "Rejoin party ABCD" when
+  there's one to rejoin), each with an arcade cap in its colour; small planks in the corner (How to play, Settings,
+  Items, Trophies); and your runner on a plaque at the top right, which opens the name and runner picker. Every frame in
+  the menus is cut from one generated pixel-art wood 9-slice (`woodFrame()` in `src/knobs.js`).
+- **Gadget ring:** on touch screens the runner's gadgets sit on a circle around JUMP (`placeRing()` in main.js),
+  sockets edge to edge, climbing from its lower left over its top. The ring may reach a little into the bottom-right
+  corner of the view; the layout and device tests allow that and report how far.
+- **Frost** now freezes the controls, not the floor: for 1.4 s the runner can't move, jump, grab or use gadgets
+  while the world goes on (a jump in progress drops short, they coast to a stop). They're shown in a block of ice,
+  and their buttons frost over.
+- **Aimed gadgets are forgiving:** lightning strikes a 2-tile-wide strip, glue covers 5 tiles, a mine triggers
+  anywhere over 3 tiles, and bats catch from further away. A tap for glue or a mine finds the nearest floor (into the
+  ground, above it, or up to 2 tiles to the side). Traps on the map also take taps further from them.
+- **Trapdoors matter:** a running jump clears at most 6 tiles, so every trapdoor is now a bridge of at least 7 tiles
+  over a pit (or a low tunnel you can't jump in). `node tools/trapdoor-check.mjs` opens each one for good and asks
+  the solver whether the level can still be finished; every trapdoor in every level is needed.
+- **Rejoin:** both players remember the party. Reopening within 5 minutes goes straight back in (the host reopens
+  the same code and keeps the score; the guest knocks again). For 30 minutes the title offers "Rejoin party ABCD", also
+  after leaving by mistake. `tools/rejoin-test.mjs`.

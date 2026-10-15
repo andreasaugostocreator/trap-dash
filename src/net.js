@@ -39,9 +39,9 @@ export class Net {
   get link() { return this.conn && this.conn.open ? 'direct' : 'relay'; }
 
   // ---------- host: open a room and wait for a friend on either transport
-  async host() {
+  async host(want = null) {   // want: reopen a party under its old code (the host came back)
     this.close(true);
-    const code = newCode();
+    const code = want || newCode();
     this.code = code; this.role = 'host';
     const tries = [];
     if (useRelay()) tries.push(this.startRelay(() => this.relay.subscribe(topic(code, 'host'))));

@@ -14,6 +14,7 @@ const SOLIDS = new Set([SOLID, CANNON, NOZZLE, SPRING, TURRET, FAN, LASER, DROPP
 export const MOVER = { speed: 42, maxRange: 7 }, CRUMBLE_T = { shake: 0.45, gone: 3 }, ROPE = { maxLen: 5, pump: 5.5, release: 270 };
 const r1 = v => Math.round(v * 10) / 10;
 // Runner status timers (seconds left). Most come from gadgets.
+const NO_INPUT = Object.freeze({ left: false, right: false, jump: false, jumpPressed: false });
 const STATUS = ['stun', 'rev', 'shield', 'inv', 'gust', 'frost', 'fog', 'heavy', 'moon', 'squash', 'glide', 'boots', 'haste', 'phase', 'anchor', 'radar'];
 
 export class World {
@@ -49,9 +50,11 @@ export class World {
       const kind = GROUPED[c];
       if (kind && ch(x - 1, y) !== c) { let x1 = x; while (ch(x1 + 1, y) === c) x1++; this.addTrap(kind, x, x1, y); }
     }
-    for (const t of this.traps) {
+    for (const t of this.traps) {   // first every trap claims its tiles, so the measuring below can ask about any of them
       for (let x = t.x0; x <= t.x1; x++) this.trapAt[t.y * this.w + x] = t.id;
       if (t.kind === 'wall') for (let k = 1; k <= 2 && t.y - k >= 0; k++) if (this.tiles[(t.y - k) * this.w + t.x0] === WALL) this.trapAt[(t.y - k) * this.w + t.x0] = t.id;
+    }
+    for (const t of this.traps) {
       if (t.kind === 'crusher') {           // falls until it meets the first solid tile under any of its columns
         let fy = this.h;
         for (let x = t.x0; x <= t.x1; x++) for (let y = t.y + 1; y < this.h; y++) if (this.solidAt(x, y)) { fy = Math.min(fy, y); break; }
@@ -227,12 +230,13 @@ export class World {
     const def = GADGETS[side] && GADGETS[side][id], g = this.gad[side] && this.gad[side][id], p = this.player;
     if (!def || !g || def.passive || g.n === 0 || g.cd > 0 || p.finished || p.dead) return false;
     if (side === 'trapper' && this.jam > 0) return false;
+    if (side === 'runner' && p.frost > 0) return false;   // frozen: no buttons at all
     const px = p.x + PHYS.w / 2, py = p.y + PHYS.h / 2;
     switch (id) {
       // trapper
       case 'bolt': this.fx.push({ k: 'bolt', x: Math.round(x), t: Math.min(lead, def.warn * 0.5) }); break;
       case 'glue': case 'mine': {
-        const spot = this.floorBelow(x, y, id === 'mine' ? 0 : 1);
+        const spot = this.floorBelow(x, y, id === 'mine' ? 1 : 2);
         if (!spot) return false;
         this.fx.push(id === 'glue' ? { k: 'glue', x0: spot.x0, x1: spot.x1, y: spot.y, t: def.life } : { k: 'mine', x0: spot.x0, x1: spot.x1, y: spot.y, t: def.life });
         break;
@@ -240,7 +244,7 @@ export class World {
       case 'bat': this.fx.push({ k: 'bat', x: Math.round(x), y: Math.round(y), t: def.life }); break;
       case 'gust': p.gust = def.time; p.gustDir = -p.face; break;
       case 'hex': p.rev = def.time; break;
-      case 'frost': p.frost = def.time; break;
+      case 'frost': p.frost = def.time; this.emit('freeze', px, p.y); break;
       case 'fog': p.fog = def.time; break;
       case 'anvil': p.heavy = def.time; p.moon = 0; break;
       case 'moon': p.moon = def.time; p.heavy = 0; break;
@@ -319,9 +323,19 @@ export class World {
   }
 
   // The floor under a point (only where there is floor): `extra` tiles to each side. For glue and mines.
+  // Where glue or a mine lands for a tap at (x, y): forgiving, so a tap a bit off still works. It looks for a floor
+  // surface from 3 tiles above the tap downward, in the tapped column first and then up to 2 columns either side.
   floorBelow(x, y, extra = 1) {
-    const tx = Math.floor(x / TILE);
-    for (let ty = Math.max(0, Math.floor(y / TILE)); ty < this.h; ty++) {
+    const T0 = Math.floor(x / TILE);
+    for (const off of [0, -1, 1, -2, 2]) {
+      const s = this.floorIn(T0 + off, Math.max(0, Math.floor(y / TILE) - 3), extra);
+      if (s && Math.abs(s.y - y) < 8 * TILE) return s;
+    }
+    return null;
+  }
+  floorIn(tx, fromTy, extra) {
+    if (tx < 0 || tx >= this.w) return null;
+    for (let ty = fromTy; ty < this.h; ty++) {
       if (this.solidAt(tx, ty) && !this.solidAt(tx, ty - 1)) {
         let x0 = tx, x1 = tx;
         for (let i = 0; i < extra; i++) {
@@ -351,7 +365,7 @@ export class World {
       } else if (f.k === 'glue') { f.t -= dt; if (f.t <= 0) this.fx.splice(i, 1); }
       else if (f.k === 'mine') {
         f.t -= dt;
-        if (alive && p.onGround && p.x + PHYS.w > f.x0 + 3 && p.x < f.x1 - 3 && Math.abs(p.y + PHYS.h - f.y) < 2) {
+        if (alive && p.onGround && p.x + PHYS.w > f.x0 && p.x < f.x1 && Math.abs(p.y + PHYS.h - f.y) < 3) {
           this.emit('pop', (f.x0 + f.x1) / 2, f.y);
           if (!(p.anchor > 0)) { p.vy = -T.mine.pop; p.onGround = false; }
           this.hit('mine', T.mine.stun); this.fx.splice(i, 1);
@@ -360,7 +374,7 @@ export class World {
         f.t -= dt;
         const dx = cx - f.x, dy = cy - f.y, d = Math.hypot(dx, dy) || 1;
         f.x += dx / d * T.bat.speed * dt; f.y += dy / d * T.bat.speed * dt; f.face = Math.sign(dx) || 1;
-        if (alive && d < 9 && !(p.phase > 0)) { this.hit('bat', T.bat.stun); this.emit('poof', f.x, f.y, 'bat'); this.fx.splice(i, 1); }
+        if (alive && d < 13 && !(p.phase > 0)) { this.hit('bat', T.bat.stun); this.emit('poof', f.x, f.y, 'bat'); this.fx.splice(i, 1); }
         else if (f.t <= 0) { this.emit('poof', f.x, f.y, 'bat'); this.fx.splice(i, 1); }
       } else if (f.k === 'boom') { f.t -= dt; if (f.t <= 0) this.fx.splice(i, 1); }
     }
@@ -452,6 +466,9 @@ export class World {
     this.stepTraps(dt);
     const p = this.player, G = GADGETS;
     if (p.finished) { p.vx *= 0.8; p.carry = 0; this.movePlayer(dt); return; }
+    // Frozen (the trapper's frost): the runner can't press anything, but the world goes on. A jump in the air drops
+    // short (jump isn't held any more), they coast to a stop on the ground and can't grab, steer or use gadgets.
+    if (p.frost > 0) input = NO_INPUT;
     this.time += dt;
     if (p.dead) {
       p.deadT -= dt;
@@ -478,7 +495,7 @@ export class World {
     if (p.rev > 0) [L, R] = [R, L];
     if (stunned) L = R = false;
     p.slow = this.fx.some(f => f.k === 'glue' && p.onGround && p.x + PHYS.w > f.x0 && p.x < f.x1 && Math.abs(p.y + PHYS.h - f.y) < 2);
-    p.icy = p.frost > 0 || !!this.standingOn('ice') || this.onTile(ICEFLOOR);
+    p.icy = !!this.standingOn('ice') || this.onTile(ICEFLOOR);
     const belt = p.anchor > 0 ? null : this.standingOn('conveyor');
     p.carry = belt ? TRAPS.conveyor.carry : 0;
     // Wind carries you like a belt does, whatever you press: running into it crawls, jumps fall short.

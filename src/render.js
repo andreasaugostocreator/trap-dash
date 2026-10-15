@@ -141,6 +141,7 @@ export class Renderer {
     if (k === 'die') this.say(x, y - 14, ['CAUGHT!', 'OUCH!', 'GOTCHA!', 'BONK!'][Math.floor(Math.random() * 4)], '#ff5d6a');
     if (k === 'fooled') { this.say(x, y - 14, 'FOOLED!', '#c58bff'); P(14, () => ({ x, y, vx: (Math.random() - 0.5) * 120, vy: -Math.random() * 90, life: 0.5, size: 2, color: Math.random() < 0.5 ? '#c58bff' : '#ffffff', g: 200 })); }
     if (k === 'block') this.say(x, y - 18, 'BLOCKED!', '#8fe8ff');
+    if (k === 'freeze') { this.say(x, y - 14, 'FROZEN!', '#8fe8ff'); P(12, () => ({ x, y: y + 6, vx: (Math.random() - 0.5) * 90, vy: -Math.random() * 70, life: 0.5, size: 1, color: Math.random() < 0.5 ? '#e8f8ff' : '#8fe8ff', g: 150 })); }
     if (k === 'stun') this.say(x, y - 14, extra === 'wall' ? 'SHOVED!' : 'ZAP!', '#ffd84a');
     if (k === 'pop') this.say(x, y - 10, 'POP!', '#ff9a3c');
     if (k === 'gadget' && extra && GADGETS.trapper[extra] && !GADGETS.trapper[extra].aim) this.say(x, y - 20, GADGETS.trapper[extra].name.toUpperCase() + '!', '#c58bff');
@@ -829,7 +830,15 @@ export class Renderer {
     }
     if (p.heavy > 0) { l.fillStyle = '#3b3f52'; l.fillRect(X - 4, Y - 24, 9, 3); l.fillRect(X - 2, Y - 21, 5, 2); l.fillStyle = '#9aa3b5'; l.fillRect(X - 4, Y - 24, 9, 1); }
     if (p.moon > 0 && Math.random() < 0.3) this.parts.push({ x: X + (Math.random() - 0.5) * 12, y: Y - 6, vx: 0, vy: -20, life: 0.6, size: 1, color: '#dfe6ff', g: 0 });
-    if (p.frost > 0 || p.icy) { l.fillStyle = '#bfe9ff'; for (let i = -1; i <= 1; i++) l.fillRect(X + i * 4, Y - 1 - (i === 0 ? 1 : 0), 2, 1); }
+    if (p.icy) { l.fillStyle = '#bfe9ff'; for (let i = -1; i <= 1; i++) l.fillRect(X + i * 4, Y - 1 - (i === 0 ? 1 : 0), 2, 1); }
+    if (p.frost > 0) {   // frozen solid in a block of ice (the controls are locked); it cracks in the last moment
+      const x0 = X - 8, y0 = Y - 19, w = 17, h = 20;
+      l.fillStyle = 'rgba(170, 225, 255, .45)'; l.fillRect(x0, y0, w, h);
+      l.fillStyle = '#e8f8ff'; l.fillRect(x0, y0, w, 1); l.fillRect(x0, y0, 1, h);
+      l.fillStyle = '#7cc4ec'; l.fillRect(x0, y0 + h - 1, w, 1); l.fillRect(x0 + w - 1, y0, 1, h);
+      l.fillStyle = '#ffffff'; l.fillRect(x0 + 3, y0 + 3, 1, 5); l.fillRect(x0 + 4, y0 + 2, 1, 2); l.fillRect(x0 + 12, y0 + 12, 1, 3);
+      if (p.frost < 0.35) { l.fillStyle = '#ffffff'; l.fillRect(x0 + 6, y0 + 5, 1, 4); l.fillRect(x0 + 7, y0 + 9, 1, 3); l.fillRect(x0 + 8, y0 + 12, 2, 1); }
+    }
     if (p.boots > 0) { l.fillStyle = Math.floor(this.t * 10) % 2 ? '#ffd84a' : '#ff9a3c'; l.fillRect(X - 4, Y - 1, 3, 1); l.fillRect(X + 2, Y - 1, 3, 1); }
     if (p.haste > 0 && Math.abs(p.vx) > 40 && Math.random() < 0.6) this.parts.push({ x: X - p.face * 8, y: Y - 3 - Math.random() * 10, vx: -p.face * 120, vy: 0, life: 0.15, size: 1, color: '#ffffffcc', g: 0 });
     if (p.anchor > 0) { l.fillStyle = '#9aa3b5'; l.fillRect(X, Y + 1, 1, 3); l.fillRect(X - 2, Y + 3, 5, 1); }
@@ -918,7 +927,7 @@ export class Renderer {
     const l = this.l, x = Math.round(aim.x), y = Math.round(aim.y), blink = Math.floor(this.t * 6) % 2;
     l.fillStyle = blink ? '#ffffff' : '#ffd84a';
     if (aim.id === 'bolt') { const w = GADGETS.trapper.bolt.width; for (let yy = this.camY; yy < this.camY + this.lo.height; yy += 6) { l.fillRect(x - w / 2, yy, 1, 3); l.fillRect(x + w / 2, yy, 1, 3); } }
-    if (aim.id === 'glue') { const f = world.floorBelow(x, y); if (f) { l.fillRect(f.x0, f.y - 3, f.x1 - f.x0, 1); l.fillRect(f.x0, f.y - 3, 1, 3); l.fillRect(f.x1 - 1, f.y - 3, 1, 3); } }
+    if (aim.id === 'glue' || aim.id === 'mine') { const f = world.floorBelow(x, y, aim.id === 'mine' ? 1 : 2); if (f) { l.fillRect(f.x0, f.y - 3, f.x1 - f.x0, 1); l.fillRect(f.x0, f.y - 3, 1, 3); l.fillRect(f.x1 - 1, f.y - 3, 1, 3); } }
     l.fillRect(x - 5, y, 4, 1); l.fillRect(x + 2, y, 4, 1); l.fillRect(x, y - 5, 1, 4); l.fillRect(x, y + 2, 1, 4);
   }
 

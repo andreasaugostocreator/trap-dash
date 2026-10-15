@@ -21,30 +21,37 @@
 <body>
 <canvas id="game"></canvas>
 
-<!-- Title -->
-<section class="screen" id="title">
-  <div class="card wide titleCard">
+<!-- Title: the logo over the living landscape, big wooden tiles, small buttons in the corner, your runner top right -->
+<section class="screen title" id="title">
+  <div class="tTop">
     <h1 class="logo"><span>TRAP</span><span>DASH</span></h1>
     <p class="tag">One friend runs. The other springs the traps!</p>
+  </div>
+  <nav class="tMenu" id="tMenu">
+    <button class="tile gold hidden" id="rejoinBtn">Rejoin party</button>
+    <button class="tile" data-go="host">Host a party</button>
+    <button class="tile" data-go="join">Join a party</button>
+    <button class="tile" data-go="local">Same screen</button>
+    <button class="tile" data-go="practice">Practice</button>
+  </nav>
+  <div class="tCorner">
+    <button class="plank" id="howBtn">How to play</button>
+    <button class="plank" id="setBtn">Settings</button>
+    <button class="plank" id="itemsBtn">Items</button>
+    <button class="plank" id="troBtn">Trophies</button>
+  </div>
+  <button class="profile" id="profileBtn" aria-label="Your name and runner"><canvas class="pix" id="profileArt" width="12" height="16"></canvas><span><small>Your runner</small><b id="profileName"></b></span></button>
+</section>
+<!-- Your name and runner -->
+<section class="screen overlay hidden" id="profile">
+  <div class="card">
+    <h2>Your runner</h2>
     <div class="me">
       <label>Your name <input id="name" maxlength="12" autocomplete="off" spellcheck="false"></label>
-      <div class="pickLabel">Your runner: <b id="charName"></b></div>
+      <div class="pickLabel">Runner: <b id="charName"></b></div>
       <div class="colors" id="colors"></div>
     </div>
-    <div class="buttons">
-      <button class="big pink" data-go="host">Host a party</button>
-      <button class="big blue" data-go="join">Join a party</button>
-      <div class="row">
-        <button class="mid" data-go="local">Same screen</button>
-        <button class="mid" data-go="practice">Practice</button>
-      </div>
-    </div>
-    <div class="row small">
-      <button class="chip" id="howBtn">How to play</button>
-      <button class="chip" id="setBtn">⚙ Settings</button>
-      <button class="chip" id="itemsBtn">📖 Items</button>
-      <button class="chip" id="troBtn">🏆 Trophies</button>
-    </div>
+    <div class="buttons"><button class="big pink" id="profileDone">Done</button></div>
   </div>
 </section>
 

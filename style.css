@@ -667,3 +667,82 @@ button:disabled::before { display: none; }
 button.chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 button.chip canvas.bicon { display: inline-block; width: 15px; height: 15px; }
 body #tJump { position: relative; }
+/* frozen runner: their own buttons ice over until the frost lets go */
+.pad.frozen #padL canvas, .pad.frozen #padR canvas, .pad.frozen #padM .rgad canvas { filter: saturate(.25) brightness(1.25) drop-shadow(0 0 4px #bfeaff); }
+.pad.frozen #padL, .pad.frozen #padR { animation: frostShiver .25s steps(2) infinite; }
+@keyframes frostShiver { 50% { translate: 1px 0; } }
+
+/* ---------- the runner's gadgets in a ring around JUMP (touch) */
+#padR.ring { position: relative; }
+#padR.ring .rgad { position: absolute; inset: 0; display: block; margin: 0; pointer-events: none; }
+#padR.ring .rgad .gbtn { position: absolute; translate: 0 0 !important; pointer-events: auto; }
+#padR.ring .rgad .gbtn small { display: none; }
+body.ringpad { --padH: calc(100px + env(safe-area-inset-bottom)); }
+@media (min-height: 501px) { body.ringpad { --padH: calc(140px + env(safe-area-inset-bottom)); } }
+/* the joystick matches JUMP's size on touch screens */
+body.ringpad canvas.stick { width: calc(var(--aw) * var(--k) * 1.25px); height: calc(var(--ah) * var(--k) * 1.25px); }
+button.gold { background: linear-gradient(#ffe066 0 50%, #ffc93d 50%); color: var(--ink); box-shadow: var(--frame), 0 calc(var(--px) * 2) 0 var(--ink), inset 0 var(--px) 0 #fff3b8, inset 0 calc(-1 * var(--px)) 0 #d99a12; }
+button.gold img.pi.bicon { filter: brightness(.12); }
+
+/* =====================================================================================================
+   The title: the logo over the living landscape (src/scene.js), big wooden tiles, little planks in the corner,
+   your runner on a plaque at the top right. Everything wooden is cut from one pixel-art frame (--woodImg, 3x).
+   ===================================================================================================== */
+#title.screen { display: block; padding: 0; overflow: hidden; background: radial-gradient(ellipse at 50% 45%, transparent 60%, rgba(28, 20, 36, .22)); }
+.tTop { position: absolute; left: 0; right: 0; top: max(5%, env(safe-area-inset-top)); text-align: center; pointer-events: none; animation: titleDrop 1s cubic-bezier(.2, 1.3, .4, 1) 1.9s both; }
+@keyframes titleDrop { from { transform: translateY(-40px); opacity: 0; } to { transform: none; opacity: 1; } }
+#title .logo { font-size: clamp(38px, 12vh, 92px); margin: 0; filter: drop-shadow(0 4px 0 rgba(28, 20, 36, .35)); }
+#title .logo .logoLetter { height: 1.25em; }
+#title .tag { margin: 6px 0 0; color: #fff; font-size: clamp(14px, 3.4vh, 20px); text-shadow: var(--outline); }
+#title .tag::before, #title .tag::after { color: #ffd84a; }
+.tMenu { position: absolute; left: 50%; top: 58%; transform: translate(-50%, -50%); display: flex; gap: clamp(8px, 1.6vw, 18px); align-items: stretch;
+  animation: tilesUp .8s cubic-bezier(.2, 1.3, .4, 1) 2.3s both; }
+@keyframes tilesUp { from { transform: translate(-50%, calc(-50% + 50px)); opacity: 0; } to { transform: translate(-50%, -50%); opacity: 1; } }
+button.tile { width: clamp(104px, 14vw, 156px); min-height: 0; margin: 0; padding: 4px 6px 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  border: 15px solid transparent; border-image: var(--woodImg) 5 fill / 15px round; background: none; color: var(--ink);
+  box-shadow: 0 7px 0 -1px rgba(28, 20, 36, .35); transition: transform .12s; }
+button.tile::before, button.tile::after { content: none; }
+@media (hover: hover) { button.tile:not(:disabled):hover { transform: translateY(-4px); filter: none; } }
+button.tile:active, button.tile.padfocus { transform: translateY(2px); }
+button.tile.padfocus { outline: 4px solid #ffd84a; outline-offset: 4px; }
+button.tile.gold { box-shadow: 0 7px 0 -1px rgba(28, 20, 36, .35), 0 0 0 3px #ffd84a, 0 0 18px 4px rgba(255, 216, 74, .55); animation: goldGlow 1.6s ease-in-out infinite; }
+@keyframes goldGlow { 50% { box-shadow: 0 7px 0 -1px rgba(28, 20, 36, .35), 0 0 0 3px #ffd84a, 0 0 26px 8px rgba(255, 216, 74, .75); } }
+.tile canvas.tknob { position: static; display: block; width: calc(var(--aw) * var(--k) * 1px); height: calc(var(--ah) * var(--k) * 1px); image-rendering: pixelated; pointer-events: none; }
+.tlabel { font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; letter-spacing: .03em; font-size: 17px; line-height: 1.05; text-align: center; }
+.tlabel b { color: var(--pink); }
+/* little planks in the bottom-left corner */
+.tCorner { position: absolute; left: max(12px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); display: flex; gap: 6px; animation: tilesUp2 .6s ease-out 2.6s both; }
+@keyframes tilesUp2 { from { transform: translateY(30px); opacity: 0; } to { transform: none; opacity: 1; } }
+button.plank { margin: 0; padding: 0 4px 1px; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); white-space: nowrap;
+  border: 10px solid transparent; border-image: var(--woodImg) 5 fill / 10px round; background: none; box-shadow: 0 4px 0 -1px rgba(28, 20, 36, .35); }
+button.plank::before, button.plank::after { content: none; }
+button.plank canvas.bicon { display: inline-block; width: 14px; height: 14px; filter: brightness(.12); }
+@media (hover: hover) { button.plank:hover { transform: translateY(-2px); filter: none; } }
+/* your runner on a plaque at the top right */
+button.profile { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); margin: 0; padding: 0 6px 0 2px;
+  display: flex; align-items: center; gap: 6px; text-align: left; border: 10px solid transparent; border-image: var(--woodImg) 5 fill / 10px round; background: none;
+  box-shadow: 0 4px 0 -1px rgba(28, 20, 36, .35); animation: tilesUp2 .6s ease-out 2.6s both; }
+button.profile::before, button.profile::after { content: none; }
+button.profile canvas { position: static; display: block; width: 30px; height: 40px; image-rendering: pixelated; }
+button.profile small { display: block; font-size: 11px; color: var(--muted); line-height: 1; }
+button.profile b { display: block; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 17px; line-height: 1.1; }
+/* the cards share the same wood */
+.card { border: 15px solid transparent; border-image: var(--woodImg) 5 fill / 15px round; background: none; box-shadow: 0 10px 0 -2px rgba(28, 20, 36, .4); }
+@media (max-height: 500px) {
+  .card { border-width: 10px; border-image-width: 10px; }
+  button.tile { width: clamp(92px, 15vw, 128px); border-width: 10px; border-image-width: 10px; padding: 2px 4px 5px; gap: 3px; }
+  .tlabel { font-size: 14px; }
+  #title .logo { font-size: clamp(30px, 11vh, 60px); }
+  button.plank { font-size: 12px; }
+  button.profile canvas { width: 24px; height: 32px; }
+}
+@media (max-height: 380px) { .tMenu { top: 60%; } button.tile { width: clamp(84px, 14vw, 112px); } #title .tag { display: none; } }
+#title .logo { width: fit-content; margin: 0 auto; }
+@media (max-height: 380px) { #lobby .card { padding-top: 0; padding-bottom: 0; } #lobby .players { margin-top: 6px; } }
+/* very short phones: slimmer panels, so the play area keeps at least ~10 tiles on a shared screen */
+@media (max-height: 380px) {
+  :root { --padTopH: 76px; }
+  body.ringpad { --padH: calc(90px + env(safe-area-inset-bottom)); }
+  body .pad.top { padding-top: 10px; }
+  body .pad .tbtn .eta { top: -8px; }
+}

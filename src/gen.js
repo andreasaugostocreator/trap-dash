@@ -39,8 +39,8 @@ export const SEGMENTS = [
     g.ground(x, x + 5, f); g.set(x + 3, f, 'B'); g.ground(x + 6, x + 7, f - 6); g.ground(x + 8, x + 12, f); return [x + 13, f]; } },
   { id: 'spikes', kinds: ['spikes'], tiers: [1, 2, 3], make: (g, r, x, f, tier) => {
     g.ground(x, x + 9, f); g.row(x + 3, x + 3 + tier, f - 1, 'P'); return [x + 10, f]; } },
-  { id: 'trapdoor', kinds: ['trapdoor'], tiers: [1, 2, 3], make: (g, r, x, f, tier) => {
-    const w = tier > 1 ? 4 : 3;
+  { id: 'trapdoor', kinds: ['trapdoor'], tiers: [1, 2, 3], make: (g, r, x, f, tier) => {   // a bridge over a gap too wide to jump
+    const w = 6 + tier;   // 7+ tiles: no running jump clears it (tools/trapdoor-check.mjs)
     g.ground(x, x + 2, f); g.row(x + 3, x + 2 + w, f, 'T'); g.ground(x + 3 + w, x + 5 + w, f); return [x + 6 + w, f]; } },
   { id: 'crusher', kinds: ['crusher'], tiers: [1, 2, 3], make: (g, r, x, f, tier) => {
     const n = tier === 3 ? 2 : 1, w = 8 + n * 3;
@@ -85,7 +85,7 @@ export const SEGMENTS = [
     g.ground(x + 4 + gap, x + 8 + gap, f); return [x + 9 + gap, f]; } },
   { id: 'doorLane', kinds: ['trapdoor'], tiers: [2, 3], combo: true, make: (g, r, x, f, tier) => {   // too low to jump the doors
     const w = 3 + tier; g.ground(x, x + 2, f); g.row(x + 3, x + 2 + w, f, 'T'); g.ground(x + 3 + w, x + 5 + w, f);
-    g.rect(x + 2, Math.max(0, f - 5), x + 3 + w, f - 3); return [x + 6 + w, f]; } },
+    g.rect(x + 1, Math.max(0, f - 5), x + 4 + w, f - 3); return [x + 6 + w, f]; } },
   { id: 'sawBridge', kinds: ['saw'], tiers: [2, 3], combo: true, make: (g, r, x, f, tier) => {   // a thin bridge, nowhere to step aside
     const n = 4 + tier; g.ground(x, x + 1, f); g.row(x + 2, x + 2 + n, f, '#'); g.row(x + 2, x + 2 + n, f - 1, 'Z');
     g.ground(x + 3 + n, x + 5 + n, f); return [x + 6 + n, f]; } },

@@ -6,6 +6,7 @@ import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS, THEMES } from './levels.js';
 import { Renderer, viewH } from './render.js';
+import { Scene } from './scene.js';
 import { Net, cleanCode } from './net.js';
 import { Bot } from './bot.js';
 import { rateLevel } from './rating.js';
@@ -17,7 +18,10 @@ const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { pollPads, BTN } from './gamepad.js';
-import { drawKnob, drawStick, KICON, pixURL } from './knobs.js';
+import { drawKnob, drawStick, KICON, pixURL, woodFrame } from './knobs.js';
+// the pixel wood every frame in the menus is cut from (see style.css: --woodImg)
+document.documentElement.style.setProperty('--woodImg', `url(${woodFrame()})`);
+document.documentElement.style.setProperty('--woodImgDark', `url(${woodFrame('#3a2a1e')})`);
 // Pixel icons inside menu text: colour ones (PI) and the white button icons (PIW, darkened on paper buttons).
 const PI = (name, cls = 'pi') => `<img class="${cls}" alt="" src="${pixURL(name)}">`;
 const piwCache = {};
@@ -116,13 +120,17 @@ function logoLetter(word, k) {
     word.textContent = '';
     for (let k = 0; k < letters; k++) { const i = document.createElement('i'); i.style.setProperty('--i', n++); i.appendChild(logoLetter(w, k)); word.appendChild(i); }
   });
-  const run = document.createElement('canvas'); run.width = 16; run.height = 18; run.className = 'pix logoRun'; run.id = 'logoRun';
-  logo.appendChild(run);
-  const ICONS = { host: 'flag', join: 'blink', local: 'decoy', practice: 'shield' };
-  for (const [go, icon] of Object.entries(ICONS)) {
-    const b = document.querySelector(`#title [data-go="${go}"]`), c = document.createElement('canvas');
-    c.width = c.height = 7; c.className = 'pix bicon'; c.getContext('2d').drawImage(SPR.icon[icon], 0, 0); b.prepend(c);
+  // the big wooden tiles: each carries an arcade cap with its icon, in the colours the game uses for it
+  const TILES = [['[data-go="host"]', 'flag', 'red'], ['[data-go="join"]', 'blink', 'blue'], ['[data-go="local"]', 'decoy', 'yellow'], ['[data-go="practice"]', 'shield', 'runner'], ['#rejoinBtn', 'blink', 'aim']];
+  for (const [sel, icon, pal] of TILES) {
+    const b = document.querySelector('#title ' + sel), c = document.createElement('canvas'), label = document.createElement('span');
+    c.className = 'pix tknob'; drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2 }); sizeArt(c);
+    label.className = 'tlabel'; label.textContent = b.textContent; b.textContent = ''; b.append(c, label);
+    b.addEventListener('pointerdown', () => { drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2, pressed: true }); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2 }));
   }
+  $('profileBtn').onclick = () => { sfx.click(); show('profile'); };
+  $('profileDone').onclick = () => { sfx.click(); show('title'); buildTitle(); };
   // the small buttons get pixel icons too (no emoji: they'd break the pixel look)
   for (const [id, icon, text] of [['howBtn', 'help', 'How to play'], ['setBtn', 'gear', 'Settings'], ['itemsBtn', 'book', 'Items'], ['troBtn', 'trophy', 'Trophies']]) {
     const b = $(id), c = document.createElement('canvas');
@@ -132,10 +140,10 @@ function logoLetter(word, k) {
 })();
 let titleAnimT = 0;
 function animateTitle(dt) {
-  if ($('title').classList.contains('hidden')) return;
+  if ($('title').classList.contains('hidden') && $('profile').classList.contains('hidden')) return;
   titleAnimT += dt;
   const f = ['run0', 'run1', 'run2', 'run1'][Math.floor(titleAnimT * 10) % 4];
-  const c = $('logoRun'), x = c.getContext('2d'); x.clearRect(0, 0, 16, 18); x.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1);
+  const c = $('profileArt'), x = c.getContext('2d'); x.clearRect(0, 0, 12, 16); x.drawImage(charFrame(charOf(me.char), titleAnimT % 4 < 2.4 ? 'idle' : f, 1, Math.floor(titleAnimT * 2) % 2), 0, 0);
   const on = document.querySelector('.swatch.on canvas');
   if (on) { const y = on.getContext('2d'); y.clearRect(0, 0, 16, 18); y.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1); }
 }
@@ -146,6 +154,7 @@ if (/iP(hone|od)/.test(navigator.userAgent) && !navigator.standalone && !matchMe
   setTimeout(() => toast('Tip: Share → Add to Home Screen plays in full screen'), 1500);
 
 function buildTitle() {
+  offerRejoin();
   $('name').value = me.name;
   $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; saveMe(); };
   const box = $('colors'); box.innerHTML = '';
@@ -157,6 +166,7 @@ function buildTitle() {
     box.appendChild(b);
   }
   $('charName').textContent = charOf(me.char).name;
+  $('profileName').textContent = me.name;
 }
 $('setBtn').onclick = () => { sfx.click(); openSettings(hidePanel); };
 
@@ -238,6 +248,7 @@ async function hostParty() {
   try {
     roomCode = await net.host();
     if (mode !== 'online') return;
+    saveSession();
     openLobby();
   } catch (e) {
     console.warn(e);
@@ -287,7 +298,8 @@ net.onMessage = m => {
     const char = charOf(m.char).id === players.a.char ? otherChar(players.a.char) : charOf(m.char).id;
     const back = m.rejoin && players.b;
     players.b = { name: String(m.name || 'Friend').slice(0, 12), char };
-    if (!back) { score = { a: 0, b: 0 }; runs = []; }
+    if (!back && !(m.rejoin && restoredScore)) { score = { a: 0, b: 0 }; runs = []; }
+    restoredScore = false; saveSession();
     if (back && run && performance.now() - lastRestart > 3000) restartRound();
     syncLobby(); if (!run) openLobby();
     toast(players.b.name + ' joined!');
@@ -364,7 +376,8 @@ async function guestRejoin(fromReload) {
       await net.join(code, gid);
       netBanner(null); toast('Reconnected!'); sfx.cp();
       saveSession();
-      if (fromReload) { players = { a: null, b: { name: me.name, char: me.char } }; net.send({ t: 'hi', name: me.name, char: me.char, rejoin: true }); }
+      if (fromReload) players = { a: null, b: { name: me.name, char: me.char } };
+      net.send({ t: 'hi', name: me.name, char: me.char, rejoin: true });   // also tells a host who reopened the party who's back
       return true;
     } catch (e) {
       if (e && e.type === 'full') break;
@@ -375,9 +388,46 @@ async function guestRejoin(fromReload) {
   if (mode === 'online' && !isHost) { forgetSession(); friendLeft(); }
   return false;
 }
-// A guest remembers the party for a few minutes, so closing the app or reloading the page rejoins the same party.
-const saveSession = () => store.set('session', { code: roomCode, gid: net.gid, t: Date.now() });
+// Both players remember the party. Closing the app or reloading within a few minutes goes straight back in (the host
+// reopens the same code, the guest knocks again), and for half an hour the title offers "Rejoin party ABCD", also after
+// leaving by mistake. The host keeps the score, so the match carries on.
+const saveSession = () => {
+  if (mode !== 'online' || !roomCode) return;
+  const s = { code: roomCode, gid: net.gid, role: isHost ? 'host' : 'guest', t: Date.now(), score, friend: players.b && players.b.name };
+  store.set('session', s); store.set('lastParty', s);
+};
 const forgetSession = () => store.set('session', null);
+setInterval(saveSession, 10000);
+addEventListener('pagehide', saveSession);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveSession(); });
+const REJOIN_OFFER = 30 * 60 * 1000;
+let restoredScore = false;
+async function rejoinParty(s, auto = false) {
+  unlockAudio();
+  if (s.role === 'host') {
+    mode = 'online'; isHost = true; score = s.score || { a: 0, b: 0 }; restoredScore = true;
+    players = { a: { name: me.name, char: me.char }, b: null }; roomCode = '';
+    openLobby(); $('lobbyStatus').textContent = `Reopening party ${s.code}…`;
+    try {
+      roomCode = await net.host(s.code);
+      if (mode !== 'online') return;
+      saveSession(); openLobby();
+      toast(`Party ${s.code} is open again. ${s.friend ? esc(s.friend) + ' can' : 'Your friend can'} rejoin.`);
+    } catch (e) {
+      console.warn(e); $('lobbyStatus').textContent = 'Could not reopen the party. Check your connection.'; $('lobbyStatus').className = 'status err';
+    }
+  } else {
+    show('title'); mode = 'online'; isHost = false; roomCode = s.code; net.gid = s.gid; score = { a: 0, b: 0 };
+    const ok = await guestRejoin(true);
+    if (!ok) { mode = null; show('title'); buildTitle(); if (!auto) toast(`Party ${s.code} isn't open any more.`); }
+  }
+}
+function offerRejoin() {
+  const s = store.get('lastParty', null), b = $('rejoinBtn');
+  const ok = s && Date.now() - s.t < REJOIN_OFFER && mode !== 'online';
+  b.classList.toggle('hidden', !ok);
+  if (ok) { const l = b.querySelector('.tlabel'); if (l) l.innerHTML = `Rejoin <b>${esc(s.code)}</b>`; b.onclick = () => { sfx.click(); rejoinParty(s); }; }
+}
 
 function friendLeft() {
   if (mode !== 'online') return;
@@ -399,7 +449,7 @@ function leaveParty() {
   mode = null; players = { a: null, b: null }; endRunView();
 }
 
-function syncLobby() { if (mode === 'online' && isHost) net.send({ t: 'lobby', players, lobby, score }); }
+function syncLobby() { if (mode === 'online' && isHost) { net.send({ t: 'lobby', players, lobby, score }); saveSession(); } }
 
 // ---------- lobby
 function openLobby() {
@@ -591,7 +641,7 @@ const touchHeld = { left: new Set(), right: new Set(), jump: new Set() };
 const TOUCH_BTN = { left: 'tLeft', right: 'tRight', jump: 'tJump' };
 // The runner's arcade parts: a joystick for left / right, a big red JUMP button. Redrawn when they change.
 const knobArt = (el, cls = 'knob') => { let c = el.querySelector('canvas.' + cls); if (!c) { c = document.createElement('canvas'); c.className = 'pix ' + cls; el.prepend(c); } return c; };
-const sizeArt = c => { c.style.setProperty('--aw', c.width); c.style.setProperty('--ah', c.height); };
+function sizeArt(c) { c.style.setProperty('--aw', c.width); c.style.setProperty('--ah', c.height); }
 let lookSig = '';
 const touchLooks = () => {
   for (const k in TOUCH_BTN) $(TOUCH_BTN[k]).classList.toggle('down', touchHeld[k].size > 0);
@@ -726,8 +776,8 @@ function trapAt(cx, cy) {
   let best = -1, bd = 1e9;
   for (const t of run.world.traps) {
     const b = R.trapButton(run.world, t), d = Math.hypot(b.x - w.x, b.y - w.y);
-    const inRect = w.x > t.x0 * 16 - 4 && w.x < (t.x1 + 1) * 16 + 4 && w.y > t.y * 16 - 6 + (t.kind === 'crusher' ? t.oy : 0) && w.y < (t.y + 1) * 16 + 6 + (t.kind === 'crusher' ? t.oy : 0);
-    if ((d < b.r + 9 || inRect) && d < bd) { bd = d; best = t.id; }
+    const inRect = w.x > t.x0 * 16 - 10 && w.x < (t.x1 + 1) * 16 + 10 && w.y > t.y * 16 - 12 + (t.kind === 'crusher' ? t.oy : 0) && w.y < (t.y + 1) * 16 + 12 + (t.kind === 'crusher' ? t.oy : 0);
+    if ((d < b.r + 16 || inRect) && d < bd) { bd = d; best = t.id; }
   }
   return best;
 }
@@ -817,7 +867,7 @@ function buildTrapBar() {
     const b = document.createElement('button');
     b.className = 'tbtn'; b.dataset.slot = i; b.style.setProperty('--slot', SLOT_COLORS[i]);
     b.innerHTML = `<i class="eta"></i><span class="kw"><canvas class="pix knob"></canvas><span class="secs"></span><i class="skey kc">${slotKey(i)}</i></span><small></small>`;
-    b.sig = '';
+    b.sig = ''; slotArt(b, i, null);
     b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireSlot(i, 'p' + e.pointerId); });
     bar.appendChild(b);
   }
@@ -878,6 +928,7 @@ function gadgetButton(id, side, onPress) {
   b.innerHTML = `<span class="kw"><canvas class="pix knob"></canvas><span class="secs"></span>${showKey ? `<i class="kc">${key}</i>` : ''}</span><small></small>`;
   b.querySelector('small').textContent = GADGETS[side][id].name;
   b.sig = '';
+  { const c = b.querySelector('canvas.knob'); drawKnob(c, { r: 8, pal: side, icon: SPR.icon[id] }); sizeArt(c); }
   if (onPress) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); unlockAudio(); if (run) onPress(id); });
   return b;
 }
@@ -890,6 +941,7 @@ function buildGadgets() {
 }
 function updateGadgets() {
   const w = run.world;
+  $('pad').classList.toggle('frozen', run.runnerHere && w.player.frost > 0);
   for (const [bar, side] of [['gadbar', 'trapper'], ['rgad', 'runner']]) for (const b of $(bar).children) {
     const id = b.dataset.id, g = w.gad[side][id], def = GADGETS[side][id];
     const state = g.n === 0 ? 'none' : side === 'trapper' && w.jam > 0 ? 'jam' : run.aim && run.aim.id === id ? 'aim' : g.cd > 0 ? 'cool' : def.passive ? 'passive' : 'ready';
@@ -931,23 +983,47 @@ function useRunnerGadget(id) {
 // ---------- where the controls go. The bottom panel holds whoever plays on this device; on a shared touch screen
 // the trapper gets a panel at the top. The game view is whatever space is left, so nothing covers it.
 // Tell the renderer which parts of the screen the bars cover, so the camera keeps the action between them.
+// The runner's gadgets on a circle around JUMP: they start low on its left and climb over its top, spaced so the
+// sockets just touch, the whole arc centred on the upper left (where the thumb reaches from the corner).
+function placeRing() {
+  const pr = $('padR'); if (!pr.classList.contains('ring')) return;
+  const btns = [...$('rgad').children], jc = $('tJump').querySelector('canvas.knob');
+  if (!btns.length || !jc) return;
+  $('tJump').style.marginRight = '';
+  for (let pass = 0; pass < 2; pass++) {
+    const P = pr.getBoundingClientRect(), J = jc.getBoundingClientRect(), g = btns[0].querySelector('canvas.knob').getBoundingClientRect();
+    const cx = J.left + J.width / 2 - P.left, cy = J.top + J.width / 2 - P.top, gr = g.width / 2, Rr = J.width / 2 + gr - 2;
+    const step = 2 * Math.asin(Math.min(1, (gr + 2) / Rr)), mid = 112 * Math.PI / 180;
+    const start = Math.min(190 * Math.PI / 180, mid + (btns.length - 1) * step / 2);
+    let right = 0;
+    btns.forEach((b, i) => {
+      const a = start - i * step, x = cx + Math.cos(a) * Rr, y = cy - Math.sin(a) * Rr;
+      b.style.left = Math.round(x - gr) + 'px'; b.style.top = Math.round(y - gr) + 'px';
+      right = Math.max(right, x + gr);
+    });
+    const over = right - (innerWidth - P.left - 6);
+    if (over <= 0) break;
+    $('tJump').style.marginRight = Math.ceil(over) + 'px';
+  }
+}
 function updateInsets() {
   if (!run) { R.setInsets(0, 0); R.resize(); return; }
+  placeRing();
   const hud = $('hud').getBoundingClientRect(), top = $('padTop'), pad = $('pad');
   let t = hud.bottom, b = 0;
   if (!top.classList.contains('hidden')) t = Math.max(t, top.getBoundingClientRect().bottom);
   if (!pad.classList.contains('hidden')) b = viewH() - pad.getBoundingClientRect().top;
   R.setInsets(t, b); R.resize();
 }
-const PORTRAIT = matchMedia('(orientation: portrait) and (max-width: 600px)');
-PORTRAIT.addEventListener?.('change', () => { if (run) layoutControls(); });
 function layoutControls() {
   const parts = $('parts');
   for (const id of ['arrows', 'tJump', 'trapbar', 'gadbar', 'rgad']) parts.appendChild($(id));
   for (const id of ['padL', 'padM', 'padR', 'padTL', 'padTM', 'padTR']) $(id).innerHTML = '';
   const bottom = { L: [], M: [], R: [] }, top = { L: [], M: [], R: [] };
   // Touch: gadgets sit right next to JUMP, under the same thumb (portrait phones: in a row above it).
-  if (run.runnerHere && touchDevice) { bottom.L.push('arrows'); if (PORTRAIT.matches) bottom.M.push('rgad'); else bottom.R.push('rgad'); bottom.R.push('tJump'); }
+  // Touch: the gadgets sit in a ring around JUMP, all under the same thumb (placeRing positions them).
+  $('padR').classList.toggle('ring', run.runnerHere && touchDevice);
+  if (run.runnerHere && touchDevice) { bottom.L.push('arrows'); bottom.R.push('tJump', 'rgad'); }
   else if (run.runnerHere) bottom.L.push('rgad');
   if (run.trapperHere) {
     const where = run.runnerHere && touchDevice ? top : bottom;
@@ -956,6 +1032,7 @@ function layoutControls() {
   const fill = (spec, prefix) => { let any = false; for (const k of ['L', 'M', 'R']) for (const id of spec[k]) { $(prefix + k).appendChild($(id)); any = true; } return any; };
   const hasBottom = fill(bottom, 'pad'), hasTop = fill(top, 'padT');
   lookSig = ''; touchLooks();
+  document.body.classList.toggle('ringpad', run.runnerHere && touchDevice);
   $('pad').classList.toggle('hidden', !hasBottom);
   $('padTop').classList.toggle('hidden', !hasTop);
   document.body.classList.add('playing');
@@ -1087,7 +1164,7 @@ const GAD_LONG = {
   bolt: 'Aim it: a lightning bolt strikes after a short warning and stuns the runner.', glue: 'Aim it: a sticky puddle on the floor slows the runner and lowers their jumps.',
   mine: 'Aim it: a hidden mine that pops the runner up and stuns them.', bat: 'Aim it: a bat flies at the runner and stuns on contact.',
   gust: 'A strong wind blows the runner back for 1.8 s; jumps fall short.', hex: 'Swaps the runner\'s left and right for 2.6 s.',
-  frost: 'The runner\'s feet go icy for 3 s: slippery everywhere.', fog: 'The runner can only see close around them for 4 s.',
+  frost: 'Freezes the runner\'s controls for 1.4 s: no running, jumping or gadgets, while the world goes on. Mid-jump, they drop.', fog: 'The runner can only see close around them for 4 s.',
   anvil: 'Makes the runner heavy for 3 s: low jumps, fast falls.', moon: 'Floaty low gravity for 3 s: hard to land precisely.',
   rewind: 'Sends the runner back to where they were 2 s ago.', squash: 'Shrinks the runner for 3 s: slower and lower jumps.',
 };
@@ -1147,7 +1224,7 @@ const GAD_DESC = {
   shield: 'blocks one hit', phase: 'traps pass through you', jam: 'stops all traps for 2 s', slowmo: 'slows the traps', flag: 'checkpoint where you stand',
   decoy: 'a fake runner', magnet: 'nothing can push you', peek: 'see hidden mines',
   bolt: 'aimed lightning: stuns', glue: 'aimed puddle: slows', mine: 'hidden: pops them up', bat: 'chases the runner', gust: 'wind blows them back',
-  hex: 'swaps left and right', frost: 'their feet go icy', fog: 'they only see nearby', anvil: 'heavy: low jumps', moon: 'floaty jumps',
+  hex: 'swaps left and right', frost: 'frozen controls', fog: 'they only see nearby', anvil: 'heavy: low jumps', moon: 'floaty jumps',
   rewind: 'back 2 seconds', squash: 'small and slow',
 };
 function showPreview() {
@@ -1400,7 +1477,7 @@ function tick(dt, now) {
   if (innerWidth !== R.vw || innerHeight !== R.ih || dpr !== R.dpr) updateInsets();
   paintEdges();
   readPads(dt);
-  if (!run) { drawAttract(dt); animateTitle(dt); return; }
+  if (!run) { drawMenuScene(dt); animateTitle(dt); return; }
   const w = run.world;
   readInput();
   if (run.phase === 'preview' && !run.paused) panPreview(dt);
@@ -1470,29 +1547,18 @@ function tick(dt, now) {
 // Safari tints the strip it keeps at the bottom of the screen with the page background: match what's at the bottom.
 let edgeCol = '';
 function paintEdges() {
-  const th = THEMES[(run ? run.world : attract ? attract.world : { level: LEVELS[0] }).level.theme] || THEMES.day;
-  const col = run && !$('pad').classList.contains('hidden') ? '#241a30' : th.dirt[1];
+  const th = run && (THEMES[run.world.level.theme] || THEMES.day);
+  const col = !run ? '#3f9a38' : !$('pad').classList.contains('hidden') ? '#241a30' : th.dirt[1];
   if (col !== edgeCol) { edgeCol = col; document.documentElement.style.backgroundColor = col; document.body.style.backgroundColor = col; }
 }
 
-// Behind the menus: a little demo of the first level with the bot.
-let attract = null;
-function drawAttract(dt) {
-  if (!attract) attract = { world: new World(LEVELS[0]), bot: new Bot(0.3), t: 0, acc: 0 };
-  const a = attract, w = a.world;
-  a.acc += dt;
-  while (a.acc >= DT) {
-    a.acc -= DT; a.t += DT;
-    const p = w.player;
-    const blocked = w.solidAt(Math.floor((p.x + 14) / 16), Math.floor((p.y + 6) / 16)) || !w.solidAt(Math.floor((p.x + 20) / 16), Math.floor((p.y + 20) / 16));
-    w.step(DT, { right: true, jump: true, jumpPressed: blocked && p.onGround });
-    a.bot.think(w, DT);
-    for (const e of w.events) R.onEvent(e, charOf(me.char));
-    w.events.length = 0;
-    if (p.finished || a.t > 40) { attract = null; return; }
-  }
-  R.follow(w, dt, false);
-  R.draw(w, { dt, colors: charOf(me.char), trapper: false });
+// Behind the title and every menu: the menu world (src/scene.js), a living landscape, not a level.
+const scene = new Scene();
+function drawMenuScene(dt) {
+  const kk = Math.max(1, Math.round(R.devH / 190)), W = Math.ceil(R.devW / kk), H = Math.ceil(R.devH / kk);
+  if (R.lo.width !== W || R.lo.height !== H) { R.lo.width = W; R.lo.height = H; R.l.imageSmoothingEnabled = false; }
+  R.wide = 'scene';   // the game sets its own zoom again when a round starts
+  scene.draw(R.l, W, H, dt, R.lite);
 }
 
 // ---------- boot
@@ -1502,9 +1568,8 @@ const q = new URLSearchParams(location.search);
 const session = store.get('session', null);
 if (q.get('join')) { $('code').value = cleanCode(q.get('join')); show('join'); }
 else if (session && Date.now() - session.t < 5 * 60 * 1000) {   // the app was closed mid-party: go straight back in
-  show('title'); mode = 'online'; isHost = false; roomCode = session.code; net.gid = session.gid; score = { a: 0, b: 0 };
-  guestRejoin(true).then(ok => { if (!ok) { mode = null; show('title'); } });
+  rejoinParty(session, true);
 }
 else show('title');
 requestAnimationFrame(frame);
-window.__td = { get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };
+window.__td = { scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };

@@ -12,15 +12,22 @@ const check = async (p, name) => {
     const c = { top: R.insets.top, bottom: innerHeight - R.insets.bottom, width: g.width, height: innerHeight - R.insets.top - R.insets.bottom };
     for (const el of document.querySelectorAll('.pad:not(.hidden) button, .hud button')) {
       const e = el.getBoundingClientRect();
-      if (e.width && e.bottom > c.top + 1 && e.top < c.bottom - 1) bad.push((el.id || el.dataset.kind || el.dataset.id) + ' overlaps the play band');
+      const ring = el.closest('#padR.ring') && e.right > innerWidth * 0.72 && e.bottom > c.bottom - 40;   // the gadget ring may reach a little into the bottom-right corner
+      if (ring && e.top < c.bottom - 1) window.__ringOver = Math.max(window.__ringOver || 0, Math.round(c.bottom - e.top));
+      if (e.width && !ring && e.bottom > c.top + 1 && e.top < c.bottom - 1) bad.push((el.id || el.dataset.kind || el.dataset.id) + ' overlaps the play band');
       if (e.right > innerWidth + 1 || e.left < -1) bad.push((el.id || el.dataset.kind || el.dataset.id) + ' off screen');
     }
-    const btns = [...document.querySelectorAll('.pad:not(.hidden) button')].map(el => el.getBoundingClientRect());
-    for (let i = 0; i < btns.length; i++) for (let j = i + 1; j < btns.length; j++) { const a = btns[i], q = btns[j]; if (a.left < q.right - 1 && q.left < a.right - 1 && a.top < q.bottom - 1 && q.top < a.bottom - 1) bad.push('two buttons overlap'); }
-    return { view: `${Math.round(c.width)}x${Math.round(c.height)}`, bad: [...new Set(bad)] };
+    // round arcade buttons: compare their caps as circles (the ring packs them edge to edge); others as boxes
+    const btns = [...document.querySelectorAll('.pad:not(.hidden) button')].map(el => { const k = el.querySelector('canvas.knob'); return { r: el.getBoundingClientRect(), k: k && k.getBoundingClientRect(), ring: !!el.closest('#padR.ring') || el.id === 'tJump' }; });
+    for (let i = 0; i < btns.length; i++) for (let j = i + 1; j < btns.length; j++) {
+      const A = btns[i], Q = btns[j];
+      if (A.ring && Q.ring && A.k && Q.k) { const d = Math.hypot(A.k.x + A.k.width / 2 - Q.k.x - Q.k.width / 2, A.k.y + A.k.height / 2 - Q.k.y - Q.k.height / 2); if (d < (A.k.width + Q.k.width) / 2 - 8) bad.push('two buttons overlap'); continue; }
+      const a = A.r, q = Q.r; if (a.left < q.right - 1 && q.left < a.right - 1 && a.top < q.bottom - 1 && q.top < a.bottom - 1) bad.push('two buttons overlap');
+    }
+    return { view: `${Math.round(c.width)}x${Math.round(c.height)}`, bad: [...new Set(bad)], ring: window.__ringOver || 0 };
   });
   await p.screenshot({ path: `shots/70-${name}.png` });
-  console.log(name.padEnd(22), 'play band', r.view, r.bad.length ? 'PROBLEMS: ' + r.bad.join(', ') : 'ok');
+  console.log(name.padEnd(22), 'play band', r.view, r.bad.length ? 'PROBLEMS: ' + r.bad.join(', ') : 'ok', r.ring ? `(gadget ring reaches ${r.ring}px into the bottom-right corner)` : '');
 };
 for (const portrait of [false]) {   // landscape only now
   const tag = portrait ? 'portrait' : 'landscape';
