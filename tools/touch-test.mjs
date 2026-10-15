@@ -27,9 +27,9 @@ const D = await box('.rgad');
 await touch('touchStart', [{ x: (R.x + R.width + D.x) / 2, y: R.y + 4, id: 3 }]); await p.waitForTimeout(100);
 console.log('middle gap (should follow nearest only if within 56px):', JSON.stringify(await held()));
 await touch('touchEnd', []);
-// 4. a gadget button 10 px below it
+// 4. a gadget button: a tap 6 px above it (it sits at the bottom edge now)
 const S = await p.locator('.gbtn[data-id="shield"]').boundingBox();
-await touch('touchStart', [{ x: S.x + S.width / 2, y: S.y + S.height + 8, id: 4 }]); await p.waitForTimeout(100); await touch('touchEnd', []);
-console.log('8 px below Shield: shield on', await p.evaluate(() => window.__td.run.world.player.shield > 0));
+await touch('touchStart', [{ x: S.x + S.width / 2, y: S.y - 6, id: 4 }]); await p.waitForTimeout(100); await touch('touchEnd', []);
+console.log('6 px above Shield: shield on', await p.evaluate(() => window.__td.run.world.player.shield > 0));
 console.log(errs.length ? 'ERRORS ' + errs.join(' | ') : 'no errors');
 await b.close();

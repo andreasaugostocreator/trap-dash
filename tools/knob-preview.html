@@ -1,0 +1,21 @@
+<!doctype html><meta charset="utf-8"><body style="margin:0;background:linear-gradient(#6fb6ff,#8bd 60%,#7a5233 60%);">
+<div id="o" style="display:flex;flex-wrap:wrap;gap:18px;padding:20px;align-items:flex-end"></div>
+<script type="module">
+import { drawKnob, drawStick, knobSize, KICON } from '../src/knobs.js';
+import { SPR, initSprites } from '../src/sprites.js';
+initSprites();
+const o = document.getElementById('o'), K = 3;
+const add = (opts, label) => { const c = document.createElement('canvas'); drawKnob(c, opts); c.style.cssText = `width:${c.width*K}px;height:${c.height*K}px;image-rendering:pixelated`; const f = document.createElement('figure'); f.style.cssText='margin:0;text-align:center;font:12px monospace;color:#fff'; f.append(c, Object.assign(document.createElement('div'), { textContent: label })); o.append(f); };
+add({ r: 13, pal: 'jump', icon: KICON.jump, iconScale: 2 }, 'jump');
+add({ r: 13, pal: 'jump', icon: KICON.jump, iconScale: 2, pressed: true }, 'jump pressed');
+for (const [p, ic] of [['red', 'wall'], ['blue', 'arrows'], ['yellow', 'fan']]) add({ r: 11, pal: p, icon: SPR.icon[ic], iconScale: 2 }, p);
+add({ r: 11, pal: 'blue', icon: SPR.icon.arrows, iconScale: 2, cd: 0.6 }, 'cooling');
+add({ r: 11, empty: true }, 'empty');
+add({ r: 8, pal: 'runner', icon: SPR.icon.dash, pips: 2 }, 'dash');
+add({ r: 8, pal: 'runner', icon: SPR.icon.shield, pips: 1, cd: 0.3 }, 'cool');
+add({ r: 8, pal: 'trapper', icon: SPR.icon.bolt, pips: 4 }, 'bolt');
+add({ r: 8, pal: 'aim', icon: SPR.icon.anvil, pips: 1 }, 'aim');
+add({ r: 8, pal: 'runner', icon: SPR.icon.dash, spent: true }, 'spent');
+add({ r: 6, pal: 'dark', icon: KICON.pause }, 'pause');
+for (const dir of [-1, 0, 1]) { const c = document.createElement('canvas'); drawStick(c, dir); c.style.cssText = `width:${c.width*K}px;height:${c.height*K}px;image-rendering:pixelated`; o.append(c); }
+</script>

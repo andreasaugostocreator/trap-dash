@@ -306,3 +306,24 @@ tablet and foldable sizes; `tools/menu-fit-test.mjs` checks every menu on 16 siz
   The trapper's B X Y match the red, blue and yellow slot colours; LB RB LT RT are gadgets, and aimed ones steer
   with a stick (A drops, B cancels). On one screen pad 1 runs and pad 2 traps. Start pauses; menus use the d-pad
   and A, and B goes back. Button labels switch to the pad's buttons once one is connected. `tools/gamepad-test.mjs`.
+
+## 14. Art direction: the pixel arcade cabinet
+
+Trap Dash is a head-to-head duel made of crisp pixel art, so the interface is treated as arcade hardware built from
+the same pixels as the world, not as web buttons laid over it.
+
+- **One material.** Every in-game control is drawn pixel by pixel (`src/knobs.js`) on the game's own grid and scaled
+  up crisp. Caps are domed (light from the upper left, a glint, a shaded lower half), with a visible side when raised.
+  They sit in **smoked-glass sockets**, so the level shows through and nothing reads as a flat plate.
+- **Runner:** a joystick (it leans the way you press, and that side's arrow lights up), a big red JUMP button in the
+  corner, and the gadgets on a gentle arc beside it that rises toward the corner, following the thumb's swing.
+- **Trapper:** the three trap slots are red, blue and yellow arcade buttons, the same colours as the outlines on the
+  map. An empty slot is an empty socket. "in 2s" and "now" ride on a tag over the cap.
+- **State is shown on the hardware:** pressing sinks the cap, cooldown drains around the cap like a pie in grey,
+  charges are lit pips on the socket rim, a recharged button flashes, and one that isn't ready shakes.
+- **Menus** use the same plastic: a hard two-tone face (lit top, shaded bottom), a bright top edge, a dark lip and
+  a pixel glint. No emoji anywhere: menus, results and achievements use pixel icons, and achievements are little medals
+  in the same cap style.
+- **Landscape only.** Upright phones and tablets get a pixel "turn your phone" screen and a running game pauses; the
+  installed app asks for landscape.
+- Scale: `--k` screen px per art pixel (3 on big screens, 2.2 on phones held sideways, 2 on very short ones).

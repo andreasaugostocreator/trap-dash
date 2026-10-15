@@ -559,3 +559,111 @@ html.vfix body { transform: translateZ(0); }
 button.padfocus { outline: 4px solid #ffd84a; outline-offset: 3px; z-index: 2; }
 /* gadgets beside JUMP (landscape touch): one group under the right thumb */
 #padR .rgad { margin-right: 6px; padding-right: 10px; border-right: 3px solid rgba(255, 255, 255, .12); }
+
+/* =====================================================================================================
+   Arcade controls. Every in-game control is a pixel-art arcade part (src/knobs.js), drawn on the game's own pixel
+   grid: domed round caps in smoked-glass sockets, a joystick, charge pips. No plates behind them: the map shows
+   through, and the buttons read as hardware sitting on the glass. --k = screen px per art pixel.
+   ===================================================================================================== */
+:root { --k: 3; }
+@media (max-height: 500px) { :root { --k: 2.2; } }
+@media (max-height: 380px) { :root { --k: 2; } }
+body canvas.knob, body canvas.stick, body .pad canvas.knob, body .pad .tbtn canvas.knob, body .pad .gbtn canvas.knob { position: static; display: block; width: calc(var(--aw) * var(--k) * 1px); height: calc(var(--ah) * var(--k) * 1px); image-rendering: pixelated; pointer-events: none; }
+
+body .pad .gbtn, body .pad .tbtn, body .arrows button, body #tJump, body #pauseBtn {
+  width: auto; height: auto; min-width: 0; flex: 0 0 auto; padding: 0; margin: 0; background: none; box-shadow: none; overflow: visible;
+  display: flex; flex-direction: column; align-items: center; gap: 1px; color: #fff; opacity: 1; filter: none; }
+body .pad .gbtn:hover, body .pad .tbtn:hover, body #pauseBtn:hover { transform: none; filter: none; }
+body .pad .gbtn.down, body .pad .tbtn.down, body #tJump.down, body .arrows button.down, body .pad button:active, body #pauseBtn:active { transform: none; box-shadow: none; filter: none; background: none; }
+body .pad .gbtn[data-state], body .pad .tbtn[data-state] { background: none; opacity: 1; }
+.kw { position: relative; display: block; }
+.pad small { font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; letter-spacing: .04em; font-size: 12px; line-height: 1; color: #fff; white-space: nowrap; margin-top: -2px;
+  text-shadow: 2px 0 var(--ink), -2px 0 var(--ink), 0 2px var(--ink), 0 -2px var(--ink), 2px 2px var(--ink), -2px 2px var(--ink), 2px -2px var(--ink), -2px -2px var(--ink); }
+.pad .gbtn[data-state="none"] small, .pad .tbtn[data-state="empty"] small { opacity: .5; }
+/* seconds left: big, centred on the cap */
+body .pad .kw .secs { position: absolute; inset: 0 0 6% 0; display: flex; align-items: center; justify-content: center; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6;
+  font-size: 22px; color: #fff; z-index: 2; pointer-events: none; text-shadow: var(--outline); }
+body .pad .tbtn .kw .secs { font-size: 28px; }
+/* a key / pad button chip, like a little keycap at the corner */
+.kc { position: absolute; left: -2px; top: -2px; z-index: 3; font-style: normal; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 11px; line-height: 1;
+  min-width: 15px; padding: 2px 3px 3px; text-align: center; color: var(--ink); background: #f4ead7; box-shadow: var(--frame), 0 3px 0 var(--ink), inset 0 -2px 0 #cdbb98; pointer-events: none; }
+.kc:empty { display: none; }
+body .tbtn .skey { position: absolute; left: -2px; right: auto; top: -2px; color: var(--ink); text-shadow: none; font-size: 11px; }
+/* "in 2s" / "now": a tag floating over the cap's top edge */
+body .pad .tbtn .eta { position: absolute; left: 50%; top: -10px; transform: translateX(-50%); z-index: 4; font-size: 11px; padding: 2px 5px 3px; color: #ffd84a; background: var(--ink); box-shadow: 0 0 0 2px rgba(255, 255, 255, .15); white-space: nowrap; }
+body .pad .tbtn .eta:empty { display: none; }
+body .pad .tbtn[data-state="ready"] .eta { color: #fff; }
+/* ready again: the cap glows for a moment; denied: shake */
+body .pad .readyNow::after { content: none; }
+.readyNow .knob { animation: knobGlow .5s ease-out both; }
+@keyframes knobGlow { 0% { filter: brightness(1.7) drop-shadow(0 0 8px #fff); } 100% { filter: none; } }
+/* the joystick: two invisible halves over one drawing */
+body .arrows { position: relative; display: block; gap: 0; touch-action: none; }
+body .arrows button { position: absolute; top: 0; bottom: 0; width: 50%; height: auto; }
+body .arrows button#tLeft { left: 0; } body .arrows button#tRight { right: 0; left: auto; }
+body .arrows button::after { content: ''; position: absolute; inset: -14px -8px; }
+body .arrows button { font-size: 0; color: transparent; }
+body #tJump { font-size: 0; color: transparent; }
+body #tJump::after { content: ''; position: absolute; inset: -10px; }
+/* gadgets beside JUMP, on a gentle arc around the thumb (nearest to JUMP sits highest) */
+#padR .rgad { margin-right: 4px; padding-right: 0; border-right: 0; gap: 4px; align-items: flex-end; }
+#padR .rgad .gbtn:nth-last-child(1) { translate: 0 -12px; } #padR .rgad .gbtn:nth-last-child(2) { translate: 0 -6px; } #padR .rgad .gbtn:nth-last-child(3) { translate: 0 -2px; }
+.gadbar { border-left: 0; padding-left: 4px; gap: 4px; align-items: flex-end; }
+.gadbar .gbtn:nth-child(1) { translate: 0 -10px; } .gadbar .gbtn:nth-child(2) { translate: 0 -5px; } .gadbar .gbtn:nth-child(3) { translate: 0 -1px; }
+.pad.top .gadbar .gbtn { translate: 0 0; }
+.trapbar { gap: 10px; align-items: flex-end; }
+/* the panels: no plate, just a soft shade so the parts stand out on bright levels */
+body .pad { background: radial-gradient(120% 140% at 50% 120%, rgba(14, 10, 22, .42), rgba(14, 10, 22, 0) 70%); align-items: flex-end; padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+body .pad.top { background: radial-gradient(120% 140% at 50% -20%, rgba(14, 10, 22, .42), rgba(14, 10, 22, 0) 70%); align-items: flex-start; padding-top: 14px; }
+:root { --padH: calc(108px + env(safe-area-inset-bottom)); --padTopH: 120px; }
+@media (max-height: 500px) { :root { --padH: calc(88px + env(safe-area-inset-bottom)); --padTopH: 86px; } }
+/* the pause button: a small dark arcade button */
+body #pauseBtn { position: relative; }
+body #pauseBtn::after { inset: -8px; }
+
+/* ---------- landscape only: upright phones and tablets see this instead of the game */
+.turn { display: none; position: fixed; inset: 0; z-index: 200; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center;
+  background: radial-gradient(circle at 50% 40%, #3a2c52, #1c1424 70%); color: #fff; }
+.turn canvas { width: 120px; height: 120px; animation: turnPhone 2.4s steps(1) infinite; }
+.turn b { font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 28px; letter-spacing: .03em; text-shadow: var(--outline); }
+.turn span { font-size: 18px; color: #c9bde0; }
+@keyframes turnPhone { 0% { rotate: 0deg; } 35% { rotate: -45deg; } 50% { rotate: -90deg; } 85% { rotate: -90deg; } }
+@media (orientation: portrait) and (pointer: coarse) { .turn { display: flex; } }
+
+body #pauseBtn canvas.knob { width: calc(var(--aw) * 2px); height: calc(var(--ah) * 2px); }
+@media (max-height: 500px) { body #pauseBtn canvas.knob { width: calc(var(--aw) * 1.75px); height: calc(var(--ah) * 1.75px); } }
+.pad small { font-size: 11px; }
+#padR .rgad, .gadbar { gap: 8px; }
+@media (max-height: 500px) { body .pad.top { padding-top: 12px; } body .pad .tbtn .kw .secs { font-size: 22px; } body .pad .kw .secs { font-size: 18px; } }
+/* an empty trap slot is an empty socket, still visible */
+body .pad .tbtn[data-state="empty"] { box-shadow: none; background: none; }
+body .pad .tbtn[data-state="empty"] canvas.knob { visibility: visible; opacity: .8; }
+/* the trapper's gadgets also rise toward the corner the thumb pivots on */
+.gadbar .gbtn:nth-child(n) { translate: 0 0; }
+.gadbar .gbtn:nth-last-child(1) { translate: 0 -12px; } .gadbar .gbtn:nth-last-child(2) { translate: 0 -6px; } .gadbar .gbtn:nth-last-child(3) { translate: 0 -2px; }
+.pad.top .gadbar .gbtn:nth-last-child(n) { translate: 0 0; }
+
+/* ---------- pixel icons in text (instead of emoji) */
+img.pi { width: 1.25em; height: 1.25em; vertical-align: -0.22em; image-rendering: pixelated; }
+img.bigpi { width: 54px; height: 54px; image-rendering: pixelated; display: inline-block; }
+.trophy img.bigpi { width: 72px; height: 72px; }
+@media (max-height: 500px) { img.bigpi { width: 40px; height: 40px; } .trophy img.bigpi { width: 54px; height: 54px; } }
+button img.pi.bicon { width: 1.15em; height: 1.15em; }
+button.pink img.pi.bicon, button.blue img.pi.bicon { filter: none; }
+img.medal { width: 44px; height: 44px; image-rendering: pixelated; display: block; }
+.achv img.medal { width: 40px; height: 40px; }
+
+/* ---------- menu buttons: the same arcade plastic as the controls. A hard two-tone face (lit top half, shaded
+   bottom half), a bright top edge, a darker lip, and a pixel glint at the top left. */
+button { background: linear-gradient(#fffdf6 0 50%, #f5ead4 50%);
+  box-shadow: var(--frame), 0 calc(var(--px) * 2) 0 var(--ink), inset 0 var(--px) 0 rgba(255, 255, 255, .8), inset 0 calc(-1 * var(--px)) 0 rgba(120, 80, 40, .22); }
+button:active, button.down { box-shadow: var(--frame), inset 0 var(--px) 0 rgba(0, 0, 0, .18); }
+button.pink { background: linear-gradient(#ff5d6c 0 50%, #e8414f 50%); box-shadow: var(--frame), 0 calc(var(--px) * 2) 0 var(--ink), inset 0 var(--px) 0 #ffa3ad, inset 0 calc(-1 * var(--px)) 0 #b3263a; }
+button.blue { background: linear-gradient(#5486ea 0 50%, #3c6fd1 50%); box-shadow: var(--frame), 0 calc(var(--px) * 2) 0 var(--ink), inset 0 var(--px) 0 #9fc0ff, inset 0 calc(-1 * var(--px)) 0 #2a4f9e; }
+button.pink:active, button.blue:active { box-shadow: var(--frame), inset 0 var(--px) 0 rgba(0, 0, 0, .25); }
+button.big::before, button.mid::before { content: ''; position: absolute; left: 6px; top: 6px; width: 6px; height: 3px; background: rgba(255, 255, 255, .85); box-shadow: 6px 0 0 rgba(255, 255, 255, .45); pointer-events: none; }
+button.mid::before { background: rgba(255, 255, 255, .95); }
+button:disabled::before { display: none; }
+button.chip { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+button.chip canvas.bicon { display: inline-block; width: 15px; height: 15px; }
+body #tJump { position: relative; }

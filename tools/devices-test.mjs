@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
 const devices = [['small android', 360, 640], ['small android', 640, 360], ['galaxy s', 360, 780], ['galaxy s', 780, 360], ['galaxy ultra', 412, 915], ['galaxy ultra', 915, 412],
-  ['iphone se', 375, 667], ['iphone se', 667, 375], ['iphone pro max', 430, 932], ['iphone pro max', 932, 430], ['ipad', 820, 1180], ['ipad', 1180, 820], ['fold open', 673, 841]];
+  ['iphone se', 375, 667], ['iphone se', 667, 375], ['iphone pro max', 430, 932], ['iphone pro max', 932, 430], ['ipad', 820, 1180], ['ipad', 1180, 820], ['fold open', 673, 841]].filter(([, w, h]) => w > h);   // landscape only: upright shows the turn screen
 let bad = 0;
 for (const [name, w, h] of devices) {
   for (const mode of ['Practice', 'Same screen']) {

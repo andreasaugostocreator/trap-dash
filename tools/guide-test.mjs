@@ -2,7 +2,7 @@
 import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
 const errs = [];
-for (const [name, vp] of [['phone', { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true }], ['portrait', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }]]) {
+for (const [name, vp] of [['phone', { viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true }], ['tablet', { viewport: { width: 1180, height: 820 }, isMobile: true, hasTouch: true }]]) {
   const p = await b.newPage(vp); p.on('pageerror', e => errs.push(e.message));
   await p.goto('http://localhost:8080/'); await p.waitForTimeout(400);
   await p.tap('#itemsBtn'); await p.waitForTimeout(200);

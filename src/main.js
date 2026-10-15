@@ -17,6 +17,26 @@ const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { pollPads, BTN } from './gamepad.js';
+import { drawKnob, drawStick, KICON, pixURL } from './knobs.js';
+// Pixel icons inside menu text: colour ones (PI) and the white button icons (PIW, darkened on paper buttons).
+const PI = (name, cls = 'pi') => `<img class="${cls}" alt="" src="${pixURL(name)}">`;
+const piwCache = {};
+// Achievement medals: a little arcade cap in the achievement's colour with a game icon on it.
+const ACH_ART = { first_flag: ['flag', 'aim'], flawless: ['phase', 'aim'], speedster: ['bolt', 'aim'], gauntlet: ['shield', 'runner'], daredevil: ['flame', 'red'],
+  close5: ['dash', 'runner'], shield_save: ['shield', 'blue'], ghostbuster: ['phase', 'runner'], endless5: ['haste', 'blue'], endless10: ['glider', 'blue'],
+  first_catch: ['spikes', 'trapper'], assist: ['gust', 'trapper'], combo: ['dropper', 'red'], catch5: ['crusher', 'trapper'], variety: ['saw', 'trapper'],
+  trap_master: ['hex', 'red'], champion: ['trophy', 'aim'], rivals: ['decoy', 'blue'] };
+const medalCache = {};
+function medal(id, got = true) {
+  const key = id + got;
+  if (!medalCache[key]) {
+    const [ic, pal] = ACH_ART[id] || ['flag', 'aim'], c = document.createElement('canvas');
+    drawKnob(c, { r: 8, pal, icon: got ? SPR.icon[ic] || KICON[ic] : KICON.lockW, spent: !got });
+    medalCache[key] = c.toDataURL();
+  }
+  return `<img class="medal" alt="" src="${medalCache[key]}">`;
+}
+const PIW = name => `<img class="pi bicon" alt="" src="${piwCache[name] || (piwCache[name] = (SPR.icon[name] || KICON[name]).toDataURL())}">`;
 import { TrapScore, titleFor } from './score.js';
 import { TRAINING, Tutorial } from './tutorial.js';
 import { ACHIEVEMENTS, unlock, has, count as achCount, bump } from './achievements.js';
@@ -103,6 +123,12 @@ function logoLetter(word, k) {
     const b = document.querySelector(`#title [data-go="${go}"]`), c = document.createElement('canvas');
     c.width = c.height = 7; c.className = 'pix bicon'; c.getContext('2d').drawImage(SPR.icon[icon], 0, 0); b.prepend(c);
   }
+  // the small buttons get pixel icons too (no emoji: they'd break the pixel look)
+  for (const [id, icon, text] of [['howBtn', 'help', 'How to play'], ['setBtn', 'gear', 'Settings'], ['itemsBtn', 'book', 'Items'], ['troBtn', 'trophy', 'Trophies']]) {
+    const b = $(id), c = document.createElement('canvas');
+    c.width = c.height = 7; c.className = 'pix bicon'; c.getContext('2d').drawImage(KICON[icon], 0, 0);
+    b.textContent = text; b.prepend(c);
+  }
 })();
 let titleAnimT = 0;
 function animateTitle(dt) {
@@ -165,14 +191,14 @@ function watchSpeed(dt) {
 applyGraphics();
 $('howBtn').onclick = () => { panel(`
   <h2>How to play</h2>
-  <div class="row tutRow"><button class="mid pink" id="tutRun">🏃 Runner training</button><button class="mid blue" id="tutTrap">🪤 Trapper training</button></div>
+  <div class="row tutRow"><button class="mid pink" id="tutRun">${PIW('dash')} Runner training</button><button class="mid blue" id="tutTrap">${PIW('spikes')} Trapper training</button></div>
   <ul class="help">
     <li><b>The runner</b> dashes from the start to the checkered flag. Move with <b>← →</b> or <b>A D</b>, jump with <b>Space</b>, <b>W</b> or <b>↑</b> (hold for higher). On a phone, use the buttons.</li>
     <li><b>The trapper</b> gets three coloured buttons for the next traps ahead of the runner (or keys 1-3). Each button fires the trap outlined in its colour on the map; as the runner moves on, the buttons switch to the next traps. There are 13 kinds: spikes, trapdoors, walls, cannons, arrows, crushers, flames, fans, saws, lasers, bombs, conveyor belts and ice.</li>
     <li>Every trap has a <b>cooldown</b> (the dial fills up), and traps can't be fired back to back. The runner sees the dials too, so dash while they're recharging!</li>
     <li><b>Gadgets</b> never kill on their own. There are 12 for each side (lightning, glue, mines, bats, fog, frost, an anvil, rewind… and dash, shield, blink, glider, slow-mo, decoy, phase…), but <b>each map deals 4 to each player</b>, picked to suit its traps and layout. Small numbers show how many uses are left this run.</li>
     <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
-    <li>Levels have ★ to ★★★ difficulty. 🎲 builds a random level of the difficulty you pick.</li>
+    <li>Levels have ★ to ★★★ difficulty. ${PI('dice')} builds a random level of the difficulty you pick.</li>
     <li><b>Gamepad</b>: plug one in and play. Runner: stick or d-pad to move, <b>A</b> jumps, <b>X Y B RB</b> gadgets. Trapper: <b>B X Y</b> fire the red, blue and yellow trap slots, <b>LB RB LT RT</b> gadgets (aimed ones: steer with a stick, <b>A</b> drops it). On one screen the first pad runs and the second traps. <b>Start</b> pauses; in menus use the d-pad and <b>A</b>.</li>
     <li><b>∞ Endless</b>: stage after stage of new levels, no clock. Swap sides whenever you like from the <b>II</b> menu.</li>
   </ul>
@@ -313,7 +339,7 @@ net.onLost = () => {
     const tick = () => {
       const left = Math.ceil((until - performance.now()) / 1000);
       if (left <= 0) { clearInterval(waitTimer); netBanner(null); return friendLeft(); }
-      netBanner(`<b>📡 Lost ${name}</b><small>Waiting for them to come back… ${left}s</small>`);
+      netBanner(`<b>${PI('warn')} Lost ${name}</b><small>Waiting for them to come back… ${left}s</small>`);
     };
     tick(); waitTimer = setInterval(tick, 500);
   } else guestRejoin();
@@ -333,7 +359,7 @@ function restartRound() {   // after a reconnect the round starts over; the scor
 async function guestRejoin(fromReload) {
   const code = roomCode, gid = net.gid, until = performance.now() + REJOIN_WAIT * 1000;
   for (let attempt = 1; performance.now() < until && mode === 'online'; attempt++) {
-    netBanner(`<b>📡 Connection lost</b><small>Reconnecting to the party… (try ${attempt})</small>`);
+    netBanner(`<b>${PI('warn')} Connection lost</b><small>Reconnecting to the party… (try ${attempt})</small>`);
     try {
       await net.join(code, gid);
       netBanner(null); toast('Reconnected!'); sfx.cp();
@@ -424,7 +450,7 @@ function openLobby() {
   const rr = $('randRow'); rr.innerHTML = '';
   const cur = typeof lobby.level === 'object' ? lobby.level : null;
   const lab = document.createElement('span');
-  lab.innerHTML = cur ? `🎲 <b>${esc(cur.name)}</b> <span class="stars">${starText(cur.stars)}</span>` : '🎲 Random level:';
+  lab.innerHTML = cur ? `${PI('dice')} <b>${esc(cur.name)}</b> <span class="stars">${starText(cur.stars)}</span>` : PI('dice') + ' Random level:';
   rr.appendChild(lab);
   for (const n of [1, 2, 3]) {
     const b = document.createElement('button');
@@ -563,7 +589,17 @@ addEventListener('keyup', e => { keys.delete(e.code); releaseHold(e.code); });
 addEventListener('blur', () => keys.clear());
 const touchHeld = { left: new Set(), right: new Set(), jump: new Set() };
 const TOUCH_BTN = { left: 'tLeft', right: 'tRight', jump: 'tJump' };
-const touchLooks = () => { for (const k in TOUCH_BTN) $(TOUCH_BTN[k]).classList.toggle('down', touchHeld[k].size > 0); };
+// The runner's arcade parts: a joystick for left / right, a big red JUMP button. Redrawn when they change.
+const knobArt = (el, cls = 'knob') => { let c = el.querySelector('canvas.' + cls); if (!c) { c = document.createElement('canvas'); c.className = 'pix ' + cls; el.prepend(c); } return c; };
+const sizeArt = c => { c.style.setProperty('--aw', c.width); c.style.setProperty('--ah', c.height); };
+let lookSig = '';
+const touchLooks = () => {
+  for (const k in TOUCH_BTN) $(TOUCH_BTN[k]).classList.toggle('down', touchHeld[k].size > 0);
+  const dir = touchHeld.left.size > 0 ? -1 : touchHeld.right.size > 0 ? 1 : 0, j = touchHeld.jump.size > 0, sig = dir + '|' + j;
+  if (sig === lookSig) return; lookSig = sig;
+  const st = knobArt($('arrows'), 'stick'); drawStick(st, dir); sizeArt(st);
+  const jc = knobArt($('tJump')); drawKnob(jc, { r: 13, pal: 'jump', icon: KICON.jump, iconScale: 2, pressed: j }); sizeArt(jc);
+};
 // A finger may have slid from one button to another, so a release clears it from every button.
 const release = id => { for (const k in touchHeld) touchHeld[k].delete(id); touchLooks(); };
 const releaseAll = () => { for (const k in touchHeld) touchHeld[k].clear(); touchLooks(); };
@@ -780,7 +816,8 @@ function buildTrapBar() {
   for (let i = 0; i < SLOTS; i++) {
     const b = document.createElement('button');
     b.className = 'tbtn'; b.dataset.slot = i; b.style.setProperty('--slot', SLOT_COLORS[i]);
-    b.innerHTML = `<i class="eta"></i><i class="skey">${slotKey(i)}</i><canvas class="pix" width="7" height="7"></canvas><span class="cool"></span><span class="secs"></span><small></small>`;
+    b.innerHTML = `<i class="eta"></i><span class="kw"><canvas class="pix knob"></canvas><span class="secs"></span><i class="skey kc">${slotKey(i)}</i></span><small></small>`;
+    b.sig = '';
     b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireSlot(i, 'p' + e.pointerId); });
     bar.appendChild(b);
   }
@@ -794,11 +831,10 @@ function updateTrapBar() {
     if (b.dataset.trap !== String(t ? t.id : '')) {   // a new trap in this slot: new icon and name, and a little pop
       b.dataset.trap = t ? t.id : '';
       b.dataset.kind = t ? t.kind : '';
-      const c = b.querySelector('canvas').getContext('2d'); c.clearRect(0, 0, 7, 7);
-      if (t) { c.drawImage(SPR.icon[t.kind], 0, 0); b.classList.remove('swap'); void b.offsetWidth; b.classList.add('swap'); }
+      if (t) { b.classList.remove('swap'); void b.offsetWidth; b.classList.add('swap'); }
       b.querySelector('small').textContent = t ? TRAPS[t.kind].name : '';
     }
-    if (!t) { if (b.dataset.state !== 'empty') b.dataset.state = 'empty'; b.querySelector('.eta').textContent = ''; return; }
+    if (!t) { if (b.dataset.state !== 'empty') b.dataset.state = 'empty'; b.querySelector('.eta').textContent = ''; slotArt(b, i, null); return; }
     const C = TRAPS[t.kind], ready = t.state === 'idle' && t.cd <= 0, pend = run.pending[t.id] > 0;
     const burning = C.hold && t.state === 'active';
     const state = w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 && !w.chained(t) ? 'lock' : 'ready') : 'cool';
@@ -806,9 +842,19 @@ function updateTrapBar() {
     b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
     const secs = !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
     const se = b.querySelector('.secs'); if (se.textContent != secs) se.textContent = secs;
+    slotArt(b, i, t, state, burning ? Math.min(1, t.t / C.tank) : !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd) : 0);
     const eta = etaOfTrap(w, t), etaText = eta == null ? '' : eta < 0.5 ? 'now' : `in ${Math.ceil(eta)}s`, el = b.querySelector('.eta');
     if (el.textContent !== etaText) el.textContent = etaText;
   });
+}
+// A trap slot is a big arcade button in the slot's colour with the trap's icon; an empty slot is an empty socket.
+const SLOT_PAL = ['red', 'blue', 'yellow'];
+function slotArt(b, i, t, state = 'empty', cd = 0) {
+  const down = b.classList.contains('down'), sig = `${t ? t.kind : ''}|${state}|${Math.round(cd * 32)}|${down}`;
+  if (b.sig === sig) return; b.sig = sig;
+  const c = b.querySelector('canvas.knob');
+  drawKnob(c, { r: 11, pal: SLOT_PAL[i], icon: t && SPR.icon[t.kind], iconScale: 2, empty: !t, pressed: down || state === 'burn' || state === 'sent', cd: state === 'burn' ? cd : state === 'cool' ? cd : 0, spent: state === 'jam' || state === 'lock' });
+  sizeArt(c);
 }
 function etaOfTrap(w, t) {
   const p = w.player, px = p.x + 5, dir = Math.sign(w.goal.x - px) || 1, ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - px) * dir;
@@ -828,14 +874,10 @@ const slotKey = i => padOn ? PAD_SLOT[i] : touchDevice ? '' : String(i + 1);
 function gadgetButton(id, side, onPress) {
   const b = document.createElement('button');
   b.className = 'gbtn ' + side; b.dataset.id = id;
-  const ic = document.createElement('canvas'); ic.width = ic.height = 7; ic.className = 'pix';
-  ic.getContext('2d').drawImage(SPR.icon[id], 0, 0);
-  b.innerHTML = '<span class="cool"></span><span class="secs"></span><i class="badge"></i>';
-  b.prepend(ic);
-  const lab = document.createElement('small');
-  const key = keyOf(side, id);
-  lab.textContent = (!key || (touchDevice && !padOn) ? '' : key + ' ') + GADGETS[side][id].name;
-  b.appendChild(lab);
+  const key = keyOf(side, id), showKey = key && (!touchDevice || padOn);
+  b.innerHTML = `<span class="kw"><canvas class="pix knob"></canvas><span class="secs"></span>${showKey ? `<i class="kc">${key}</i>` : ''}</span><small></small>`;
+  b.querySelector('small').textContent = GADGETS[side][id].name;
+  b.sig = '';
   if (onPress) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); unlockAudio(); if (run) onPress(id); });
   return b;
 }
@@ -853,10 +895,16 @@ function updateGadgets() {
     const state = g.n === 0 ? 'none' : side === 'trapper' && w.jam > 0 ? 'jam' : run.aim && run.aim.id === id ? 'aim' : g.cd > 0 ? 'cool' : def.passive ? 'passive' : 'ready';
     if (b.dataset.state !== state) { if (state === 'ready' && b.dataset.state === 'cool') flashReady(b); b.dataset.state = state; }
     b.style.setProperty('--cd', g.cd > 0 && def.cd ? Math.min(1, g.cd / def.cd).toFixed(3) : 0);
-    const secs = g.cd > 0 && g.n !== 0 ? Math.ceil(g.cd) : '', badge = g.n < 0 ? '' : g.n;
-    const [cool, secsEl, badgeEl] = b.querySelectorAll('.cool, .secs, .badge');
+    const secs = g.cd > 0 && g.n !== 0 ? Math.ceil(g.cd) : '', secsEl = b.querySelector('.secs');
     if (secsEl.textContent != secs) secsEl.textContent = secs;
-    if (badgeEl.textContent != badge) badgeEl.textContent = badge;
+    const cd = g.cd > 0 && def.cd ? Math.min(1, g.cd / def.cd) : 0, down = b.classList.contains('down');
+    const sig = `${state}|${Math.round(cd * 32)}|${g.n}|${down}`;
+    if (b.sig !== sig) {
+      b.sig = sig;
+      const c = b.querySelector('canvas.knob');
+      drawKnob(c, { r: 8, pal: state === 'aim' ? 'aim' : state === 'jam' ? 'grey' : side, icon: SPR.icon[id], pressed: down || state === 'aim', cd: state === 'jam' ? 1 : cd, spent: state === 'none', pips: g.n > 0 ? g.n : 0 });
+      sizeArt(c);
+    }
   }
 }
 function useTrapperGadget(id, at) {
@@ -907,6 +955,7 @@ function layoutControls() {
   }
   const fill = (spec, prefix) => { let any = false; for (const k of ['L', 'M', 'R']) for (const id of spec[k]) { $(prefix + k).appendChild($(id)); any = true; } return any; };
   const hasBottom = fill(bottom, 'pad'), hasTop = fill(top, 'padT');
+  lookSig = ''; touchLooks();
   $('pad').classList.toggle('hidden', !hasBottom);
   $('padTop').classList.toggle('hidden', !hasTop);
   document.body.classList.add('playing');
@@ -970,7 +1019,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-3, gadgets 7-0)'}`
     : runnerHere ? (touchDevice ? `Reach the flag! Your gadgets: ${gadNames('runner')}.` : `Reach the flag! ← → run, Space jump. ${runnerKeyed().map((id, i) => R_KEYS[i] + ' ' + GADGETS.runner[id].name.toLowerCase()).join(', ')}.`)
       : (touchDevice ? `The three coloured buttons fire the traps outlined in the same colour (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-3 fire the coloured trap buttons, 7-0 gadgets (${gadNames('trapper')}), aimed at your mouse.`);
-  $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + (touchDevice && innerHeight > innerWidth ? ' (Tip: turn your phone sideways for a wider view.)' : ''); $('hint').classList.remove('hidden');
+  $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + ''; $('hint').classList.remove('hidden');
   if (run.preview) { run.phase = 'preview'; run.previewT = PREVIEW; showPreview(); $('hint').classList.add('hidden'); }
   input.jumpQueued = false;
   startMusic(endless ? 'endless' : levelOf(level).theme);
@@ -999,14 +1048,14 @@ function showAch() {
   const def = achQueue[0];
   if (!def) return;
   const el = $('achv');
-  el.innerHTML = `<span class="achIcon">${def.icon}</span><div><small>Achievement unlocked!</small><b>${esc(def.name)}</b></div>`;
+  el.innerHTML = `<span class="achIcon">${medal(def.id)}</span><div><small>Achievement unlocked!</small><b>${esc(def.name)}</b></div>`;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   sfx.achieve();
   setTimeout(() => { el.classList.remove('show'); achQueue.shift(); setTimeout(showAch, 300); }, 3000);
 }
 function openTrophies() {
   panel(`<h2>Trophies</h2><p class="status">${achCount()} of ${ACHIEVEMENTS.length} unlocked</p>
-    <div class="trophies">${ACHIEVEMENTS.map(a => `<div class="tro${has(a.id) ? ' got' : ''}"><span class="achIcon">${has(a.id) ? a.icon : '🔒'}</span><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></div>`).join('')}</div>
+    <div class="trophies">${ACHIEVEMENTS.map(a => `<div class="tro${has(a.id) ? ' got' : ''}"><span class="achIcon">${medal(a.id, has(a.id))}</span><div><b>${esc(a.name)}</b><small>${esc(a.desc)}</small></div></div>`).join('')}</div>
     <div class="buttons"><button class="big pink" id="troDone">Back</button></div>`);
   $('panelCard').classList.add('wide');
   $('troDone').onclick = () => { sfx.click(); hidePanel(); };
@@ -1190,7 +1239,7 @@ function resultOf(world, runner) {
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
 function line(r, win) {
   const p = players[r.runner];
-  return `<div class="line${win ? ' win' : ''}" data-portrait="${p.char}"><div><b>${esc(p.name)}${win ? ' 👑' : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
+  return `<div class="line${win ? ' win' : ''}" data-portrait="${p.char}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
 }
 // Who trapped best this level: the trapper of each run is the other player.
 function trapKing(r1, r2) {
@@ -1200,7 +1249,7 @@ function trapKing(r1, r2) {
   const best = store.get('bestTrap', 0), mine = [a, b].find(t => t.who === mySideOrA());
   let pb = '';
   if (mine && mine.pts > best && mode === 'online') { store.set('bestTrap', mine.pts); pb = '<div class="pb">New personal best!</div>'; }
-  return `<div class="trapKing"><div class="tkTitle">🪤 Trap points</div>${[a, b].map(t => `<div class="tkRow${t === k ? ' king' : ''}"><span>${esc(players[t.who].name)}${t === k ? ' 👑' : ''}</span><small>${t.c} ${t.c === 1 ? 'catch' : 'catches'} · ${titleFor(t.pts)}</small><b>${t.pts}</b></div>`).join('')}${pb}</div>`;
+  return `<div class="trapKing"><div class="tkTitle">${PI('spikes')} Trap points</div>${[a, b].map(t => `<div class="tkRow${t === k ? ' king' : ''}"><span>${esc(players[t.who].name)}${t === k ? ' ' + PI('crown') : ''}</span><small>${t.c} ${t.c === 1 ? 'catch' : 'catches'} · ${titleFor(t.pts)}</small><b>${t.pts}</b></div>`).join('')}${pb}</div>`;
 }
 const mySideOrA = () => mode === 'online' ? mySide() : 'a';
 const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.progress > y.progress;
@@ -1211,10 +1260,10 @@ function showRunResult(res) {
   const controls = mode !== 'online' || isHost;
   if (mode === 'tutorial') {
     const trap = run.tut.role === 'trapper', other = trap ? 'runner' : 'trapper';
-    panel(`<div class="big-emoji">🎓</div><h2>Training complete!</h2>
+    panel(`<div class="big-emoji">${PI('trophy', 'bigpi')}</div><h2>Training complete!</h2>
       <p>${trap ? `You caught the Coach Bot ${run.score.catches} ${run.score.catches === 1 ? 'time' : 'times'} (${run.score.pts} points).` : `You reached the flag in ${res.time.toFixed(1)}s with ${res.deaths} ${res.deaths === 1 ? 'fall' : 'falls'}.`}</p>
       <p>Now grab a friend: host a party, or play on the same screen.</p>
-      <div class="buttons"><button class="big pink" id="tutNext">${trap ? '🏃 Runner training' : '🪤 Trapper training'}</button>
+      <div class="buttons"><button class="big pink" id="tutNext">${trap ? PIW('dash') + ' Runner training' : PIW('spikes') + ' Trapper training'}</button>
       <div class="row"><button class="mid" id="tutAgain">Again</button><button class="mid" id="tutDone">Main menu</button></div></div>`);
     $('tutNext').onclick = () => { sfx.click(); startTutorial(other); };
     $('tutAgain').onclick = () => { sfx.click(); startTutorial(run.tut.role); };
@@ -1225,7 +1274,7 @@ function showRunResult(res) {
     const best = store.get('best', {}), prev = L.random ? null : best[L.id];
     const record = res.finished && (!prev || res.time < prev);
     if (record && !L.random) { best[L.id] = res.time; store.set('best', best); }
-    panel(`<div class="big-emoji">${res.finished ? '🏁' : '⏰'}</div><h2>${res.finished ? 'You made it!' : 'Out of time'}</h2>
+    panel(`<div class="big-emoji">${PI(res.finished ? 'flag' : 'clock', 'bigpi')}</div><h2>${res.finished ? 'You made it!' : 'Out of time'}</h2>
       <div class="result">${line(res, false)}</div>
       <p>${record ? 'New best time!' : prev ? `Best: ${prev.toFixed(1)}s` : ''}</p>
       <div class="buttons"><button class="big pink" id="again">Try again</button>
@@ -1237,7 +1286,7 @@ function showRunResult(res) {
   }
   if (run.n === 1) {
     const next = other(res.runner);
-    panel(`<div class="big-emoji">${res.finished ? '🏁' : '⏰'}</div><h2>${esc(name)} ${res.finished ? 'made it!' : 'ran out of time'}</h2>
+    panel(`<div class="big-emoji">${PI(res.finished ? 'flag' : 'clock', 'bigpi')}</div><h2>${esc(name)} ${res.finished ? 'made it!' : 'ran out of time'}</h2>
       <div class="result">${line(res, false)}</div>
       <p><b>Swap!</b> Now ${esc(players[next].name)} runs and ${esc(name)} gets the traps.</p>
       <div class="buttons">${controls ? `<button class="big pink" id="go2">Go!</button>` : `<p class="status">Waiting for the host…</p>`}</div>`);
@@ -1251,7 +1300,7 @@ function showRunResult(res) {
   if (!run.counted) { run.counted = true; if (bump('levels') >= 10) achieve('rivals'); }
   if (lobby.bo3 && win && score[win.runner] >= 2) return trophyScreen(win.runner, r1, r2);
   const nextLevel = controls ? nextOf(run.level) : null;
-  panel(`<div class="big-emoji">${tie ? '🤝' : '🏆'}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
+  panel(`<div class="big-emoji">${PI(tie ? 'flag' : 'trophy', 'bigpi')}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
     <div class="result">${[r1, r2].map(r => line(r, r === win)).join('')}</div>
     ${trapKing(r1, r2)}
     <p>Score: ${esc(players.a.name)} <b>${score.a}</b> – <b>${score.b}</b> ${esc(players.b.name)}</p>
@@ -1269,7 +1318,7 @@ function trophyScreen(winner, r1, r2) {
   const controls = mode !== 'online' || isHost, loser = other(winner);
   sfx.goal(); buzz([60, 40, 60, 40, 120]);
   if (mode !== 'online' || winner === mySide()) achieve('champion');
-  panel(`<div class="trophy">🏆</div><h2>${esc(players[winner].name)} wins the match!</h2>
+  panel(`<div class="trophy">${PI('trophy', 'bigpi')}</div><h2>${esc(players[winner].name)} wins the match!</h2>
     <div class="champ" data-portrait="${players[winner].char}"></div>
     <p class="matchScore"><b>${score[winner]}</b> – <b>${score[loser]}</b></p>
     ${trapKing(r1, r2)}
@@ -1313,7 +1362,7 @@ function togglePause() {
     ${E && mode !== 'practice' ? `<button class="big blue" id="swapBtn">Swap sides (new level)</button>` : ''}
     ${canLobby ? `<button class="mid" id="endBtn">End run · lobby</button>` : ''}
     <button class="mid" id="quitRun">${online ? 'Leave the party' : 'Quit to lobby'}</button>
-    <div class="row"><button class="chip" id="pItems">📖 Items</button><button class="chip" id="pSet">⚙ Settings</button></div></div>`);
+    <div class="row"><button class="chip" id="pItems">${PIW('book')} Items</button><button class="chip" id="pSet">${PIW('gear')} Settings</button></div></div>`);
   $('resume').onclick = () => { sfx.click(); hidePanel(); if (run) run.paused = false; };
   if ($('swapBtn')) $('swapBtn').onclick = () => { sfx.click(); swapSides(); };
   if ($('endBtn')) $('endBtn').onclick = () => { sfx.click(); if (online) net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
@@ -1322,6 +1371,19 @@ function togglePause() {
   $('pItems').onclick = () => { sfx.click(); openGuide(() => { hidePanel(); togglePause(); }); };
 }
 $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
+// Landscape only. Upright phones and tablets get a "turn your phone" screen (and a running game pauses); where the
+// browser allows it (installed app, fullscreen), the screen is locked sideways on the first touch.
+const UPRIGHT = matchMedia('(orientation: portrait) and (pointer: coarse)');
+{
+  const c = $('turnArt'), g = c.getContext('2d');
+  const px = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  px(6, 1, 12, 22, '#1c1424'); px(7, 2, 10, 20, '#463a5c'); px(8, 4, 8, 15, '#6fc3ff'); px(8, 14, 8, 5, '#5fae4a'); px(8, 13, 8, 1, '#7bd65a');
+  px(9, 11, 2, 2, '#e8414f'); px(14, 6, 2, 1, '#fff'); px(11, 20, 2, 1, '#8c7fa6'); px(10, 3, 4, 1, '#16101e');
+}
+const onUpright = () => { if (UPRIGHT.matches && run && !run.paused && run.phase !== 'end') togglePause(); };
+UPRIGHT.addEventListener?.('change', onUpright);
+addEventListener('pointerdown', () => { try { screen.orientation?.lock?.('landscape').catch(() => {}); } catch { /* not allowed here */ } }, { once: true });
+{ const c = document.createElement('canvas'); c.className = 'pix knob'; drawKnob(c, { r: 5, pal: 'dark', icon: KICON.pause }); sizeArt(c); $('pauseBtn').textContent = ''; $('pauseBtn').append(c); }
 
 // ---------- main loop
 let last = performance.now();

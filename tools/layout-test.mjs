@@ -22,7 +22,7 @@ const check = async (p, name) => {
   await p.screenshot({ path: `shots/70-${name}.png` });
   console.log(name.padEnd(22), 'play band', r.view, r.bad.length ? 'PROBLEMS: ' + r.bad.join(', ') : 'ok');
 };
-for (const portrait of [false, true]) {
+for (const portrait of [false]) {   // landscape only now
   const tag = portrait ? 'portrait' : 'landscape';
   const pr = await page(phone(portrait));
   await pr.goto('http://localhost:8080/'); await pr.waitForTimeout(400); await pr.tap('text=Practice'); await pr.tap('#startBtn'); await pr.waitForTimeout(3800);

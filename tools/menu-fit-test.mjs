@@ -1,9 +1,16 @@
-// Every menu screen must fit without scrolling on common phone sizes (landscape and portrait).
+// Every menu screen must fit without scrolling on common phone sizes (landscape: upright phones get the turn screen).
 import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
-const sizes = [[844, 390], [932, 430], [667, 375], [640, 360], [780, 360], [915, 412], [390, 844], [375, 667], [360, 640], [360, 780], [412, 915], [768, 1024], [1024, 768], [820, 1180], [1180, 820], [673, 841]];   // iPhones, Galaxy phones, small Androids, iPads, a foldable
+const sizes = [[844, 390], [932, 430], [667, 375], [640, 360], [780, 360], [915, 412], [390, 844], [375, 667], [360, 640], [360, 780], [412, 915], [768, 1024], [1024, 768], [820, 1180], [1180, 820], [673, 841]].filter(([w, h]) => w > h);   // iPhones, Galaxy phones, small Androids, iPads, a foldable
 const fits = p => p.evaluate(() => { const s = [...document.querySelectorAll('.screen')].find(x => !x.classList.contains('hidden')); const c = s.querySelector('.card'); return { over: Math.max(0, c.scrollHeight - c.clientHeight, s.scrollHeight - s.clientHeight), w: c.scrollWidth > c.clientWidth + 1 }; });
 let bad = 0;
+for (const [w, h] of [[390, 844], [820, 1180]]) {   // upright: only the "turn your phone" screen shows
+  const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
+  await p.goto('http://localhost:8080/'); await p.waitForTimeout(400);
+  const on = await p.evaluate(() => getComputedStyle(document.getElementById('turn')).display !== 'none');
+  console.log(`${w}x${h}: turn screen ${on ? 'shown' : 'MISSING'}`); if (!on) bad++;
+  await p.screenshot({ path: `shots/80-turn-${w}x${h}.png` }); await p.close();
+}
 for (const [w, h] of sizes) {
   const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
   await p.goto('http://localhost:8080/'); await p.waitForTimeout(500);
