@@ -18,7 +18,7 @@ const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { pollPads, BTN } from './gamepad.js';
-import { drawKnob, drawStick, KICON, pixURL, woodFrame } from './knobs.js';
+import { drawKnob, drawStick, KICON, TICON, pixURL, woodFrame } from './knobs.js';
 // the pixel wood every frame in the menus is cut from (see style.css: --woodImg)
 document.documentElement.style.setProperty('--woodImg', `url(${woodFrame()})`);
 document.documentElement.style.setProperty('--woodImgDark', `url(${woodFrame('#3a2a1e')})`);
@@ -121,13 +121,13 @@ function logoLetter(word, k) {
     for (let k = 0; k < letters; k++) { const i = document.createElement('i'); i.style.setProperty('--i', n++); i.appendChild(logoLetter(w, k)); word.appendChild(i); }
   });
   // the big wooden tiles: each carries an arcade cap with its icon, in the colours the game uses for it
-  const TILES = [['[data-go="host"]', 'flag', 'jump'], ['[data-go="join"]', 'blink', 'blue'], ['[data-go="local"]', 'decoy', 'trapper'], ['[data-go="practice"]', 'shield', 'runner'], ['#rejoinBtn', 'blink', 'aim']];
+  const TILES = [['[data-go="host"]', 'host', 'jump'], ['[data-go="join"]', 'join', 'blue'], ['[data-go="local"]', 'local', 'trapper'], ['[data-go="practice"]', 'practice', 'runner'], ['#rejoinBtn', 'rejoin', 'aim']];
   for (const [sel, icon, pal] of TILES) {
     const b = document.querySelector('#title ' + sel), c = document.createElement('canvas'), label = document.createElement('span');
-    c.className = 'pix tknob'; drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2 }); sizeArt(c);
+    c.className = 'pix tknob'; drawKnob(c, { r: 12, pal, icon: TICON[icon] }); sizeArt(c);
     label.className = 'tlabel'; label.textContent = b.textContent; b.textContent = ''; b.append(c, label);
-    b.addEventListener('pointerdown', () => { drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2, pressed: true }); });
-    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2 }));
+    b.addEventListener('pointerdown', () => { drawKnob(c, { r: 12, pal, icon: TICON[icon], pressed: true }); });
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => drawKnob(c, { r: 12, pal, icon: TICON[icon] }));
   }
   $('profileBtn').onclick = () => { sfx.click(); show('profile'); };
   $('profileDone').onclick = () => { sfx.click(); show('title'); buildTitle(); };

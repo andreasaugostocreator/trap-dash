@@ -211,3 +211,92 @@ export function woodFrame(inner = '#f6e7c8') {
   for (const [x, y] of [[2, 2], [9, 2], [2, 9], [9, 9]]) { put(x, y, '#ffe9b0'); put(x + 1, y + 1, '#5a3418'); }
   return c.toDataURL();
 }
+
+// ---------- the title tiles' icons: 13x13, shaded (W light, L shade, A honey, O deep honey, R brick, r deep brick),
+// outlined in walnut so they read on any cap colour. Drawn at full art resolution (no doubling) for finer detail.
+const TI = { K: '#3a2417', W: '#fdf6e6', L: '#d8c6a4', A: '#f0be4a', O: '#b9851f', R: '#d9663f', r: '#9e3f24', G: '#8fc05a' };
+function tIcon(rows) {
+  const c = document.createElement('canvas'); c.width = rows[0].length; c.height = rows.length;
+  const g = c.getContext('2d');
+  rows.forEach((r, y) => [...r].forEach((ch, x) => { if (TI[ch]) { g.fillStyle = TI[ch]; g.fillRect(x, y, 1, 1); } }));
+  return c;
+}
+function ringIcon(paint, n = 13) {   // painted from distance and angle to the centre
+  const rows = [], c = (n - 1) / 2;
+  for (let y = 0; y < n; y++) { let r = ''; for (let x = 0; x < n; x++) r += paint(x - c, y - c); rows.push(r); }
+  return tIcon(rows);
+}
+// two overlapping people, painted from shapes (round heads, rounded shoulders) with a walnut outline around each
+function people() {
+  const shapes = [   // front first
+    { head: [4.6, 5.4, 2.9], body: [4.6, 9.8, 4.4], fill: 'W', shade: 'L' },
+    { head: [10.6, 3.4, 2.7], body: [10.6, 7.8, 3.9], fill: 'A', shade: 'O' },
+  ];
+  const inside = (s, x, y) => Math.hypot(x - s.head[0], y - s.head[1]) <= s.head[2] ||
+    (y >= s.body[1] && y <= N - 1 && Math.abs(x - s.body[0]) <= s.body[2] - (y < s.body[1] + 1 ? 1.5 : y < s.body[1] + 2 ? 0.6 : 0));
+  const rows = [], N = 15;
+  for (let y = 0; y < N; y++) {
+    let r = '';
+    for (let x = 0; x < N; x++) {
+      const i = shapes.findIndex(s => inside(s, x, y));
+      if (i < 0) { r += shapes.some(s => [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inside(s, x + dx, y + dy))) ? 'K' : '.'; continue; }
+      const s = shapes[i], edge = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => !inside(s, x + dx, y + dy) && (y + dy <= N - 1));
+      const behindFront = i > 0 && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => inside(shapes[0], x + dx, y + dy));
+      r += edge || behindFront ? 'K' : (x > (y < s.body[1] ? s.head[0] : s.body[0]) + 1 ? s.shade : s.fill);
+    }
+    rows.push(r);
+  }
+  return tIcon(rows);
+}
+export const TICON = {
+  host: tIcon([   // a pennant waving on a pole with a gold finial
+    '..KK.........',
+    '.KAOK........',
+    '.KKKKKKKK....',
+    '.KWKWWWWWKK..',
+    '.KWKWWWWWWWKK',
+    '.KWKWWLWWWWWK',
+    '.KWKWWLLWWWK.',
+    '.KWKWWWWLKK..',
+    '.KWKKKKKK....',
+    '.KWK.........',
+    '.KLK.........',
+    'KKLKK........',
+    'KLLLK........',
+  ]),
+  join: tIcon([   // a key: you join with the party's code
+    '...KKKKK.....',
+    '..KWWWWWK....',
+    '.KWWKKKWWK...',
+    '.KWK...KWK...',
+    '.KWWKKKWLK...',
+    '..KWWWWLK....',
+    '...KKWLK.....',
+    '....KWLKKK...',
+    '....KWLWWK...',
+    '....KWLKKK...',
+    '....KWLWK....',
+    '....KWLKK....',
+    '.....KKK.....',
+  ]),
+  local: people(),   // two players: one in front (white), one just behind (honey)
+  practice: ringIcon((x, y) => {   // a bullseye
+    const d = Math.hypot(x, y);
+    if (d > 7.4) return '.'; if (d > 6.4) return 'K';
+    if (d > 4.9) return y > 2 ? 'L' : 'W'; if (d > 3.3) return y > 1 ? 'r' : 'R'; if (d > 1.7) return 'W'; return 'R';
+  }, 15),
+  rejoin: tIcon([   // a U-turn arrow: back into the party
+    '...K.........',
+    '..KWK........',
+    '.KWWWKKKKKK..',
+    'KWWWWWWWWWWKK',
+    '.KWWWLLLLLWWK',
+    '..KWKKKKKKKWK',
+    '...K......KWK',
+    '..........KLK',
+    '.....KKKKKKLK',
+    '....KWWWWWLLK',
+    '....KLLLLLLK.',
+    '....KKKKKKK..',
+  ]),
+};
