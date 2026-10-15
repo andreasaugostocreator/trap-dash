@@ -7,6 +7,7 @@ import { World } from './sim.js';
 import { LEVELS, THEMES } from './levels.js';
 import { Renderer, viewH, UI, toUI, uiRect } from './render.js';
 import { Scene } from './scene.js';
+import { Matchmaker } from './matchmaker.js';
 import { Net, cleanCode } from './net.js';
 import { Bot } from './bot.js';
 import { rateLevel } from './rating.js';
@@ -122,7 +123,7 @@ function logoLetter(word, k) {
     for (let k = 0; k < letters; k++) { const i = document.createElement('i'); i.style.setProperty('--i', n++); i.appendChild(logoLetter(w, k)); word.appendChild(i); }
   });
   // the big wooden tiles: each carries an arcade cap with its icon, in the colours the game uses for it
-  const TILES = [['[data-go="host"]', 'host', 'jump'], ['[data-go="join"]', 'join', 'blue'], ['[data-go="local"]', 'local', 'trapper'], ['[data-go="practice"]', 'practice', 'runner'], ['#rejoinBtn', 'rejoin', 'aim']];
+  const TILES = [['[data-go="match"]', 'match', 'red'], ['[data-go="host"]', 'host', 'jump'], ['[data-go="join"]', 'join', 'blue'], ['[data-go="local"]', 'local', 'trapper'], ['[data-go="practice"]', 'practice', 'runner'], ['#rejoinBtn', 'rejoin', 'aim']];
   for (const [sel, icon, pal] of TILES) {
     const b = document.querySelector('#title ' + sel), c = document.createElement('canvas'), label = document.createElement('span');
     c.className = 'pix tknob'; drawKnob(c, { r: 12, pal, icon: TICON[icon] }); sizeArt(c);
@@ -229,6 +230,7 @@ function nav(where) {
   if (where === 'title') { leaveParty(); show('title'); buildTitle(); return; }
   if (where === 'join') { show('join'); $('joinStatus').textContent = ''; $('joinStatus').className = 'status'; setTimeout(() => $('code').focus(), 50); return; }
   if (where === 'host') return hostParty();
+  if (where === 'match') return openMatchmaking();
   if (where === 'local') {
     mode = 'local'; isHost = true;
     players = { a: { name: me.name, char: me.char }, b: { name: 'Player 2', char: otherChar(me.char) } };
@@ -304,6 +306,7 @@ net.onMessage = m => {
     if (!back && !(m.rejoin && restoredScore)) { score = { a: 0, b: 0 }; runs = []; }
     restoredScore = false; saveSession();
     if (back && run && performance.now() - lastRestart > 3000) restartRound();
+    if (matchmade && !back && !run) { mm.matched(); return beginMatchmade(); }
     syncLobby(); if (!run) openLobby();
     toast(players.b.name + ' joined!');
   } else if ((m.t === 'start' || m.t === 'stage') && !isHost && (!players.a || !players.b)) {
@@ -446,7 +449,63 @@ function friendLeft() {
   }
 }
 
+// ---------- matchmaking (src/matchmaker.js): a random opponent, no code to share
+let matchmade = false, mmArtT = 0;
+const mm = new Matchmaker({
+  async host() {   // open a room quietly; the lobby shows once the other player says hi
+    mode = 'online'; isHost = true; matchmade = true; score = { a: 0, b: 0 }; runs = [];
+    players = { a: { name: me.name, char: me.char }, b: null };
+    roomCode = await net.host(); saveSession(); return roomCode;
+  },
+  unhost() { if (mode === 'online' && isHost && !players.b) { net.close(); mode = null; } },
+  async join(code, name) {
+    mode = 'online'; isHost = false; matchmade = true; roomCode = code; score = { a: 0, b: 0 };
+    try {
+      await net.join(code);
+      mm.matched(); saveSession();
+      net.send({ t: 'hi', name: me.name, char: me.char });
+      players = { a: null, b: { name: me.name, char: me.char } };
+      openLobby(); toast(`Matched with ${name || 'a player'}!`); sfx.cp();
+    } catch { mode = null; matchmade = false; mm.start({ name: me.name }); }
+  },
+  status(state, others, name) {
+    const st = $('mmStatus');
+    st.textContent = state === 'connecting' ? 'Connecting…' : state === 'offline' ? 'Can\'t reach the matchmaking service. Check your connection.' :
+      state === 'found' ? `Opponent found${name ? ': ' + name : ''}! Joining…` :
+      others > 0 ? `${others} other player${others === 1 ? '' : 's'} searching…` : 'Looking for players…';
+    st.classList.toggle('err', state === 'offline');
+  },
+});
+function openMatchmaking() {
+  unlockAudio(); leaveParty(); show('mm'); mm.start({ name: me.name });
+}
+$('mmCancel').onclick = () => { sfx.click(); mm.stop(); if (mode === 'online' && !players.b) { net.close(); mode = null; } matchmade = false; show('title'); buildTitle(); };
+// both players are in: pick a level, best of 3, and start after a short countdown (nobody waits on a stranger)
+function beginMatchmade() {
+  lobby.level = Math.floor(Math.random() * LEVELS.length); lobby.bo3 = true; lobby.first = Math.random() < 0.5 ? 'a' : 'b';
+  score = { a: 0, b: 0 }; runs = [];
+  syncLobby(); openLobby(); sfx.cp();
+  let n = 3;
+  const tick = () => {
+    if (mode !== 'online' || !players.b || run) return;
+    if (n === 0) { $('startBtn').click(); return; }
+    toast(`Matched with ${players.b.name}! Best of 3 starts in ${n}…`); n--; setTimeout(tick, 1000);
+  };
+  tick();
+}
+// the searching animation: a runner jogging on the spot while a little radar sweeps
+function animateMatchmaking(dt) {
+  if ($('mm').classList.contains('hidden')) return;
+  mmArtT += dt;
+  const c = $('mmArt'), g = c.getContext('2d'); g.clearRect(0, 0, 40, 22);
+  const f = ['run0', 'run1', 'run2', 'run1'][Math.floor(mmArtT * 10) % 4];
+  g.drawImage(charFrame(charOf(me.char), f, 1, 0), 4, 5);
+  for (let i = 0; i < 3; i++) { const on = Math.floor(mmArtT * 3) % 3 === i; g.fillStyle = on ? '#f0be4a' : '#b4a48c'; g.fillRect(22 + i * 5, 14, 3, 3); }
+}
+
 function leaveParty() {
+  if (mm.state !== 'idle' && mm.state !== 'matched') mm.stop();
+  matchmade = false;
   if (mode === 'online') { net.close(); forgetSession(); }
   clearInterval(waitTimer); netBanner(null);
   mode = null; players = { a: null, b: null }; endRunView();
@@ -1472,7 +1531,7 @@ function tick(dt, now) {
   if (innerWidth !== UI.iw || innerHeight !== UI.ih || dpr !== R.dpr) updateInsets();
   paintEdges();
   readPads(dt);
-  if (!run) { drawMenuScene(dt); animateTitle(dt); return; }
+  if (!run) { drawMenuScene(dt); animateTitle(dt); animateMatchmaking(dt); return; }
   const w = run.world;
   readInput();
   if (run.phase === 'preview' && !run.paused) panPreview(dt);

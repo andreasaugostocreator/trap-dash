@@ -387,3 +387,14 @@ brown outlines instead of black, and colour used for meaning.
 - **Trap slots**: brick `#d9663f`, dusty teal `#4aa3b2`, honey: still three clearly different buttons, matching the
   outlines on the map.
 - Headings are wooden planks with parchment letters. The levels keep their own world colours.
+
+## 18. Matchmaking
+
+"Find a match" on the title pairs you with a random player who is searching at the same time, with no code to share
+(`src/matchmaker.js`). Searchers announce themselves every 1.5 s on a shared relay topic, on every broker at once so
+players on different brokers still meet. When two see each other, the one with the smaller random id hosts: it opens
+an ordinary room quietly and sends the code privately to the other, who joins it the usual way. Each player is in one
+pairing at a time ("busy" turns other offers down), and an offer nobody takes up within 10 s is withdrawn and both
+search again. Once both are in, the host side picks a random level and starts a best-of-3 after a 3-second countdown,
+so nobody waits on a stranger. The search screen shows your runner jogging, how many others are searching, and Cancel.
+`tools/matchmaking-test.mjs` pairs two players end to end and checks that a lone searcher can cancel.

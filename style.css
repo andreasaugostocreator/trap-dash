@@ -783,3 +783,10 @@ button.plank canvas.picon[width="13"] { width: 24px; height: 24px; margin: -1px;
 /* two little ropes from the logo */
 #title .tag { overflow: visible; }
 #title .tTop .tag { background-image: none; }
+/* matchmaking */
+.mmSearch { display: flex; justify-content: center; margin: 4px 0 2px; }
+.mmSearch canvas { position: static; width: 120px; height: 66px; image-rendering: pixelated; }
+.mmStatus { font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 20px; margin: 4px 0; }
+.mmStatus.err { color: #b9503a; }
+.mmHint { color: var(--muted); font-size: 15px; margin: 2px 0 8px; }
+@container app (max-height: 500px) { .mmSearch canvas { width: 80px; height: 44px; } .mmHint { font-size: 13px; } }

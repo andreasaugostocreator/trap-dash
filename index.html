@@ -30,6 +30,7 @@
   </div>
   <nav class="tMenu" id="tMenu">
     <button class="tile gold hidden" id="rejoinBtn">Rejoin party</button>
+    <button class="tile" data-go="match">Find a match</button>
     <button class="tile" data-go="host">Host a party</button>
     <button class="tile" data-go="join">Join a party</button>
     <button class="tile" data-go="local">Same screen</button>
@@ -42,6 +43,16 @@
     <button class="plank" id="troBtn">Trophies</button>
   </div>
   <button class="profile" id="profileBtn" aria-label="Your name and runner"><canvas class="pix" id="profileArt" width="12" height="16"></canvas><span><small>Your runner</small><b id="profileName"></b></span></button>
+</section>
+<!-- Matchmaking: looking for a random opponent -->
+<section class="screen overlay hidden" id="mm">
+  <div class="card">
+    <h2>Find a match</h2>
+    <div class="mmSearch" aria-hidden="true"><canvas class="pix" id="mmArt" width="40" height="22"></canvas></div>
+    <p class="mmStatus" id="mmStatus">Looking for players…</p>
+    <p class="mmHint" id="mmHint">You'll be paired with someone who is searching right now, then a best-of-3 starts by itself.</p>
+    <div class="buttons"><button class="mid" id="mmCancel">Cancel</button></div>
+  </div>
 </section>
 <!-- Your name and runner -->
 <section class="screen overlay hidden" id="profile">

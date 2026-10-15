@@ -214,7 +214,7 @@ export function woodFrame(inner = '#f6e7c8') {
 
 // ---------- the title tiles' icons: 13x13, shaded (W light, L shade, A honey, O deep honey, R brick, r deep brick),
 // outlined in walnut so they read on any cap colour. Drawn at full art resolution (no doubling) for finer detail.
-const TI = { K: '#3a2417', W: '#fdf6e6', L: '#d8c6a4', A: '#f0be4a', O: '#b9851f', R: '#d9663f', r: '#9e3f24', G: '#8fc05a' };
+const TI = { K: '#3a2417', W: '#fdf6e6', L: '#d8c6a4', A: '#f0be4a', O: '#b9851f', R: '#d9663f', r: '#9e3f24', G: '#8fc05a', g: '#5f8f38', B: '#4aa3b2', b: '#2f6a78' };
 function tIcon(rows) {
   const c = document.createElement('canvas'); c.width = rows[0].length; c.height = rows.length;
   const g = c.getContext('2d');
@@ -285,6 +285,12 @@ export const TICON = {
     if (d > 7.4) return '.'; if (d > 6.4) return 'K';
     if (d > 4.9) return y > 2 ? 'L' : 'W'; if (d > 3.3) return y > 1 ? 'r' : 'R'; if (d > 1.7) return 'W'; return 'R';
   }, 15),
+  match: shapeIcon(15, (x, y) => Math.hypot(x, y) <= 6.2, (x, y) => {   // a globe: players anywhere
+    const lon = Math.round((Math.asin(Math.max(-1, Math.min(1, x / 6.3))) * 3)), land = ((x * 7 + y * 13 + 40) % 9 < 4 && Math.hypot(x - 1, y + 1) > 2.2) || (x < -1 && y > 1 && y < 4);
+    if (x + y < -6) return 'W';
+    if (Math.abs(y) === 0 || lon === 0 && Math.abs(x) <= 0) return 'L';
+    return land ? (x + y > 3 ? 'g' : 'G') : (x + y > 3 ? 'b' : 'B');
+  }),
   rejoin: tIcon([   // a U-turn arrow: back into the party
     '...K.........',
     '..KWK........',
