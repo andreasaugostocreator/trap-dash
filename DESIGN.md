@@ -374,3 +374,16 @@ the same pixels as the world, not as web buttons laid over it.
   with ordered dithering (sky bands, 3-range mountains with strata and haze, multi-cluster tree crowns, a shaded
   split-rail fence and pebbled path, bushes, flowers), and only the living bits are drawn each frame (about 2 ms).
   `tools/places-shots.mjs` renders each place by day and at night.
+
+## 17. The Harvest palette
+
+One earthy colour family for the whole interface, taking its cue from cozy farm games: nothing pure or saturated, warm
+brown outlines instead of black, and colour used for meaning.
+- **Ink** (outlines, text, dark panels): walnut `#3a2417`. **Paper**: parchment `#f7ead0`. **Frames**: the pixel wood.
+- **Moss** `#6fa046`: go and confirm (Start, Done, Host), the runner's gadgets and the RUN tag.
+- **Honey** `#f0be4a`: special and selected (Rejoin, the chosen level, the timer digits, Join).
+- **Harvest orange** `#f08a3a`: JUMP and the TRAP half of the logo (DASH is moss).
+- **Plum** `#8e5a86`: the trapper's gadgets and the TRAP tag.
+- **Trap slots**: brick `#d9663f`, dusty teal `#4aa3b2`, honey: still three clearly different buttons, matching the
+  outlines on the map.
+- Headings are wooden planks with parchment letters. The levels keep their own world colours.

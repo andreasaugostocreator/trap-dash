@@ -3,18 +3,18 @@
 // The canvases are tiny and scaled up by CSS with image-rendering: pixelated. Redrawn only when their look changes.
 
 // [highlight, base, shade, side]
-export const PAL = {
-  runner: ['#9ff5df', '#2fbf9f', '#229279', '#135446'],
-  trapper: ['#d2c1ff', '#8a63f0', '#6a46cc', '#3a2484'],
-  red: ['#ffb3ba', '#ff4d5e', '#d12f40', '#76162a'],
-  blue: ['#bcd8ff', '#3d8bff', '#2766cc', '#163c7e'],
-  yellow: ['#fff3b8', '#ffc23d', '#e09a12', '#81520a'],
-  jump: ['#ffa8b1', '#f03a4d', '#c42338', '#6a1020'],
-  grey: ['#c4c8d3', '#878d9f', '#666c7e', '#363b49'],
-  dark: ['#8c7fa6', '#463a5c', '#33293f', '#16101e'],
-  aim: ['#fff6c8', '#ffd84a', '#e0a91a', '#7d5a08'],
+export const PAL = {   // the Harvest palette: moss, plum, brick, dusty teal, honey, harvest orange, warm greys, walnut
+  runner: ['#cfeaa0', '#7fb04e', '#5f8f38', '#365a20'],
+  trapper: ['#e2b8da', '#9a6492', '#7a4a72', '#46283f'],
+  red: ['#f6b89a', '#d9663f', '#b24a2c', '#6a2a18'],
+  blue: ['#bfe6ea', '#4aa3b2', '#33808e', '#1d4a54'],
+  yellow: ['#fff0b8', '#f0be4a', '#cf9a2a', '#7a5414'],
+  jump: ['#ffd2a0', '#f08a3a', '#cc6524', '#743614'],
+  grey: ['#ddd2c0', '#a29580', '#7f725e', '#4c4134'],
+  dark: ['#a8876a', '#5e3f28', '#4a301e', '#26170c'],
+  aim: ['#fff0b8', '#f0be4a', '#cf9a2a', '#7a5414'],
 };
-const INK = [28, 20, 36];
+const INK = [58, 36, 23];
 const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const PALRGB = {}; for (const k in PAL) PALRGB[k] = PAL[k].map(hex);
 
@@ -26,7 +26,7 @@ function shadowOf(icon) {
   let c = tinted.get(icon);
   if (!c) {
     c = document.createElement('canvas'); c.width = icon.width; c.height = icon.height;
-    const x = c.getContext('2d'); x.drawImage(icon, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = 'rgba(28,20,36,.75)'; x.fillRect(0, 0, c.width, c.height);
+    const x = c.getContext('2d'); x.drawImage(icon, 0, 0); x.globalCompositeOperation = 'source-in'; x.fillStyle = 'rgba(58,36,23,.75)'; x.fillRect(0, 0, c.width, c.height);
     tinted.set(icon, c);
   }
   return c;
@@ -82,7 +82,7 @@ export function drawKnob(cv, o) {
       const X = x0 + p * 3 + xx, Y = y0 + yy;
       if (X < 0 || X >= w || Y >= h) continue;
       const lit = yy > 0 && yy < 3 && xx > 0 && xx < 3;
-      put(Y * w + X, lit ? (yy === 1 ? [255, 240, 170] : [255, 200, 60]) : INK);
+      put(Y * w + X, lit ? (yy === 1 ? [255, 236, 170] : [240, 190, 74]) : INK);
     }
   }
   g.putImageData(img, 0, 0);
@@ -120,7 +120,7 @@ export function drawStick(cv, dir) {
   }
   // arrows engraved at both ends, lit on the side being pressed
   const arrow = (ax, s, lit) => {
-    const col = lit ? [255, 216, 74] : [244, 234, 215], a = lit ? 255 : 150;
+    const col = lit ? [240, 190, 74] : [247, 234, 208], a = lit ? 255 : 150;
     for (let k = 0; k < 4; k++) for (let j = -k; j <= k; j++) put(ax + s * k, py + j, INK, a);
     for (let k = 0; k < 3; k++) for (let j = -k; j <= k; j++) put(ax + s * (k + 1), py + j, col, a);
   };
@@ -166,7 +166,7 @@ export const KICON = {
 
 // Colour pixel icons for menus and result screens (in place of emoji, which would break the pixel look).
 // K ink, W white, Y gold, O dark gold, R red, G grey, N wood.
-const PC = { K: '#1c1424', W: '#ffffff', Y: '#ffd84a', O: '#d18f12', R: '#e8414f', G: '#9aa3b5', N: '#8a5a2b', B: '#3c6fd1' };
+const PC = { K: '#3a2417', W: '#fdf6e6', Y: '#f0be4a', O: '#c08a22', R: '#d9663f', G: '#b4a48c', N: '#8a5a2b', B: '#4aa3b2' };
 const PICON = {
   trophy: ['KKKKKKKKK', 'KYWYYYYOK', 'KYWYYYYOK', '.KYYYYYK.', '..KYYYK..', '...KYK...', '...KOK...', '..KYYOK..', '.KKKKKKK.'],
   crown: ['.........', 'K...K...K', 'KK.KYK.KK', 'KYKYYYKYK', 'KYYYRYYYK', 'KYWYYYYYK', 'KOOOOOOOK', 'KKKKKKKKK', '.........'],
@@ -198,7 +198,7 @@ export function woodFrame(inner = '#f6e7c8') {
   for (let y = 0; y < 12; y++) for (let x = 0; x < 12; x++) {
     const d = Math.min(x, y, 11 - x, 11 - y), corner = (x === 0 || x === 11) && (y === 0 || y === 11);
     if (corner) continue;
-    if (d === 0) { put(x, y, '#1c1424'); continue; }
+    if (d === 0) { put(x, y, '#3a2417'); continue; }
     if (d <= 3) {
       const top = y === d && y <= x && y <= 11 - x, left = x === d && x < y && x < 11 - y, bottom = 11 - y === d, right = 11 - x === d && !bottom;
       let col = top ? (d === 1 ? '#f0bd78' : '#d7984f') : left ? '#c98a49' : bottom ? (d === 1 ? '#6e3f1e' : '#86502a') : right ? '#965c30' : '#b8763f';

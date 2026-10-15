@@ -99,12 +99,12 @@ const LOGO_GLYPHS = {
   H: ['##..##', '##..##', '##..##', '######', '##..##', '##..##', '##..##'],
 };
 const LOGO_WORDS = ['TRAP', 'DASH'];
-const LOGO_COLS = [['#ffc0c8', '#ff7b8a', '#e8414f', '#a3202e'], ['#cfe0ff', '#6c9bff', '#3c6fd1', '#2a4f9e']];
+const LOGO_COLS = [['#ffd9a0', '#f5a54a', '#d9782a', '#8f4419'], ['#dcf0a6', '#9cc966', '#6fa046', '#3f6a24']];   // harvest orange, moss
 function logoLetter(word, k) {
   const g = LOGO_GLYPHS[LOGO_WORDS[word][k]], [hi, base, mid, lo] = LOGO_COLS[word];
   const c = document.createElement('canvas'); c.width = 8; c.height = 11; c.className = 'pix logoLetter';
   const x = c.getContext('2d'), on = (i, j) => g[j] && g[j][i] === '#';
-  x.fillStyle = '#1c1424';   // drop shadow, then outline
+  x.fillStyle = '#3a2417';   // drop shadow, then outline
   for (let j = 0; j < 7; j++) for (let i = 0; i < 6; i++) if (on(i, j)) x.fillRect(i + 1, j + 3, 1, 1);
   for (let j = 0; j < 7; j++) for (let i = 0; i < 6; i++) if (on(i, j)) for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) x.fillRect(i + 1 + dx, j + 1 + dy, 1, 1);
   for (let j = 0; j < 7; j++) for (let i = 0; i < 6; i++) if (on(i, j)) { x.fillStyle = !on(i, j - 1) ? hi : !on(i, j + 1) ? mid : base; x.fillRect(i + 1, j + 1, 1, 1); }
@@ -121,7 +121,7 @@ function logoLetter(word, k) {
     for (let k = 0; k < letters; k++) { const i = document.createElement('i'); i.style.setProperty('--i', n++); i.appendChild(logoLetter(w, k)); word.appendChild(i); }
   });
   // the big wooden tiles: each carries an arcade cap with its icon, in the colours the game uses for it
-  const TILES = [['[data-go="host"]', 'flag', 'red'], ['[data-go="join"]', 'blink', 'blue'], ['[data-go="local"]', 'decoy', 'yellow'], ['[data-go="practice"]', 'shield', 'runner'], ['#rejoinBtn', 'blink', 'aim']];
+  const TILES = [['[data-go="host"]', 'flag', 'jump'], ['[data-go="join"]', 'blink', 'blue'], ['[data-go="local"]', 'decoy', 'trapper'], ['[data-go="practice"]', 'shield', 'runner'], ['#rejoinBtn', 'blink', 'aim']];
   for (const [sel, icon, pal] of TILES) {
     const b = document.querySelector('#title ' + sel), c = document.createElement('canvas'), label = document.createElement('span');
     c.className = 'pix tknob'; drawKnob(c, { r: 11, pal, icon: SPR.icon[icon], iconScale: 2 }); sizeArt(c);
@@ -825,7 +825,7 @@ for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => relea
 // ---------- the trap bar: three slots for the traps just ahead of the runner
 // Only the next few traps get a button. Each slot has its own colour, and the trap it fires is outlined in the same
 // colour on the map with the same number. A trap keeps its slot while it stays in range, so buttons don't jump around.
-const SLOT_COLORS = ['#ff4d5e', '#3d8bff', '#ffc23d'];
+const SLOT_COLORS = ['#d9663f', '#4aa3b2', '#f0be4a'];   // brick, dusty teal, honey (the knobs' PAL red / blue / yellow)
 const SLOTS = 3, AHEAD = 18 * TILE, BEHIND = 2 * TILE;
 function slotCandidates(w) {
   const p = w.player, px = p.x + 5, py = p.y + 6, dir = Math.sign(w.goal.x - px) || 1, out = [];
@@ -1409,7 +1409,7 @@ function trophyScreen(winner, r1, r2) {
 }
 function confetti() {
   const box = document.createElement('div'); box.className = 'confetti';
-  const cols = ['#ff5d8f', '#ffd84a', '#5ab4ff', '#7bd65a', '#b48cff', '#ffffff'];
+  const cols = ['#f08a3a', '#f0be4a', '#4aa3b2', '#7fb04e', '#d9663f', '#fdf6e6'];
   for (let i = 0; i < 60; i++) {
     const c = document.createElement('i');
     c.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.5).toFixed(2)}s;--dx:${Math.round((Math.random() - 0.5) * 120)}px`;
@@ -1541,7 +1541,7 @@ function tick(dt, now) {
 let edgeCol = '';
 function paintEdges() {
   const th = run && (THEMES[run.world.level.theme] || THEMES.day);
-  const col = !run ? '#3f9a38' : !$('pad').classList.contains('hidden') ? '#241a30' : th.dirt[1];
+  const col = !run ? '#3f6a24' : !$('pad').classList.contains('hidden') ? '#2e1c12' : th.dirt[1];
   if (col !== edgeCol) { edgeCol = col; document.documentElement.style.backgroundColor = col; document.body.style.backgroundColor = col; }
 }
 
