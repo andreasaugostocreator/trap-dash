@@ -16,7 +16,7 @@ for (const [name, w, h] of devices) {
       for (const el of document.querySelectorAll('.pad:not(.hidden) button, .hud button')) {
         const e = el.getBoundingClientRect();
         if (!e.width) continue;
-        const ring = el.closest('#padR.ring') && e.right > innerWidth * 0.72 && e.top > bottom - 40;   // the gadget ring may reach a little into the bottom-right corner
+        const ring = el.closest('#padR.ring') && e.right > innerWidth * 0.72 && e.top > bottom - 70;   // the gadget ring may reach a little into the bottom-right corner
         if (!ring && e.bottom > top + 1 && e.top < bottom - 1) out.push('covers the play area');
         if (e.right > innerWidth + 1 || e.left < -1 || e.bottom > innerHeight + 1) out.push('off screen');
       }

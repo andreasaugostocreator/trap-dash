@@ -14,12 +14,13 @@ const fits = p => p.evaluate(() => {
   return { over, w: false };
 });
 let bad = 0;
-for (const [w, h] of [[390, 844], [820, 1180]]) {   // upright: only the "turn your phone" screen shows
+for (const [w, h] of [[390, 844], [820, 1180]]) {   // upright: the app turns itself and still fills the screen in landscape
   const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
-  await p.goto('http://localhost:8080/'); await p.waitForTimeout(400);
-  const on = await p.evaluate(() => getComputedStyle(document.getElementById('turn')).display !== 'none');
-  console.log(`${w}x${h}: turn screen ${on ? 'shown' : 'MISSING'}`); if (!on) bad++;
-  await p.screenshot({ path: `shots/80-turn-${w}x${h}.png` }); await p.close();
+  await p.goto('http://localhost:8080/'); await p.waitForTimeout(3600);
+  const r = await p.evaluate(() => { const a = document.getElementById('app').getBoundingClientRect(); return { rot: document.documentElement.classList.contains('rot'), x: Math.round(a.left), y: Math.round(a.top), w: Math.round(a.width), h: Math.round(a.height) }; });
+  const ok = r.rot && r.x === 0 && r.y === 0 && r.w === w && r.h === h;
+  console.log(`${w}x${h}: turned ${r.rot}, covers ${r.w}x${r.h} at ${r.x},${r.y} ${ok ? 'ok' : 'WRONG'}`); if (!ok) bad++;
+  await p.screenshot({ path: `shots/80-rot-${w}x${h}.png` }); await p.close();
 }
 for (const [w, h] of sizes) {
   const p = await b.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });

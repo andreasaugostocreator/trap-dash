@@ -12,7 +12,7 @@ const check = async (p, name) => {
     const c = { top: R.insets.top, bottom: innerHeight - R.insets.bottom, width: g.width, height: innerHeight - R.insets.top - R.insets.bottom };
     for (const el of document.querySelectorAll('.pad:not(.hidden) button, .hud button')) {
       const e = el.getBoundingClientRect();
-      const ring = el.closest('#padR.ring') && e.right > innerWidth * 0.72 && e.bottom > c.bottom - 40;   // the gadget ring may reach a little into the bottom-right corner
+      const ring = el.closest('#padR.ring') && e.right > innerWidth * 0.72 && e.bottom > c.bottom - 70;   // the gadget ring may reach a little into the bottom-right corner
       if (ring && e.top < c.bottom - 1) window.__ringOver = Math.max(window.__ringOver || 0, Math.round(c.bottom - e.top));
       if (e.width && !ring && e.bottom > c.top + 1 && e.top < c.bottom - 1) bad.push((el.id || el.dataset.kind || el.dataset.id) + ' overlaps the play band');
       if (e.right > innerWidth + 1 || e.left < -1) bad.push((el.id || el.dataset.kind || el.dataset.id) + ' off screen');

@@ -355,3 +355,22 @@ the same pixels as the world, not as web buttons laid over it.
 - **Rejoin:** both players remember the party. Reopening within 5 minutes goes straight back in (the host reopens
   the same code and keeps the score; the guest knocks again). For 30 minutes the title offers "Rejoin party ABCD", also
   after leaving by mistake. `tools/rejoin-test.mjs`.
+
+## 16. Locked to landscape, bigger controls, four title places
+
+- **The app frame** (`layoutApp()` in render.js, `#app` in index.html): everything on screen lives in one frame that
+  is always landscape. When a touch screen reports upright (held upright, or held sideways with the phone's rotation
+  lock on), the frame is turned 90 degrees, so the game behaves like a landscape-locked native app. iOS gives web apps
+  no orientation lock. Layout rules are container queries on the frame (`@container app`, `cqw` / `cqh`), notch
+  insets go through `--sa-*` variables that are remapped when turned, and touch points and element boxes are converted
+  with `toUI()` / `uiRect()`. An iPhone home-screen app is sized from the physical screen, to sidestep iOS reporting a
+  page shorter than the screen. `tools/rotate-test.mjs` plays a round on an upright phone with real touch coordinates.
+- **Bigger runner controls** on touch screens: JUMP and the ring gadgets are 30% larger, the joystick 45%, with wide
+  invisible hit areas.
+- **Title places** (`src/scene.js`): Spring Valley (lake, turning windmill, cherry trees, petals), Autumn Woods (golden
+  light, barn and pumpkins, falling leaves), Winter Peaks (snowy pines, a log cabin with lit windows, snowfall, an
+  aurora at night) and Seaside Cliffs (sea with foam and a glitter path, a sailboat, gulls, a lighthouse sweeping its
+  beam at night). One per day, fading over at dawn; the first is random. Painted once per place into tileable strips
+  with ordered dithering (sky bands, 3-range mountains with strata and haze, multi-cluster tree crowns, a shaded
+  split-rail fence and pebbled path, bushes, flowers), and only the living bits are drawn each frame (about 2 ms).
+  `tools/places-shots.mjs` renders each place by day and at night.

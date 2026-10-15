@@ -11,15 +11,18 @@ const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const FIRE = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
 
-// iPhone home-screen apps sometimes start with a page that is shorter than the screen (by about the status bar), which
-// leaves a strip of bare background along the bottom. Measure the real screen and stretch the page over the gap.
+// ---------- the app frame. Everything on screen lives in #app, and #app is always landscape:
+// - a touch screen held upright (or held sideways with the phone's rotation lock on, which still reports upright) gets
+//   #app turned 90 degrees, so the game fills the screen sideways: locked to landscape, like a native game. iOS
+//   doesn't let web apps lock the orientation, so the app does it itself.
+// - an iPhone home-screen app is sized from the real screen, because iOS can report a page shorter than the screen
+//   (by about the status bar) and leave a bare strip along one edge.
 const IPHONE_APP = /iPhone|iPod/.test(navigator.userAgent) && navigator.standalone === true;
-// The real fix: make iOS measure the screen again. Rewriting the viewport tag (and scrolling to the top) does that; a
-// few tries, spaced out, then the stretch below stays as the fallback.
+export const UI = { w: 0, h: 0, rot: false, iw: 0, ih: 0 };
 let nudges = 0, nudgeAt = 0, lastW = 0;
-function nudgeViewport() {
+function nudgeViewport() {   // make iOS measure the screen again: rewrite the viewport tag, scroll to the top
   const now = performance.now();
-  if (innerWidth !== lastW) { lastW = innerWidth; nudges = 0; }   // a new orientation gets fresh tries
+  if (innerWidth !== lastW) { lastW = innerWidth; nudges = 0; }
   if (nudges >= 3 || now - nudgeAt < 700) return;
   nudges++; nudgeAt = now;
   const meta = document.querySelector('meta[name="viewport"]'); if (!meta) return;
@@ -27,20 +30,28 @@ function nudgeViewport() {
   meta.setAttribute('content', base.replace(/,\s*viewport-fit=cover/, ''));
   requestAnimationFrame(() => requestAnimationFrame(() => { meta.setAttribute('content', base); window.scrollTo(0, 0); dispatchEvent(new Event('resize')); }));
 }
-export function viewH() {
-  const h = window.innerHeight;
-  let gap = 0;
+export function layoutApp() {
+  const iw = innerWidth, ih = innerHeight, touch = matchMedia('(pointer: coarse)').matches;
+  let sw = iw, sh = ih;   // the screen in CSS px
   if (IPHONE_APP && screen.width && screen.height) {
-    const full = window.innerWidth > h ? Math.min(screen.width, screen.height) : Math.max(screen.width, screen.height);
-    gap = Math.max(0, Math.min(80, full - h));
+    const long = Math.max(screen.width, screen.height), short = Math.min(screen.width, screen.height);
+    if (ih > iw) { sw = Math.max(iw, Math.min(short, iw + 80)); sh = Math.max(ih, Math.min(long, ih + 80)); }
+    else { sw = Math.max(iw, Math.min(long, iw + 80)); sh = Math.max(ih, Math.min(short, ih + 80)); }
+    if (sh > ih || sw > iw) nudgeViewport();
   }
+  const rot = touch && sh > sw;
+  Object.assign(UI, { rot, iw, ih, w: rot ? sh : sw, h: rot ? sw : sh });
   const de = document.documentElement;
-  if (gap > 0) nudgeViewport();
-  if (gap !== (+de.dataset.gap || 0)) {
-    de.dataset.gap = gap; de.classList.toggle('vfix', gap > 0);
-    de.style.setProperty('--appH', (h + gap) + 'px');
-  }
-  return h + gap;
+  de.classList.toggle('rot', rot);
+  de.style.setProperty('--uiW', UI.w + 'px'); de.style.setProperty('--uiH', UI.h + 'px');
+  return UI;
+}
+export const viewH = () => UI.h;
+// screen point -> point in the (maybe turned) app; and an element's box in app coordinates
+export const toUI = (x, y) => UI.rot ? { x: y, y: UI.h - x } : { x, y };
+export function uiRect(el) {
+  const r = el.getBoundingClientRect();
+  return UI.rot ? { left: r.top, right: r.bottom, top: UI.h - r.right, bottom: UI.h - r.left, width: r.height, height: r.width, x: r.top, y: UI.h - r.right } : r;
 }
 
 export class Renderer {
@@ -55,7 +66,8 @@ export class Renderer {
 
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    this.dpr = dpr; this.vw = window.innerWidth; this.vh = viewH(); this.ih = window.innerHeight; this.ox = 0; this.oy = 0;
+    layoutApp();
+    this.dpr = dpr; this.vw = UI.w; this.vh = UI.h; this.ox = 0; this.oy = 0;
     this.insets = this.insets || { top: 0, bottom: 0 };
     this.devW = Math.round(this.vw * dpr); this.devH = Math.round(this.vh * dpr);   // the screen in device pixels
     this.wide = null;
@@ -138,7 +150,7 @@ export class Renderer {
 
   get camX() { return Math.round(this.cam.x); }
   get camY() { return Math.round(this.cam.y); }
-  toWorld(cx, cy) { return { x: (cx - (this.ox || 0)) * this.dpr / this.k + this.camX, y: (cy - (this.oy || 0)) * this.dpr / this.k + this.camY }; }
+  toWorld(sx, sy) { const { x: cx, y: cy } = toUI(sx, sy); return { x: (cx - (this.ox || 0)) * this.dpr / this.k + this.camX, y: (cy - (this.oy || 0)) * this.dpr / this.k + this.camY }; }
 
   // ---------- events -> particles
   onEvent([k, x, y, extra], ch) {

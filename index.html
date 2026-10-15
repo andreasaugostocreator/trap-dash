@@ -19,6 +19,7 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div id="app">
 <canvas id="game"></canvas>
 
 <!-- Title: the logo over the living landscape, big wooden tiles, small buttons in the corner, your runner top right -->
@@ -102,7 +103,6 @@
 <div class="catchPop" id="catchPop"></div>
 <div class="preview hidden" id="preview"></div>
 <div class="achv" id="achv"></div>
-<div class="turn" id="turn" aria-live="polite"><canvas class="pix" id="turnArt" width="24" height="24"></canvas><b>Turn your phone sideways</b><span>Trap Dash plays in landscape.</span></div>
 <div class="netWait hidden" id="netWait"></div>
 <!-- Control panels: the game view sits between the top bar and these, so no button ever covers the map. -->
 <div class="pad top hidden" id="padTop"><div class="padSec" id="padTL"></div><div class="padSec mid" id="padTM"></div><div class="padSec" id="padTR"></div></div>
@@ -120,6 +120,7 @@
 <section class="screen hidden overlay" id="panel"><div class="card" id="panelCard"></div></section>
 <div class="toast hidden" id="toast"></div>
 
+</div>
 <script src="lib/peerjs.min.js"></script>
 <script type="module" src="src/main.js"></script>
 <script>

@@ -5,7 +5,7 @@ import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS, PHYS } from './config.js';
 import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS, THEMES } from './levels.js';
-import { Renderer, viewH } from './render.js';
+import { Renderer, viewH, UI, toUI, uiRect } from './render.js';
 import { Scene } from './scene.js';
 import { Net, cleanCode } from './net.js';
 import { Bot } from './bot.js';
@@ -695,7 +695,7 @@ for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => { con
 // Sliding a thumb from ◀ to ▶ should switch direction without lifting.
 $('arrows').addEventListener('pointermove', e => {
   if (!touchHeld.left.has(e.pointerId) && !touchHeld.right.has(e.pointerId)) return;
-  const r = $('tRight').getBoundingClientRect(), onRight = e.clientX >= r.left - 7;
+  const r = uiRect($('tRight')), onRight = toUI(e.clientX, e.clientY).x >= r.left - 7;
   const to = onRight ? 'right' : 'left', from = onRight ? 'left' : 'right';
   if (touchHeld[from].delete(e.pointerId)) { touchHeld[to].add(e.pointerId); touchLooks(); }
 });
@@ -992,7 +992,7 @@ function placeRing() {
   if (!btns.length || !jc) return;
   $('tJump').style.marginRight = '';
   for (let pass = 0; pass < 2; pass++) {
-    const P = pr.getBoundingClientRect(), J = jc.getBoundingClientRect(), g = btns[0].querySelector('canvas.knob').getBoundingClientRect();
+    const P = uiRect(pr), J = uiRect(jc), g = uiRect(btns[0].querySelector('canvas.knob'));
     const cx = J.left + J.width / 2 - P.left, cy = J.top + J.width / 2 - P.top, gr = g.width / 2, Rr = J.width / 2 + gr - 2;
     const step = 2 * Math.asin(Math.min(1, (gr + 2) / Rr)), mid = 112 * Math.PI / 180;
     const start = Math.min(190 * Math.PI / 180, mid + (btns.length - 1) * step / 2);
@@ -1002,18 +1002,19 @@ function placeRing() {
       b.style.left = Math.round(x - gr) + 'px'; b.style.top = Math.round(y - gr) + 'px';
       right = Math.max(right, x + gr);
     });
-    const over = right - (innerWidth - P.left - 6);
+    const over = right - (UI.w - P.left - 6);
     if (over <= 0) break;
     $('tJump').style.marginRight = Math.ceil(over) + 'px';
   }
 }
 function updateInsets() {
   if (!run) { R.setInsets(0, 0); R.resize(); return; }
+  R.resize();   // measure the app frame first (it may have turned)
   placeRing();
-  const hud = $('hud').getBoundingClientRect(), top = $('padTop'), pad = $('pad');
+  const hud = uiRect($('hud')), top = $('padTop'), pad = $('pad');
   let t = hud.bottom, b = 0;
-  if (!top.classList.contains('hidden')) t = Math.max(t, top.getBoundingClientRect().bottom);
-  if (!pad.classList.contains('hidden')) b = viewH() - pad.getBoundingClientRect().top;
+  if (!top.classList.contains('hidden')) t = Math.max(t, uiRect(top).bottom);
+  if (!pad.classList.contains('hidden')) b = viewH() - uiRect(pad).top;
   R.setInsets(t, b); R.resize();
 }
 function layoutControls() {
@@ -1414,7 +1415,7 @@ function confetti() {
     c.style.cssText = `left:${Math.random() * 100}%;background:${cols[i % cols.length]};animation-delay:${(Math.random() * 1.2).toFixed(2)}s;animation-duration:${(2 + Math.random() * 1.5).toFixed(2)}s;--dx:${Math.round((Math.random() - 0.5) * 120)}px`;
     box.appendChild(c);
   }
-  document.body.appendChild(box); setTimeout(() => box.remove(), 4500);
+  $('app').appendChild(box); setTimeout(() => box.remove(), 4500);
 }
 
 function endRunView() {
@@ -1449,17 +1450,8 @@ function togglePause() {
   $('pItems').onclick = () => { sfx.click(); openGuide(() => { hidePanel(); togglePause(); }); };
 }
 $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
-// Landscape only. Upright phones and tablets get a "turn your phone" screen (and a running game pauses); where the
-// browser allows it (installed app, fullscreen), the screen is locked sideways on the first touch.
-const UPRIGHT = matchMedia('(orientation: portrait) and (pointer: coarse)');
-{
-  const c = $('turnArt'), g = c.getContext('2d');
-  const px = (x, y, w, h, col) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
-  px(6, 1, 12, 22, '#1c1424'); px(7, 2, 10, 20, '#463a5c'); px(8, 4, 8, 15, '#6fc3ff'); px(8, 14, 8, 5, '#5fae4a'); px(8, 13, 8, 1, '#7bd65a');
-  px(9, 11, 2, 2, '#e8414f'); px(14, 6, 2, 1, '#fff'); px(11, 20, 2, 1, '#8c7fa6'); px(10, 3, 4, 1, '#16101e');
-}
-const onUpright = () => { if (UPRIGHT.matches && run && !run.paused && run.phase !== 'end') togglePause(); };
-UPRIGHT.addEventListener?.('change', onUpright);
+// Landscape only: the app frame turns itself on a phone held upright (see layoutApp in render.js). Where the browser
+// allows a real lock (an installed Android app, fullscreen), ask for it too on the first touch.
 addEventListener('pointerdown', () => { try { screen.orientation?.lock?.('landscape').catch(() => {}); } catch { /* not allowed here */ } }, { once: true });
 { const c = document.createElement('canvas'); c.className = 'pix knob'; drawKnob(c, { r: 5, pal: 'dark', icon: KICON.pause }); sizeArt(c); $('pauseBtn').textContent = ''; $('pauseBtn').append(c); }
 
@@ -1475,7 +1467,7 @@ function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 
 function tick(dt, now) {
   const dpr = Math.min(devicePixelRatio || 1, 3);
-  if (innerWidth !== R.vw || innerHeight !== R.ih || dpr !== R.dpr) updateInsets();
+  if (innerWidth !== UI.iw || innerHeight !== UI.ih || dpr !== R.dpr) updateInsets();
   paintEdges();
   readPads(dt);
   if (!run) { drawMenuScene(dt); animateTitle(dt); return; }
