@@ -16,6 +16,7 @@ const starsOf = L => { if (L.stars) return L.stars; if (!STARS.has(L.id)) STARS.
 const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
 import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
+import { pollPads, BTN } from './gamepad.js';
 import { TrapScore, titleFor } from './score.js';
 import { TRAINING, Tutorial } from './tutorial.js';
 import { ACHIEVEMENTS, unlock, has, count as achCount, bump } from './achievements.js';
@@ -172,6 +173,7 @@ $('howBtn').onclick = () => { panel(`
     <li><b>Gadgets</b> never kill on their own. There are 12 for each side (lightning, glue, mines, bats, fog, frost, an anvil, rewind… and dash, shield, blink, glider, slow-mo, decoy, phase…), but <b>each map deals 4 to each player</b>, picked to suit its traps and layout. Small numbers show how many uses are left this run.</li>
     <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
     <li>Levels have ★ to ★★★ difficulty. 🎲 builds a random level of the difficulty you pick.</li>
+    <li><b>Gamepad</b>: plug one in and play. Runner: stick or d-pad to move, <b>A</b> jumps, <b>X Y B RB</b> gadgets. Trapper: <b>B X Y</b> fire the red, blue and yellow trap slots, <b>LB RB LT RT</b> gadgets (aimed ones: steer with a stick, <b>A</b> drops it). On one screen the first pad runs and the second traps. <b>Start</b> pauses; in menus use the d-pad and <b>A</b>.</li>
     <li><b>∞ Endless</b>: stage after stage of new levels, no clock. Swap sides whenever you like from the <b>II</b> menu.</li>
   </ul>
   <div class="buttons"><button class="big pink" data-close>Got it</button></div>`);
@@ -596,6 +598,13 @@ function pressNearest(e, pads) {
   return true;
 }
 for (const pad of [$('pad'), $('padTop')]) pad.addEventListener('pointerdown', e => { if (!e.target.closest('button')) pressNearest(e, [pad]); });
+// Pressed look (and a tiny tick, if vibration is on) for the trap and gadget buttons while a finger is on them.
+const pressedBtn = new Map();
+for (const pad of [$('pad'), $('padTop')]) pad.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.gbtn, .tbtn'); if (!b) return;
+  b.classList.add('down'); pressedBtn.set(e.pointerId, b); if (e.pointerType !== 'mouse') buzz(8);
+});
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => { const b = pressedBtn.get(e.pointerId); if (b) { b.classList.remove('down'); pressedBtn.delete(e.pointerId); } });
 // Sliding a thumb from ◀ to ▶ should switch direction without lifting.
 $('arrows').addEventListener('pointermove', e => {
   if (!touchHeld.left.has(e.pointerId) && !touchHeld.right.has(e.pointerId)) return;
@@ -604,9 +613,74 @@ $('arrows').addEventListener('pointermove', e => {
   if (touchHeld[from].delete(e.pointerId)) { touchHeld[to].add(e.pointerId); touchLooks(); }
 });
 function readInput() {
-  input.left = keys.has('ArrowLeft') || keys.has('KeyA') || touchHeld.left.size > 0;
-  input.right = keys.has('ArrowRight') || keys.has('KeyD') || touchHeld.right.size > 0;
-  input.jump = JUMP_KEYS.some(k => keys.has(k)) || touchHeld.jump.size > 0;
+  input.left = keys.has('ArrowLeft') || keys.has('KeyA') || touchHeld.left.size > 0 || gp.left;
+  input.right = keys.has('ArrowRight') || keys.has('KeyD') || touchHeld.right.size > 0 || gp.right;
+  input.jump = JUMP_KEYS.some(k => keys.has(k)) || touchHeld.jump.size > 0 || gp.jump;
+}
+
+// ---------- gamepads. Runner: stick / d-pad to move, A to jump, X Y B RB for gadgets. Trapper: B X Y fire the red,
+// blue and yellow trap slots, LB RB LT RT the gadgets (aimed ones: steer with a stick, A to drop, B to cancel).
+// On a shared screen the first pad runs and the second traps. Start pauses. In menus: d-pad / stick + A, B goes back.
+const gp = { left: false, right: false, jump: false };
+function refreshKeyLabels() {
+  if (!run) return;
+  buildGadgets(); updateGadgets();
+  [...$('trapbar').children].forEach((b, i) => { const k = b.querySelector('.skey'); if (k) k.textContent = slotKey(i); });
+}
+addEventListener('gamepadconnected', () => { if (!padOn) { padOn = true; refreshKeyLabels(); } toast('Gamepad ready: A jumps, Start pauses. Menus: d-pad + A.'); });
+addEventListener('gamepaddisconnected', () => { gp.left = gp.right = gp.jump = false; });
+function readPads(dt) {
+  const pads = pollPads();
+  gp.left = gp.right = gp.jump = false;
+  if (!pads.length) return;
+  if (!padOn) { padOn = true; refreshKeyLabels(); }
+  if (!run || run.paused || run.phase === 'end') {
+    if (run && run.paused && pads.some(p => p.pressed[BTN.START])) { togglePause(); return; }
+    menuPad(pads); return;
+  }
+  for (const p of pads) {
+    const role = !run.runnerHere ? 'trapper' : !run.trapperHere ? 'runner' : p.slot === 0 ? 'runner' : 'trapper';
+    if (p.pressed[BTN.START]) { togglePause(); return; }
+    if (run.phase === 'preview' && p.pressed[BTN.A]) readyPreview();
+    if (role === 'runner') {
+      gp.left ||= p.left; gp.right ||= p.right; gp.jump ||= !!p.down[BTN.A];
+      if (p.pressed[BTN.A]) input.jumpQueued = true;
+      [BTN.X, BTN.Y, BTN.B, BTN.RB].forEach((b, k) => { if (p.pressed[b]) { const id = runnerKeyed()[k]; if (id) useRunnerGadget(id); } });
+      continue;
+    }
+    [BTN.B, BTN.X, BTN.Y].forEach(b => { if (p.released[b]) releaseHold('gp' + p.slot + '-' + b); });
+    if (run.aim) {   // steering an aimed gadget
+      const W = run.world.w * TILE, H = run.world.h * TILE, sx = p.lx || p.rx, sy = p.ly || p.ry;
+      run.aim.x = Math.max(0, Math.min(W, run.aim.x + sx * 260 * dt)); run.aim.y = Math.max(0, Math.min(H, run.aim.y + sy * 260 * dt));
+      if (p.pressed[BTN.A]) useTrapperGadget(run.aim.id, { x: run.aim.x, y: run.aim.y });
+      else if (p.pressed[BTN.B]) run.aim = null;
+    } else [BTN.B, BTN.X, BTN.Y].forEach((b, k) => { if (p.pressed[b]) fireSlot(k, 'gp' + p.slot + '-' + b); });
+    [BTN.LB, BTN.RB, BTN.LT, BTN.RT].forEach((b, k) => { if (p.pressed[b]) { const id = run.world.loadout.trapper[k]; if (id) useTrapperGadget(id); } });
+  }
+}
+// Menus: move a highlight over the buttons of whatever screen is up, A presses it, B finds a way back.
+let padFocus = null, padRepeat = 0;
+function menuPad(pads) {
+  const scr = [...document.querySelectorAll('.screen, .panel')].filter(s => !s.classList.contains('hidden') && s.getClientRects().length).pop();
+  if (!scr) return;
+  const btns = [...scr.querySelectorAll('button')].filter(b => b.getClientRects().length && !b.disabled);
+  if (!btns.length) return;
+  let move = 0, press = false, back = false;
+  for (const p of pads) {
+    const dir = p.up || p.left ? -1 : p.downDir || p.right ? 1 : 0;
+    if (dir && (p.pressed[BTN.UP] || p.pressed[BTN.DOWN] || p.pressed[BTN.LEFT] || p.pressed[BTN.RIGHT] || padRepeat <= 0)) move = dir;
+    press ||= p.pressed[BTN.A]; back ||= p.pressed[BTN.B];
+  }
+  padRepeat = move ? 14 : padRepeat > 0 && pads.some(p => p.up || p.downDir || p.left || p.right) ? padRepeat - 1 : 0;
+  if (!btns.includes(padFocus)) { padFocus?.classList.remove('padfocus'); padFocus = null; }
+  if (move) {
+    const i = padFocus ? btns.indexOf(padFocus) : -1;
+    padFocus?.classList.remove('padfocus');
+    padFocus = btns[(i + move + btns.length) % btns.length];
+    padFocus.classList.add('padfocus'); padFocus.scrollIntoView?.({ block: 'nearest', inline: 'nearest' }); sfx.click();
+  }
+  if (press) { const b = padFocus || scr.querySelector('button.big, button.primary') || btns[0]; b.click(); }
+  if (back) { const b = btns.find(x => /^(back|leave|close|resume|done)\b/i.test(x.textContent.trim())); if (b) b.click(); }
 }
 
 // Trapper: click / tap a trap.
@@ -639,11 +713,16 @@ canvas.addEventListener('pointermove', e => {
   if (run.aim) Object.assign(run.aim, R.toWorld(e.clientX, e.clientY));
 });
 
+// Feedback on the buttons themselves: a shake when it can't go yet, a flash when it is ready again.
+function deny(el) { sfx.denied(); if (el) { el.classList.remove('nope'); void el.offsetWidth; el.classList.add('nope'); } }
+function flashReady(el) { el.classList.remove('readyNow'); void el.offsetWidth; el.classList.add('readyNow'); }
+const gadEl = (bar, id) => [...$(bar).children].find(b => b.dataset.id === id);
+
 // holdKey: what will let go of it (a pointer id or a key code). Traps that burn while held (the flame) stop on release.
 function fireTrap(id, holdKey) {
   const w = run.world, t = w.traps[id];
   const ready = t.state === 'idle' && t.cd <= 0 && (w.lock <= 0 || w.chained(t)) && !(run.pending[id] > 0);
-  if (!ready) { sfx.denied(); return; }
+  if (!ready) { deny([...$('trapbar').children].find(b => b.dataset.trap === String(id))); return; }
   const hold = holdKey !== undefined && !!TRAPS[t.kind].hold;
   if (hold) run.held.set(holdKey, id);
   if (run.simOwner) w.trigger(id, 0, hold);
@@ -692,7 +771,7 @@ function updateSlots(w) {
 }
 function fireSlot(i, holdKey) {
   const t = run.slots && run.slots[i];
-  if (!t || run.phase !== 'play') { sfx.denied(); return; }
+  if (!t || run.phase !== 'play') { deny($('trapbar').children[i]); return; }
   fireTrap(t.id, holdKey);
 }
 function buildTrapBar() {
@@ -701,7 +780,7 @@ function buildTrapBar() {
   for (let i = 0; i < SLOTS; i++) {
     const b = document.createElement('button');
     b.className = 'tbtn'; b.dataset.slot = i; b.style.setProperty('--slot', SLOT_COLORS[i]);
-    b.innerHTML = `<i class="eta"></i><i class="skey">${touchDevice ? '' : i + 1}</i><canvas class="pix" width="7" height="7"></canvas><span class="cool"></span><span class="secs"></span><small></small>`;
+    b.innerHTML = `<i class="eta"></i><i class="skey">${slotKey(i)}</i><canvas class="pix" width="7" height="7"></canvas><span class="cool"></span><span class="secs"></span><small></small>`;
     b.addEventListener('pointerdown', e => { e.preventDefault(); unlockAudio(); if (run) fireSlot(i, 'p' + e.pointerId); });
     bar.appendChild(b);
   }
@@ -723,7 +802,7 @@ function updateTrapBar() {
     const C = TRAPS[t.kind], ready = t.state === 'idle' && t.cd <= 0, pend = run.pending[t.id] > 0;
     const burning = C.hold && t.state === 'active';
     const state = w.jam > 0 ? 'jam' : burning ? 'burn' : pend ? 'sent' : ready ? (w.lock > 0 && !w.chained(t) ? 'lock' : 'ready') : 'cool';
-    if (b.dataset.state !== state) b.dataset.state = state;
+    if (b.dataset.state !== state) { if (state === 'ready' && b.dataset.state === 'cool') flashReady(b); b.dataset.state = state; }
     b.style.setProperty('--cd', burning ? Math.min(1, t.t / C.tank).toFixed(3) : !ready && t.state === 'idle' ? Math.min(1, t.cd / C.cd).toFixed(3) : 0);
     const secs = !ready && t.state === 'idle' && t.cd > 0 ? Math.ceil(t.cd) : '';
     const se = b.querySelector('.secs'); if (se.textContent != secs) se.textContent = secs;
@@ -738,9 +817,14 @@ function etaOfTrap(w, t) {
 
 // ---------- gadgets: the trapper's (left column) and the runner's (above the jump button / bottom left on PC)
 // Each map hands out its own small set (see loadout.js). Keys go by slot: trapper 7 8 9 0, runner Shift Q E R.
+// With a gamepad plugged in, the labels show its buttons instead: trap slots on B X Y (red, blue, yellow, like the
+// slot colours), trapper gadgets on the shoulders, runner gadgets on X Y B RB (A jumps).
 const T_KEYS = ['7', '8', '9', '0'], R_KEYS = ['Shift', 'Q', 'E', 'R'];
+const PAD_T = ['LB', 'RB', 'LT', 'RT'], PAD_R = ['X', 'Y', 'B', 'RB'], PAD_SLOT = ['B', 'X', 'Y'];
+let padOn = false;
 const runnerKeyed = () => run.world.loadout.runner.filter(id => !GADGETS.runner[id].passive);
-const keyOf = (side, id) => side === 'trapper' ? T_KEYS[run.world.loadout.trapper.indexOf(id)] : R_KEYS[runnerKeyed().indexOf(id)];
+const keyOf = (side, id) => side === 'trapper' ? (padOn ? PAD_T : T_KEYS)[run.world.loadout.trapper.indexOf(id)] : (padOn ? PAD_R : R_KEYS)[runnerKeyed().indexOf(id)];
+const slotKey = i => padOn ? PAD_SLOT[i] : touchDevice ? '' : String(i + 1);
 function gadgetButton(id, side, onPress) {
   const b = document.createElement('button');
   b.className = 'gbtn ' + side; b.dataset.id = id;
@@ -750,7 +834,7 @@ function gadgetButton(id, side, onPress) {
   b.prepend(ic);
   const lab = document.createElement('small');
   const key = keyOf(side, id);
-  lab.textContent = (touchDevice || !key ? '' : key + ' ') + GADGETS[side][id].name;
+  lab.textContent = (!key || (touchDevice && !padOn) ? '' : key + ' ') + GADGETS[side][id].name;
   b.appendChild(lab);
   if (onPress) b.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); unlockAudio(); if (run) onPress(id); });
   return b;
@@ -767,7 +851,7 @@ function updateGadgets() {
   for (const [bar, side] of [['gadbar', 'trapper'], ['rgad', 'runner']]) for (const b of $(bar).children) {
     const id = b.dataset.id, g = w.gad[side][id], def = GADGETS[side][id];
     const state = g.n === 0 ? 'none' : side === 'trapper' && w.jam > 0 ? 'jam' : run.aim && run.aim.id === id ? 'aim' : g.cd > 0 ? 'cool' : def.passive ? 'passive' : 'ready';
-    if (b.dataset.state !== state) b.dataset.state = state;
+    if (b.dataset.state !== state) { if (state === 'ready' && b.dataset.state === 'cool') flashReady(b); b.dataset.state = state; }
     b.style.setProperty('--cd', g.cd > 0 && def.cd ? Math.min(1, g.cd / def.cd).toFixed(3) : 0);
     const secs = g.cd > 0 && g.n !== 0 ? Math.ceil(g.cd) : '', badge = g.n < 0 ? '' : g.n;
     const [cool, secsEl, badgeEl] = b.querySelectorAll('.cool, .secs, .badge');
@@ -777,7 +861,7 @@ function updateGadgets() {
 }
 function useTrapperGadget(id, at) {
   const w = run.world, def = GADGETS.trapper[id], g = w.gad.trapper[id];
-  if (run.phase !== 'play' || g.n === 0 || g.cd > 0 || w.jam > 0) { sfx.denied(); return; }
+  if (run.phase !== 'play' || g.n === 0 || g.cd > 0 || w.jam > 0) { deny(gadEl('gadbar', id)); return; }
   if (def.aim && !at) {   // pick a spot: the next tap / click on the map
     if (run.aim && run.aim.id === id) { run.aim = null; return; }
     run.aim = { id, x: w.player.x + 40 * (w.player.face || 1), y: w.player.y };
@@ -787,13 +871,13 @@ function useTrapperGadget(id, at) {
   }
   run.aim = null;
   const x = at ? Math.round(at.x) : 0, y = at ? Math.round(at.y) : 0;
-  if (run.simOwner) { if (!w.useGadget('trapper', id, x, y)) sfx.denied(); }
+  if (run.simOwner) { if (!w.useGadget('trapper', id, x, y)) deny(gadEl('gadbar', id)); }
   else { net.send({ t: 'gad', id, x, y, lead: net.lag }); g.cd = def.cd; if (g.n > 0) g.n--; sfx.click(); }
 }
 const gadNames = side => run.world.loadout[side].map(id => GADGETS[side][id].name.toLowerCase()).join(', ');
 function useRunnerGadget(id) {
   if (!run.runnerHere || run.phase !== 'play') return;
-  if (!run.world.useGadget('runner', id)) sfx.denied();
+  if (!run.world.useGadget('runner', id)) deny(gadEl('rgad', id));
 }
 
 // ---------- where the controls go. The bottom panel holds whoever plays on this device; on a shared touch screen
@@ -807,12 +891,15 @@ function updateInsets() {
   if (!pad.classList.contains('hidden')) b = viewH() - pad.getBoundingClientRect().top;
   R.setInsets(t, b); R.resize();
 }
+const PORTRAIT = matchMedia('(orientation: portrait) and (max-width: 600px)');
+PORTRAIT.addEventListener?.('change', () => { if (run) layoutControls(); });
 function layoutControls() {
   const parts = $('parts');
   for (const id of ['arrows', 'tJump', 'trapbar', 'gadbar', 'rgad']) parts.appendChild($(id));
   for (const id of ['padL', 'padM', 'padR', 'padTL', 'padTM', 'padTR']) $(id).innerHTML = '';
   const bottom = { L: [], M: [], R: [] }, top = { L: [], M: [], R: [] };
-  if (run.runnerHere && touchDevice) { bottom.L.push('arrows'); bottom.M.push('rgad'); bottom.R.push('tJump'); }
+  // Touch: gadgets sit right next to JUMP, under the same thumb (portrait phones: in a row above it).
+  if (run.runnerHere && touchDevice) { bottom.L.push('arrows'); if (PORTRAIT.matches) bottom.M.push('rgad'); else bottom.R.push('rgad'); bottom.R.push('tJump'); }
   else if (run.runnerHere) bottom.L.push('rgad');
   if (run.trapperHere) {
     const where = run.runnerHere && touchDevice ? top : bottom;
@@ -1250,6 +1337,7 @@ function tick(dt, now) {
   const dpr = Math.min(devicePixelRatio || 1, 3);
   if (innerWidth !== R.vw || innerHeight !== R.ih || dpr !== R.dpr) updateInsets();
   paintEdges();
+  readPads(dt);
   if (!run) { drawAttract(dt); animateTitle(dt); return; }
   const w = run.world;
   readInput();

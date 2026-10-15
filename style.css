@@ -547,3 +547,15 @@ input.code { font-size-adjust: none; font-size: 40px; }
    the screen, and make the body the frame for everything pinned to the edges (a transform does that). */
 html.vfix, html.vfix body { height: var(--appH); }
 html.vfix body { transform: translateZ(0); }
+
+/* ---------- control feel: pressed, "not yet", "ready again", gamepad focus */
+.pad .gbtn.down, .pad .tbtn.down { transform: translateY(3px) scale(.96); filter: brightness(.9); box-shadow: var(--frame), 0 0 0 var(--ink); }
+.nope { animation: nope .28s steps(6) both; }
+@keyframes nope { 0%, 100% { translate: 0 0; } 20% { translate: -4px 0; } 40% { translate: 4px 0; } 60% { translate: -3px 0; } 80% { translate: 2px 0; } }
+.readyNow::after { content: ''; position: absolute; inset: 0; z-index: 4; pointer-events: none; background: #fff; animation: readyNow .35s ease-out both; }
+@keyframes readyNow { from { opacity: .75; } to { opacity: 0; } }
+.readyNow { animation: readyPop .3s cubic-bezier(.3, 1.8, .5, 1) both; }
+@keyframes readyPop { 0% { scale: 1; } 40% { scale: 1.1; } 100% { scale: 1; } }
+button.padfocus { outline: 4px solid #ffd84a; outline-offset: 3px; z-index: 2; }
+/* gadgets beside JUMP (landscape touch): one group under the right thumb */
+#padR .rgad { margin-right: 6px; padding-right: 10px; border-right: 3px solid rgba(255, 255, 255, .12); }

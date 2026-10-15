@@ -294,3 +294,15 @@ tablet and foldable sizes; `tools/menu-fit-test.mjs` checks every menu on 16 siz
 - The **TRAP DASH** logo is custom pixel lettering, drawn per letter on tiny canvases with an ink outline, a highlight and a drop shadow. It is red for TRAP and blue for DASH, and each letter still bobs.
 - Star ratings use a system symbol font, because Jersey draws ☆ and ★ almost the same.
 - The app icon is "Sunset Saw" (tools/make-icons.mjs).
+
+## 13. Control feel
+
+- **Touch, landscape:** the runner's gadgets sit right next to JUMP, so one thumb covers jumping and gadgets while
+  the other steers. Portrait phones keep them in a row above.
+- **Feedback on every press:** trap and gadget buttons sink while held (with a tiny vibration tick if vibration is on),
+  shake with a low buzz when they can't go yet, and flash when a cooldown ends, so you know when to press again
+  without reading the numbers.
+- **Gamepads** (`src/gamepad.js`, standard mapping): runner on the stick or d-pad, A jumps, X Y B RB for gadgets.
+  The trapper's B X Y match the red, blue and yellow slot colours; LB RB LT RT are gadgets, and aimed ones steer
+  with a stick (A drops, B cancels). On one screen pad 1 runs and pad 2 traps. Start pauses; menus use the d-pad
+  and A, and B goes back. Button labels switch to the pad's buttons once one is connected. `tools/gamepad-test.mjs`.
