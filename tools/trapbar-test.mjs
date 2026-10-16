@@ -5,7 +5,7 @@ import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
 const errs = [];
 const page = async o => { const p = await b.newPage(o); p.on('pageerror', e => errs.push(e.message)); return p; };
-const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
 const h = await page({ viewport: { width: 1280, height: 720 } });
 const g = await page({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
 await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(500);

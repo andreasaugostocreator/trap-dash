@@ -166,6 +166,7 @@ export class Renderer {
     if (k === 'airjump') this.sq = { x: 0.8, y: 1.2 };
     if (k === 'spring') { this.sq = { x: 0.7, y: 1.35 }; this.say(x, y - 10, 'BOING!', '#7bd65a'); }
     if (k === 'cp') this.say(x, y - 30, 'CHECKPOINT!', '#7bd65a');
+    if (k === 'gem') this.say(x, y - 14, '-0.5s', '#7fd6e0');
     if (k === 'goal') this.say(x, y - 40, 'GOAL!', '#ffd84a', 1.6);
     if (k === 'die') this.closeAt = null;
     if (k === 'die') this.say(x, y - 14, ['CAUGHT!', 'OUCH!', 'GOTCHA!', 'BONK!'][Math.floor(Math.random() * 4)], '#ff5d6a');
@@ -182,6 +183,7 @@ export class Renderer {
       P(8, i => { const a = i / 8 * TAU; return { x, y, vx: Math.cos(a) * 70, vy: Math.sin(a) * 70, life: 0.3, size: 2, color: '#ffffff', g: 0 }; });
     }
     if (k === 'spawn') P(12, i => { const a = i / 12 * TAU; return { x: x + Math.cos(a) * 14, y: y + Math.sin(a) * 14, vx: -Math.cos(a) * 45, vy: -Math.sin(a) * 45, life: 0.3, size: 1, color: '#ffffff', g: 0 }; });
+    if (k === 'gem') P(12, () => ({ x, y, vx: (Math.random() - 0.5) * 90, vy: -40 - Math.random() * 80, life: 0.5 + Math.random() * 0.3, size: 1, color: ['#bff4ff', '#55c6dc', '#ffffff'][Math.floor(Math.random() * 3)], g: 200 }));
     if (k === 'cp' || k === 'goal') P(k === 'goal' ? 60 : 24, () => ({ x, y: y - 10, vx: (Math.random() - 0.5) * 150, vy: -70 - Math.random() * 140, life: 1 + Math.random() * 0.7, size: Math.random() < 0.5 ? 2 : 1, color: ['#ff5d8f', '#ffd84a', '#5ab4ff', '#7bd65a', '#b48cff', '#ffffff'][Math.floor(Math.random() * 6)], g: 260, flicker: true }));
     if (k === 'crumble') P(10, () => ({ x: x + (Math.random() - 0.5) * 14, y: y + (Math.random() - 0.5) * 10, vx: (Math.random() - 0.5) * 50, vy: -Math.random() * 40, life: 0.7, size: 2, color: Math.random() < 0.5 ? '#a89a86' : '#7d705f', g: 500 }));
     if (k === 'crack') dust(3, 20, '#c9bca6');
@@ -229,6 +231,7 @@ export class Renderer {
     this.drawPlatforms(world);
     if (!this.lite) this.drawAmbient(world, cx, cy);
     this.drawProps(world);
+    this.drawGems(world);
     for (const t of world.traps) this.drawTrap(t, th);
     this.drawGlue(world, o);
     for (const b of world.shots) {
@@ -325,17 +328,27 @@ export class Renderer {
       const x = Math.round((((hash(i, 7) * span - cx * 0.12 + this.t * (3 + hash(i, 9) * 4)) % span) + span) % span - cl.width - 20);
       l.drawImage(cl, x, Math.round(hash(i, 8) * H * 0.35 + 6 - cy * 0.04));
     }
-    // The layers stand on the horizon: at the start of the round each one's foot sits just below the ground the
-    // runner starts on (so the hills, farms and trees rise above the level's skyline), and from there they follow
-    // the camera up and down at their own parallax.
-    if (!this.bgRef || this.bgRef.world !== world) this.bgRef = { world, cy0: cy };
-    const ground = world.start.y + 16 - this.bgRef.cy0;
+    // The layers stand on the horizon: each one's foot sits just below the ground the runner starts on (so the
+    // hills, farms and trees rise above the level's skyline), and they follow the camera at their own parallax.
+    // G is where the start ground is on screen now; Gt where it usually sits while running (the camera keeps the
+    // runner low in the view). Each layer's foot sits at Gt + sink and moves with G at its own parallax.
+    const G = world.start.y + 16 - cy, Gt = H * 0.66;
     const layer = (name, par, sink) => {
       const img = this.bg(name + theme, () => MID_NAMES.has(name) ? this.makeMid(th, name) : this.makeLayer(th, name));
-      const y = Math.round(ground + sink - img.height - (cy - this.bgRef.cy0) * par);
+      const y = Math.round(Gt + sink - img.height + (G - Gt) * par);
       const off = Math.round(((cx * par) % img.width + img.width) % img.width);
       for (let x = -off; x < W; x += img.width) l.drawImage(img, x, y);
-      if (y + img.height < H) { l.fillStyle = img.bottomColor; l.fillRect(0, y + img.height, W, H - y - img.height); }
+      if (y + img.height < H) {   // below the layer: more of its ground, lightly speckled so it never reads as a flat slab
+        const tex = this.bg('fill' + name + theme, () => {
+          const c = canvasOf(64, 32), v = c.getContext('2d'), m = /rgb\((\d+),(\d+),(\d+)\)/.exec(img.bottomColor) || [0, 90, 120, 80];
+          const shade = k => `rgb(${Math.round(m[1] * k)},${Math.round(m[2] * k)},${Math.round(m[3] * k)})`;
+          v.fillStyle = img.bottomColor; v.fillRect(0, 0, 64, 32);
+          for (let j = 0; j < 32; j++) for (let i = 0; i < 64; i++) { const n = hash(i * 3 + 1, j * 7 + 2); if (n < 0.06) { v.fillStyle = shade(0.86); v.fillRect(i, j, 1, 1); } else if (n > 0.965) { v.fillStyle = shade(1.1); v.fillRect(i, j, 1, 1); } }
+          return c;
+        });
+        const top = y + img.height, offX = Math.round(((cx * par) % 64 + 64) % 64);
+        for (let ty = top; ty < H; ty += 32) for (let tx = -offX; tx < W; tx += 64) l.drawImage(tex, 0, 0, 64, Math.min(32, H - ty), tx, ty, 64, Math.min(32, H - ty));
+      }
     };
     layer(th.far, 0.2, 34);
     const mid = MID_LAYER[theme]; if (mid && !this.lite) layer(mid, 0.32, 26);   // a middle distance: farms, a village, graves…
@@ -528,16 +541,6 @@ export class Renderer {
             x.fillStyle = top; x.fillRect(cx0 - 1, ground, 3, 3);
           }
         }
-      }
-      if (name === 'trees') {   // a windmill on the hill
-        const mx = 330, R = (i, j, w, h, col) => { x.fillStyle = col; x.fillRect(i, j, w, h); };
-        for (let j = 0; j < 30; j++) R(mx - 4 - Math.floor(j / 6), ground - 30 + j, 9 + Math.floor(j / 6) * 2, 1, top);
-        R(mx - 1, ground - 10, 3, 6, base);
-        for (let k = 0; k < 4; k++) {
-          const a = k * Math.PI / 2 + 0.4;
-          for (let d = 2; d < 15; d++) { const bx = Math.round(mx + Math.cos(a) * d), by = Math.round(ground - 30 + Math.sin(a) * d); R(bx, by, 2, 2, d > 5 ? light : top); }
-        }
-        R(mx - 1, ground - 31, 3, 3, base);
       }
     } else {   // cloud banks for the sky level
       const yb = name === 'clouds' ? 34 : 44;
@@ -789,6 +792,24 @@ export class Renderer {
     }
   }
 
+  // gems: a small turning crystal that bobs over the risky line, with a glint now and then
+  drawGems(world) {
+    if (!world.gems || !world.gems.length) return;
+    const l = this.l, spin = Math.floor(this.t * 6) % 4;
+    const img = this.bg('gem' + spin, () => {
+      const c = canvasOf(9, 10), x = c.getContext('2d'), w = [4, 3, 1, 3][spin];   // the crystal's width as it turns
+      const P = (i, j, col) => { x.fillStyle = col; x.fillRect(i, j, 1, 1); };
+      for (let j = 0; j < 9; j++) { const half = Math.max(0, Math.round(w * (1 - Math.abs(j - 3.5) / 4.5))); for (let i = -half; i <= half; i++) P(4 + i, j, i < 0 ? '#bff4ff' : i === half ? '#2f8a9c' : '#55c6dc'); P(4 - half - 1, j, '#1c3a44'); P(4 + half + 1, j, '#1c3a44'); }
+      P(4, 0, '#1c3a44'); P(4, 9, '#1c3a44'); P(3, 2, '#ffffff');
+      return c;
+    });
+    for (const g of world.gems) {
+      if (g.got) continue;
+      const bob = Math.round(Math.sin(this.t * 3 + g.x * 0.1) * 1.5);
+      l.drawImage(img, g.x - 4, g.y - 5 + bob);
+      if ((Math.floor(this.t * 2 + g.x) % 5) === 0) { l.fillStyle = '#ffffffcc'; l.fillRect(g.x + 3, g.y - 6 + bob, 1, 1); l.fillRect(g.x + 2, g.y - 5 + bob, 3, 1); }
+    }
+  }
   drawProps(world) {
     const l = this.l, f = Math.floor(this.t * 4) % 2;
     for (let ty = 0; ty < world.h; ty++) for (let tx = 0; tx < world.w; tx++) {

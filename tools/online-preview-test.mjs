@@ -4,7 +4,7 @@ const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw
 const errs = [];
 const page = async o => { const p = await b.newPage(o); p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
   await p.addInitScript(() => localStorage.setItem('trapdash-settings', JSON.stringify({ preview: true, ghost: true }))); return p; };
-const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
 const h = await page({ viewport: { width: 1280, height: 720 } }), g = await page({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
 await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(500);
 await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');

@@ -479,3 +479,21 @@ the top bar.
 
 `tools/batchD-test.mjs` checks the map, every world drawing, and that both screens get the same weather;
 `tools/map-shots.mjs` and `tools/weather-shots.mjs` take pictures.
+
+## 23. Ready check, connection bars, gems
+
+- **Ready check (online).** In the lobby both players press Ready (for the host, the Start button is their Ready).
+  Each sees the other's state ("Bob is ready! Ready?", the button glowing; a ✓ Ready on the player card), and the
+  round starts the moment both are ready. Changing the level or the match settings asks both again. Matchmade
+  matches still start by themselves. (`?autoready` lets the automated tests start as before.)
+- **Connection bars.** Four pixel bars in the lobby (by the room code) and in the top bar during an online round:
+  from the measured round trip (under 90 ms four, under 180 three, under 350 two, else one), blinking empty when
+  nothing has been heard for 2.5 s. Hovering shows "Direct link · 45 ms" or "Relay link · 140 ms".
+- **Gems.** Each level carries up to 8 small crystals placed by `World.placeGems` on the risky line over its traps
+  (two tiles over pop-up spikes, flames and saw rails, over a trapdoor, under a crusher's landing spot), at least 7
+  tiles apart, worked out from the traps alone so both devices agree. Each gem picked up takes 0.5 s off a finished
+  run's time (`GEM_BONUS`), so the risky line can win the level. The top bar counts them (2/5), the preview lists
+  them, the podium cards show the bonus, and every gem adds to your total in the profile, which unlocks the gem
+  cosmetics (60, 120, 200). Snapshots mirror which gems are gone.
+
+`tools/batchE-test.mjs` checks the gems (also mirrored online), the real two-player ready check and the bars.

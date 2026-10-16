@@ -19,7 +19,7 @@ const hook = p => { p.on('pageerror', e => errs.push(e.message)); p.on('console'
   await p.close();
 }
 {
-  const q = '?nop2p&relay=ws://127.0.0.1:8883';
+  const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
   const ch = await b.newContext({ viewport: { width: 1000, height: 600 } }), cg = await b.newContext({ viewport: { width: 1000, height: 600 } });
   const h = await ch.newPage(), g = await cg.newPage(); hook(h); hook(g);
   await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(500);

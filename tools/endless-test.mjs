@@ -23,7 +23,7 @@ await l.click('#swapBtn'); await l.waitForTimeout(3800);
 console.log('after swap:', JSON.stringify(await info(l)));
 
 // online: the guest runs stage 1, reaches the flag, both move to stage 2; the guest asks to swap.
-const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
 const h = await page({ viewport: { width: 1280, height: 720 } });
 const g = await page({ viewport: { width: 844, height: 390 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true });
 await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(500);

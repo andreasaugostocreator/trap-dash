@@ -12,7 +12,7 @@ await l.click('#startBtn'); await l.waitForTimeout(3800);
 await l.keyboard.down('ArrowRight'); await l.waitForTimeout(1500); await l.keyboard.up('ArrowRight');
 await l.screenshot({ path: 'shots/61-random-play.png' });
 console.log('local run:', await l.evaluate(() => { const r = window.__td.run; return `${r.world.level.name} ${r.world.w}x${r.world.h} x=${Math.round(r.world.player.x)}`; }));
-const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
 const h = await page({ viewport: { width: 1280, height: 720 } }), g = await page({ viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true });
 await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(400);
 await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');

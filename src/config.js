@@ -40,6 +40,7 @@ export const TRAPS = {
 };
 export const TRAP_LOCK = 0.25;   // the trapper can't fire two traps closer together than this
 export const TIME_LIMIT = 100;
+export const GEM_BONUS = 0.5;   // seconds off the runner's time for each gem picked up
 
 // Gadgets: never deadly on their own. charges -1 = unlimited, cd = seconds between uses. Charges reset every run.
 // aim: the trapper picks a spot on the map. passive: used automatically (the air jump).

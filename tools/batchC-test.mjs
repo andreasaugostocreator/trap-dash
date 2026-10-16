@@ -59,7 +59,7 @@ const hook = p => { p.on('pageerror', e => errs.push(e.message)); p.on('console'
 }
 // cosmetics travel with the player online
 {
-  const q = '?nop2p&relay=ws://127.0.0.1:8883';
+  const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
   const ch = await b.newContext({ viewport: { width: 1000, height: 600 } }), cg = await b.newContext({ viewport: { width: 1000, height: 600 } });
   await cg.addInitScript(() => { localStorage.setItem('trapdash-achievements', JSON.stringify({ champion: 1, combo: 1 })); localStorage.setItem('trapdash-me2', JSON.stringify({ name: 'Guesty', char: 'robot', cos: { hat: 'crown', scarf: 'teal' } })); });
   const h = await ch.newPage(), g = await cg.newPage(); hook(h); hook(g);

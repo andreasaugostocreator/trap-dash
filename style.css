@@ -856,6 +856,23 @@ button.want { animation: wantGlow .8s ease-in-out infinite; }
   .hud .timer::before { width: 14px; height: 12px; }
   .hud .medals .tscore, .hud .medals .deaths { font-size: 12px; }
 }
+/* the lobby's ready check: a green tick on the player's card */
+.player.isReady { background: #e4f3c8; }
+.player.isReady::after { content: '✓ Ready'; margin-left: 6px; font-size: 13px; font-weight: 700; color: #4a7a2e; white-space: nowrap; }
+/* connection bars */
+.sig { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; padding: 0 2px; vertical-align: middle; }
+.sig i { width: 4px; background: rgba(58, 36, 23, .35); box-shadow: 0 0 0 1px var(--ink); }
+.sig i:nth-child(1) { height: 5px; } .sig i:nth-child(2) { height: 8px; } .sig i:nth-child(3) { height: 11px; } .sig i:nth-child(4) { height: 14px; }
+.sig[data-n="1"] i:nth-child(-n+1) { background: #d9663f; }
+.sig[data-n="2"] i:nth-child(-n+2) { background: #f0be4a; }
+.sig[data-n="3"] i:nth-child(-n+3), .sig[data-n="4"] i { background: #7fb04e; }
+.sig[data-n="0"] { animation: sigLost 1s steps(2) infinite; }
+@keyframes sigLost { 50% { opacity: .35; } }
+.hud .sig { height: 18px; padding: 3px 4px; background: #f6e7c8; box-shadow: 0 0 0 3px #6b4226, 0 0 0 5px var(--ink); margin-right: 4px; }
+/* the gem counter in the top bar */
+.hud .medals .gems { color: var(--ink); text-shadow: none; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; gap: 5px; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; }
+.hud .medals .gems::before { content: ''; width: 18px; height: 18px; background: var(--gemImg) center / contain no-repeat; image-rendering: pixelated; }
+@container app (max-height: 500px) { .hud .medals .gems { font-size: 12px; } .hud .medals .gems::before { width: 14px; height: 14px; } }
 /* the runner picker */
 .charLine { margin: 0 0 4px; font-size: 15px; color: var(--muted); font-style: italic; min-height: 1.2em; }
 .swatch.hop canvas { animation: hop .45s cubic-bezier(.3, 1.6, .5, 1); }

@@ -37,7 +37,7 @@ for (const portrait of [false]) {   // landscape only now
   const lo = await page(phone(portrait));
   await lo.goto('http://localhost:8080/'); await lo.waitForTimeout(400); await lo.tap('text=Same screen'); await lo.tap('#levels button:has-text("Windy Works")'); await lo.tap('#startBtn'); await lo.waitForTimeout(3800);
   await check(lo, `same-screen-${tag}`);
-  const q = '?nop2p&relay=ws://127.0.0.1:8883';
+  const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
   const h = await page({ viewport: { width: 1280, height: 720 } }), g = await page(phone(portrait));
   await h.goto('http://localhost:8080/' + q); await g.goto('http://localhost:8080/' + q); await h.waitForTimeout(400);
   await h.click('text=Host a party'); await h.waitForFunction(() => document.getElementById('roomCode').textContent !== '----');

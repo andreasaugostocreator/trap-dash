@@ -1,7 +1,7 @@
 // Screens, the party flow and the game loop.
 // A match is played level by level: each player gets one run as the runner while the other works the traps,
 // then the faster runner wins the level. Online, the runner's device runs the world and streams it to the trapper.
-import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS, PHYS } from './config.js';
+import { DT, TIME_LIMIT, TILE, TRAPS, GADGETS, PHYS, GEM_BONUS } from './config.js';
 import { CHARS, charOf, charFrame, SPR } from './sprites.js';
 import { World } from './sim.js';
 import { LEVELS, THEMES } from './levels.js';
@@ -23,7 +23,7 @@ import { drawKnob, drawStick, KICON, TICON, PLANK, pixURL, woodFrame } from './k
 // the pixel wood every frame in the menus is cut from (see style.css: --woodImg)
 document.documentElement.style.setProperty('--woodImg', `url(${woodFrame()})`);
 document.documentElement.style.setProperty('--woodImgDark', `url(${woodFrame('#3a2a1e')})`);
-for (const k of ['coin', 'skull', 'clock']) document.documentElement.style.setProperty('--' + k + 'Img', `url(${pixURL(k)})`);   // the HUD's pixel medals
+for (const k of ['coin', 'skull', 'clock', 'gem']) document.documentElement.style.setProperty('--' + k + 'Img', `url(${pixURL(k)})`);   // the HUD's pixel medals
 // the tagline sign's pixel stars (see PLANK.star) — set once the icons are drawn, below
 // Pixel icons inside menu text: colour ones (PI) and the white button icons (PIW, darkened on paper buttons).
 const PI = (name, cls = 'pi') => `<img class="${cls}" alt="" src="${pixURL(name)}">`;
@@ -59,7 +59,7 @@ const NICK = ['Ace', 'Pixel', 'Dash', 'Zip', 'Jinx', 'Moxie', 'Turbo', 'Scout'];
 import { HATS, SCARVES, TINTS, SLOTS as COS_SLOTS, dressed, cleanCos, unlocked, setGemCounter } from './cosmetics.js';
 import { mapSize, pinX, pinY, paintMap, paintTrail } from './worldmap.js';
 let mapArt = null;
-import { stats, recordRun, recordCatch, recordTrapPoints, recordResult } from './stats.js';
+import { stats, recordRun, recordCatch, recordTrapPoints, recordResult, recordGems } from './stats.js';
 const me = store.get('me2', { name: NICK[Math.floor(Math.random() * NICK.length)] + Math.floor(Math.random() * 90 + 10), char: CHARS[Math.floor(Math.random() * CHARS.length)].id });
 me.cos = cleanCos(me.cos);
 setGemCounter(() => stats().gems);
@@ -461,6 +461,8 @@ net.onMessage = m => {
     finishRun(m.res);
   } else if (m.t === 'rematch' && run && run.phase === 'end') {
     voteRematch(other(mySide()));
+  } else if (m.t === 'lready' && isHost && !run) {
+    lobby.ready = { ...(lobby.ready || {}), b: !!m.on }; syncLobby(); openLobby(); bothReady();
   } else if (m.t === 'toLobby' && !isHost) {
     endRunView(); openLobby();
   } else if (m.t === 'bye') {
@@ -612,7 +614,7 @@ function beginMatchmade() {
   let n = 3;
   const tick = () => {
     if (mode !== 'online' || !players.b || run) return;
-    if (n === 0) { $('startBtn').click(); return; }
+    if (n === 0) { wipeThen(startFromLobby); return; }
     toast(`Matched with ${players.b.name}! Best of 3 starts in ${n}…`); n--; setTimeout(tick, 1000);
   };
   tick();
@@ -693,7 +695,7 @@ function openLobby() {
     b.style.left = pinX(i) + 'px'; b.style.top = pinY(i, MH) + 'px';
     b.innerHTML = `<i class="pinNum">${i + 1}</i><span>${esc(L.name)}</span><small class="stars">${starText(starsOf(L))}${best[L.id] ? ' · ' + best[L.id].toFixed(1) + 's' : ''}</small>`;
     b.disabled = online && !isHost;
-    b.onclick = () => { lobby.level = i; sfx.click(); syncLobby(); openLobby(); };
+    b.onclick = () => { lobby.level = i; unready(); sfx.click(); syncLobby(); openLobby(); };
     if (i === lobby.level) { const who = players[mySideOrA()] || players.a || { char: me.char }; const art = portrait(who, 'idle'); art.classList.add('pinRunner'); b.prepend(art); }
     inner.appendChild(b);
   });
@@ -712,7 +714,7 @@ function openLobby() {
     b.disabled = online && !isHost;
     b.onclick = () => {
       sfx.click(); b.disabled = true; b.textContent = '…';
-      genAsync(n).then(L => { lobby.level = L; syncLobby(); if (!run && !$('lobby').classList.contains('hidden')) openLobby(); });
+      genAsync(n).then(L => { lobby.level = L; unready(); syncLobby(); if (!run && !$('lobby').classList.contains('hidden')) openLobby(); });
     };
     rr.appendChild(b);
   }
@@ -734,7 +736,7 @@ function openLobby() {
     const b = document.createElement('button');
     b.textContent = label; b.className = !!lobby.bo3 === v ? 'on' : '';
     b.disabled = online && !isHost;
-    b.onclick = () => { lobby.bo3 = v; sfx.click(); syncLobby(); openLobby(); };
+    b.onclick = () => { lobby.bo3 = v; unready(); sfx.click(); syncLobby(); openLobby(); };
     ms.appendChild(b);
   }
   const seg = $('firstSeg'); seg.innerHTML = '';
@@ -742,15 +744,34 @@ function openLobby() {
     const b = document.createElement('button');
     b.textContent = players[s] ? players[s].name : '…'; b.className = lobby.first === s ? 'on' : '';
     b.disabled = online && !isHost;
-    b.onclick = () => { lobby.first = s; sfx.click(); syncLobby(); openLobby(); };
+    b.onclick = () => { lobby.first = s; unready(); sfx.click(); syncLobby(); openLobby(); };
     seg.appendChild(b);
   }
-  $('startBtn').disabled = !ready || (online && !isHost);
-  $('startBtn').textContent = online && !isHost ? 'Waiting for the host…' : 'Start!';
+  // online, both players say Ready (the host's Start is their Ready); the round starts the moment both have
+  const rd = lobby.ready || {}, mine = rd[mySide()], theirs = rd[other(mySide())], friend = players[other(mySide())];
+  $('startBtn').disabled = !ready;
+  $('startBtn').classList.toggle('want', !!(online && ready && theirs && !mine));
+  $('startBtn').textContent = !online ? 'Start!' : !ready ? 'Waiting for a friend…' : mine ? `Ready ✓ · waiting for ${friend.name}` : theirs ? `${friend.name} is ready! Ready?` : 'Ready!';
+  for (const s of ['a', 'b']) { const card = $('players').children[s === 'a' ? 0 : 1]; if (online && card && rd[s]) card.classList.add('isReady'); }
 }
 
-$('startBtn').onclick = () => wipeThen(startFromLobby);
-function startFromLobby() { unlockAudio(); sfx.click(); runs = []; if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); } hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
+$('startBtn').onclick = () => {
+  if (mode !== 'online' || AUTOREADY) return wipeThen(startFromLobby);
+  unlockAudio(); sfx.click();
+  const on = !(lobby.ready || {})[mySide()];
+  if (isHost) { lobby.ready = { ...(lobby.ready || {}), a: on }; syncLobby(); openLobby(); bothReady(); }
+  else { net.send({ t: 'lready', on }); lobby.ready = { ...(lobby.ready || {}), b: on }; openLobby(); }
+};
+const AUTOREADY = new URLSearchParams(location.search).has('autoready');   // tests: the host's Start starts at once
+function bothReady() {
+  const rd = lobby.ready || {};
+  if (!(isHost && mode === 'online' && players.b && rd.a && rd.b && !run)) return;
+  lobby.ready = {}; toast('Both ready!'); sfx.cp();
+  setTimeout(() => { if (mode === 'online' && players.b && !run) wipeThen(startFromLobby); }, 500);
+}
+// a change of level or match settings asks both players again
+const unready = () => { if (lobby.ready && (lobby.ready.a || lobby.ready.b)) lobby.ready = {}; };
+function startFromLobby() { unlockAudio(); sfx.click(); runs = []; lobby.ready = {}; if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); } hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
 $('leaveBtn').onclick = () => { sfx.click(); nav('title'); };
 $('shareBtn').onclick = async () => {
   const url = `${location.origin}${location.pathname}?join=${roomCode}`;
@@ -1490,7 +1511,7 @@ function showPreview() {
   const stars = L.stars || starsOf(L);
   const kinds = [...new Set(run.world.traps.map(t => t.kind))];
   el.innerHTML = `<div class="pvName">${esc(run.endless ? '∞ ' + L.name : L.name)} <span class="stars">${starText(stars)}</span>${R.weather ? `<small class="pvWx">· ${WEATHER_NAME[R.weather.kind]}</small>` : ''}</div>
-    <div class="pvTraps">${kinds.map(k => `<span class="pvTrap"><canvas class="pix" width="7" height="7" data-icon="${k}"></canvas>${esc(TRAPS[k].name)}</span>`).join('')}</div>
+    <div class="pvTraps">${kinds.map(k => `<span class="pvTrap"><canvas class="pix" width="7" height="7" data-icon="${k}"></canvas>${esc(TRAPS[k].name)}</span>`).join('')}${run.world.gems.length ? `<span class="pvTrap pvGems">${PI('gem')} ${run.world.gems.length} gems · −${GEM_BONUS}s each</span>` : ''}</div>
     <div class="pvRow${mine('runner') ? ' mine' : ''}"><b class="pvSide run">RUNNER</b>${icons('runner')}</div>
     <div class="pvRow${mine('trapper') ? ' mine' : ''}"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
     <div class="pvSkip"><small id="pvT"></small>${touchDevice ? '<button class="chip" id="pvSkipBtn">⏭ Skip</button>' : '<div class="pvHold"><span id="pvHoldBar"></span><b>Hold SPACE to skip</b></div>'}</div>`;
@@ -1559,6 +1580,7 @@ function finishRun(res) {
   // the profile's numbers: your own runs, and the trap points you scored on the other player's run
   if (mode !== 'tutorial') {
     const L = levelOf(run.level), iRan = mode === 'local' ? res.runner === 'a' : run.runnerHere;
+    if (iRan && res.gems) recordGems(res.gems);
     if (iRan) recordRun({ levelId: L.random ? null : L.id, levelName: L.name, time: res.time, finished: res.finished, deaths: res.deaths });
     else if (mode !== 'practice') recordTrapPoints(res.tp);
   }
@@ -1571,8 +1593,9 @@ function finishRun(res) {
 }
 
 function resultOf(world, runner) {
-  const p = world.player, span = Math.max(1, world.goal.x - world.start.x);
-  return { runner, time: Math.round(world.time * 10) / 10, deaths: p.deaths, finished: p.finished, tp: run.score.pts, tc: run.score.catches, ts: run.score.bestStreak,
+  const p = world.player, span = Math.max(1, world.goal.x - world.start.x), gems = world.gemsGot || 0;
+  // each gem takes GEM_BONUS seconds off a finished run's time
+  return { runner, gems, raw: Math.round(world.time * 10) / 10, time: Math.round(Math.max(0, world.time - (p.finished ? gems * GEM_BONUS : 0)) * 10) / 10, deaths: p.deaths, finished: p.finished, tp: run.score.pts, tc: run.score.catches, ts: run.score.bestStreak,
     progress: p.finished ? 100 : Math.max(0, Math.min(99, Math.round((p.best - world.start.x) / span * 100))) };
 }
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
@@ -1605,6 +1628,7 @@ function podium(r1, r2, win) {
       return `<div class="podCard${r === win ? ' win' : ''}"><b>${esc(p.name)}${r === win ? ' ' + PI('crown') : ''}</b>
         <div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}</i></div>
         <div class="pcRow"><span>${PI('warn')} Falls</span><i>${r.deaths}</i></div>
+        ${r.gems ? `<div class="pcRow"><span>${PI('gem')} Gems</span><i>${r.gems}<small>${r.finished ? ' · −' + (r.gems * GEM_BONUS).toFixed(1) + 's' : ''}</small></i></div>` : ''}
         ${tp != null ? `<div class="pcRow"><span>${PI('spikes')} Traps</span><i>${tp}<small> pts · ${o.tc || 0} ${o.tc === 1 ? 'catch' : 'catches'}</small></i></div>` : ''}</div>`;
     }).join('')}</div></div>${pb}`;
 }
@@ -1880,13 +1904,29 @@ function splash() {
 }
 if (SPLASH) splash();
 
+// ---------- connection bars (online): four pixel bars from the round-trip time, none when the other side is silent
+let sigT = 0;
+function updateSignal(dt) {
+  if ((sigT -= dt) > 0) return; sigT = 0.5;
+  const on = mode === 'online' && players.a && players.b && net.connected;
+  const quiet = on ? performance.now() - (net.lastHeard || 0) : 0, rtt = net.rtt || 999;
+  const n = !on ? 0 : quiet > 2500 ? 0 : rtt < 90 ? 4 : rtt < 180 ? 3 : rtt < 350 ? 2 : 1;
+  const text = !on ? '' : quiet > 2500 ? 'No signal from the other player' : `${net.link === 'direct' ? 'Direct link' : 'Relay link'} · ${Math.round(rtt)} ms`;
+  for (const id of ['sigHud', 'sigLobby']) {
+    const el = $(id); if (!el) continue;
+    el.classList.toggle('hidden', mode !== 'online' || !players.b || (id === 'sigHud' && !run));
+    if (el.dataset.n !== String(n)) el.dataset.n = n;
+    el.title = text;
+  }
+}
+
 // ---------- main loop
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;   // rAF time can trail performance.now() on the first frame
   watchSpeed(dt);
-  try { tickWipe(dt); tick(dt, now); } catch (e) { console.error(e); showError(e); }
+  try { tickWipe(dt); updateSignal(dt); tick(dt, now); } catch (e) { console.error(e); showError(e); }
 }
 function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 
@@ -1963,6 +2003,8 @@ function tick(dt, now) {
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
   $('timer').textContent = (E ? E.total + w.time : w.time).toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = (E ? E.deaths : 0) + w.player.deaths;
+  const gh = $('gemsHud'), gt = w.gems ? w.gems.length : 0;
+  gh.classList.toggle('hidden', !gt); if (gt) { const txt = `${w.gemsGot}/${gt}`; if (gh.textContent !== txt) gh.textContent = txt; }
 }
 
 // Safari tints the strip it keeps at the bottom of the screen with the page background: match what's at the bottom.

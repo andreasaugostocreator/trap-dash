@@ -70,6 +70,7 @@ export class World {
       }
       if (t.kind === 'saw') t.len = (t.x1 - t.x0) * TILE;
     }
+    this.placeGems();
     // Moving platforms travel until the next solid tile (at most MOVER.maxRange tiles): sideways to the right, or up.
     for (const m of this.movers) {
       let n = 0;
@@ -560,6 +561,7 @@ export class World {
       for (const o of this.checkpoints) if (o.x < c.x) o.on = true;
       c.on = true; p.cp = { x: c.x + 3, y: c.y + TILE - PHYS.h }; this.emit('cp', c.x + 8, c.y);
     }
+    if (this.gems.length) this.pickGems();
     if (this.goal && overlap(p.x, p.y, PHYS.w, PHYS.h, { x: this.goal.x + 2, y: this.goal.y - 24, w: 12, h: 40 })) {
       p.finished = true; this.emit('goal', this.goal.x + 8, this.goal.y); return;
     }
@@ -616,6 +618,32 @@ export class World {
     }
   }
 
+  // ---- Gems: optional pickups on the risky line over a trap (above spikes and flames, over a trapdoor, under a
+  // crusher). Each one takes GEM_BONUS seconds off the runner's time, and they add up for cosmetics. Placed from the
+  // level's traps alone, so both devices agree; never in the training level.
+  placeGems() {
+    this.gems = []; this.gemsGot = 0;
+    if (this.level.id === 'training' || this.level.noGems) return;
+    const free = (x, y) => x >= 0 && x < this.w && y >= 0 && y < this.h && !this.solidAt(x, y) && this.trapAt[y * this.w + x] < 0;
+    let lastX = -99;
+    for (const t of [...this.traps].sort((a, b) => a.x0 - b.x0)) {
+      const tx = Math.floor((t.x0 + t.x1) / 2);
+      let ty = null;
+      if (t.kind === 'spikes' || t.kind === 'flame' || t.kind === 'saw') ty = t.y - 2;
+      else if (t.kind === 'trapdoor') ty = t.y - 1;
+      else if (t.kind === 'crusher') ty = t.y + Math.round((t.drop || 0) / TILE);
+      if (ty == null || tx - lastX < 7 || !free(tx, ty)) continue;
+      if (t.kind !== 'crusher' && !free(tx, ty + 1) && t.kind !== 'trapdoor') continue;
+      this.gems.push({ x: tx * TILE + 8, y: ty * TILE + 8, got: false });
+      lastX = tx;
+      if (this.gems.length >= 8) break;
+    }
+  }
+  pickGems() {
+    const p = this.player;
+    for (const g of this.gems) if (!g.got && overlap(p.x, p.y, PHYS.w, PHYS.h, { x: g.x - 6, y: g.y - 6, w: 12, h: 12 })) { g.got = true; this.gemsGot++; this.emit('gem', g.x, g.y, this.gemsGot); }
+  }
+
   // ---- Networking: the runner's device sends this ~30 times a second, the trapper's device applies it.
   snapshot() {
     const p = this.player;
@@ -633,6 +661,7 @@ export class World {
       g: [gad('trapper'), gad('runner')],
       cp: this.checkpoints.map(c => c.on ? 1 : 0).join(''),
       cr: this.crumbles.length ? this.crumbles.map(c => c.state[0]).join('') : undefined,
+      gm: this.gems.length ? this.gems.map(g => g.got ? 1 : 0).join('') : undefined,
       ev,
     };
   }
@@ -647,6 +676,7 @@ export class World {
     this.shots = s.b; this.fx = s.fx || []; this.decoy = s.dc || null;
     if (s.g) ['trapper', 'runner'].forEach((side, j) => this.loadout[side].forEach((id, i) => { const g = this.gad[side][id]; if (g && s.g[j][i]) [g.n, g.cd] = s.g[j][i]; }));
     [...s.cp].forEach((c, i) => { if (this.checkpoints[i]) this.checkpoints[i].on = c === '1'; });
+    if (s.gm) { [...s.gm].forEach((c, i) => { if (this.gems[i]) this.gems[i].got = c === '1'; }); this.gemsGot = this.gems.filter(g => g.got).length; }
     if (s.cr) [...s.cr].forEach((c, i) => { const k = this.crumbles[i]; if (k) { const st = { o: 'ok', s: 'shake', g: 'gone' }[c]; if (st !== k.state) { k.state = st; k.t = 0; } } });
   }
 }

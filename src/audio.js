@@ -109,6 +109,7 @@ export const sfx = {
     tone(base * 2, 0.35, { vol: 0.07, delay: 0.21, type: 'triangle' });
     noise(0.12, { vol: 0.12, freq: 6000, delay: 0.02 });
   },
+  gem: (n = 1) => [0, 0.06, 0.12].forEach((d, i) => tone(1320 * Math.pow(1.06, Math.min(8, n - 1)) * [1, 1.5, 2][i], 0.12, { vol: 0.06, delay: d, type: i === 2 ? 'sine' : 'triangle' })),
   achieve: () => [659, 784, 988, 1319].forEach((f, i) => tone(f, 0.16, { vol: 0.09, delay: i * 0.08, type: 'triangle' })),
   step: (alt) => noise(0.035, { vol: 0.06, freq: alt ? 900 : 700, q: 2 }),
   whoosh: () => noise(0.3, { vol: 0.16, freq: 1800, q: 0.7 }),
@@ -133,6 +134,7 @@ export function playEvent([k, , , extra]) {
   if (k === 'fire') return (sfx[extra] || sfx.warn)();
   if (k === 'warn') return sfx.warn();
   if (k === 'gadget') return (sfx[extra] || sfx.click)();
+  if (k === 'gem') return sfx.gem(extra);
   if (k === 'poof' && extra === 'arrows') return;
   if (sfx[k]) sfx[k]();
 }

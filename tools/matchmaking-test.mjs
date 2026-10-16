@@ -3,7 +3,7 @@
 import { chromium } from 'playwright-core';
 const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
 const errs = [];
-const q = '?nop2p&relay=ws://127.0.0.1:8883';
+const q = '?nop2p&autoready&relay=ws://127.0.0.1:8883';
 const open = async () => { const c = await b.newContext({ viewport: { width: 844, height: 390 } }); const p = await c.newPage(); p.on('pageerror', e => errs.push(e.message)); await p.goto('http://localhost:8080/' + q); await p.waitForTimeout(3500); return p; };
 const [A, B] = [await open(), await open()];
 await A.click('[data-go="match"]'); await A.waitForTimeout(700);

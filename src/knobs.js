@@ -175,6 +175,7 @@ const PICON = {
   dice: ['KKKKKKKKK', 'KWWWWWWWK', 'KWKWWWWWK', 'KWWWWWWWK', 'KWWWKWWWK', 'KWWWWWWWK', 'KWWWWWKWK', 'KWWWWWWWK', 'KKKKKKKKK'],
   lock: ['..KKKKK..', '.KGKKKGK.', '.KGK.KGK.', 'KKKKKKKKK', 'KYYYYYYYK', 'KYYYKYYYK', 'KYYYKYYYK', 'KOOOOOOOK', 'KKKKKKKKK'],
   warn: ['....K....', '...KYK...', '...KYK...', '..KYKYK..', '..KYKYK..', '.KYYKYYK.', '.KYYYYYK.', 'KYYYKYYYK', 'KKKKKKKKK'],
+  gem: ['....K....', '...KBK...', '..KWBBK..', '.KWBBBBK.', 'KWBBBBBBK', '.KBBBBBK.', '..KBBBK..', '...KBK...', '....K....'],
   coin: ['...KKKKK...', '.KKYYYYYKK.', '.KYWYYYYOK.', 'KYWYYOYYYOK', 'KYYOOOOOYOK', 'KYYYOOOYYOK', 'KYYOYYYOYOK', 'KYYYYYYYOOK', '.KYYYYYOOK.', '.KKOOOOOKK.', '...KKKKK...'],
   skull: ['...KKKKK...', '.KKWWWWWKK.', '.KWWWWWWGK.', 'KWWKKWKKWGK', 'KWWKKWKKWGK', 'KWWWWKWWWGK', 'KWWWWWWWWGK', 'KWGKGKGKGGK', '.KWWWWWWGK.', '.KKGGGGGKK.', '...KKKKK...'],
   spikes: ['.........', '...K.....', '..KGK..K.', '..KWK.KGK', '.KWGGKKWK', '.KWGGKWGK', 'KWGGGKWGK', 'KKKKKKKKK', '.........'],
