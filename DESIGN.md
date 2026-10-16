@@ -437,3 +437,21 @@ so nobody waits on a stranger. The search screen shows your runner jogging, how 
 
 `tools/batchB-shots.mjs` checks the splash, the iris, the picker and the sparkles; `tools/hud-shots.mjs` shoots
 the top bar.
+
+## 21. Profile, wardrobe and the podium
+
+- **Profile card** (the runner plaque on the title) has three tabs: Runner (name and picker), Wardrobe and Stats.
+- **Wardrobe** (`src/cosmetics.js`): 9 hats, 5 scarves and 7 shirt colours. Each is unlocked by a trophy (the
+  crown by Champion, the witch hat by Ghostbuster, the red scarf by Gotcha…) or by gems collected along risky
+  routes. A locked item shows greyed with a padlock, and tapping it tells you what unlocks it. Cosmetics change
+  nothing in play. A dressed runner is a character object with its own id, so the sprite cache keeps every look
+  apart; `charFrame` draws the scarf round the neck and the hat over the top four rows of the head. Your look
+  travels with you online (`hi` carries `cos`; the host keeps it in the lobby, so both screens show it), and also
+  shows in the lobby, the ghost, the podium and the trophy screen.
+- **Stats** (`src/stats.js`): runs, flags reached, falls, catches, trap points, levels and matches won, trophies,
+  gems, the best time on each level (any mode), and the last few results with who you played.
+- **Podium results.** A finished level shows a little podium: the winner on the tall block, hopping and waving, the
+  other beside them (a tie puts both on top), then a stat card each (time or how far they got, falls, and what they
+  scored with the traps on the other run). On short screens the podium and the cards sit side by side.
+
+`tools/batchC-test.mjs` checks the wardrobe, the stats, the podium, the phone layout and cosmetics online.

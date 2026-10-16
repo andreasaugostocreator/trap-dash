@@ -192,7 +192,10 @@ export function charFrame(ch, frame, face = 1, bob = 0) {
     c = document.createElement('canvas'); c.width = 12; c.height = 16;
     const x = c.getContext('2d');
     x.drawImage(compile(BODIES[frame], pal), 0, 9);
-    x.drawImage(compile(HEADS[ch.id], pal), 0, bob);
+    x.drawImage(compile(HEADS[ch.base || ch.id], pal), 0, bob);
+    // cosmetics (src/cosmetics.js): a scarf round the neck, a hat over the top of the head
+    if (ch.scarf) x.drawImage(compile(ch.scarf.rows, { K: OUT, ...ch.scarf.pal }), 0, 8 + bob);
+    if (ch.hat) x.drawImage(compile(ch.hat.rows, { K: OUT, ...ch.hat.pal }), 0, bob);
     cache.set(key, c);
   }
   return face < 0 ? mirror(c, key + ':m') : c;

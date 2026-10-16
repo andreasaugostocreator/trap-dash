@@ -885,3 +885,68 @@ i.spark.big { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
 html.pixcursor, html.pixcursor body, html.pixcursor canvas#game { cursor: var(--curArrow), auto; }
 html.pixcursor button:not(:disabled), html.pixcursor input[type=range], html.pixcursor [data-go] { cursor: var(--curHand), pointer; }
 html.pixcursor input:not([type=range]) { cursor: text; }
+/* ---------- profile: tabs, wardrobe, stats */
+.profTabs { margin: 0 0 8px; }
+.wardHead { display: flex; align-items: center; gap: 10px; justify-content: center; margin-bottom: 6px; text-align: left; }
+.wardHead canvas { width: 64px; height: 72px; }
+.wardHead b { display: block; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 18px; }
+.wardHead small { color: var(--muted); font-size: 13px; }
+.wardRow { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.wardLab { width: 44px; flex: none; text-align: left; font-weight: 700; color: var(--muted); font-size: 14px; }
+.wardItems { display: flex; gap: 4px; flex-wrap: wrap; }
+button.ward { width: 40px; height: 44px; padding: 0; margin: 2px; background: #e8dcc0; display: flex; align-items: flex-end; justify-content: center; position: relative; }
+button.ward canvas { width: 32px; height: 36px; }
+button.ward.on { background: #f0be4a; }
+button.ward.locked canvas { filter: grayscale(1) brightness(.7); opacity: .55; }
+button.ward .wardLock { position: absolute; right: 1px; top: 1px; width: 14px; height: 14px; }
+.statCards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.stc { background: #fdf6e6; box-shadow: var(--frame); margin: 3px; padding: 3px 4px; }
+.stc b { display: block; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 18px; line-height: 1.1; }
+.stc b small { color: var(--muted); font-size: 12px; }
+.stc > small { color: var(--muted); font-size: 12px; }
+.bestList { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px 14px; text-align: left; font-size: 14px; }
+.bestList span { display: flex; justify-content: space-between; gap: 6px; border-bottom: 2px dotted #d8c6a4; }
+.bestList i { font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent { display: flex; flex-direction: column; gap: 3px; }
+.rc { display: flex; align-items: center; gap: 8px; font-size: 14px; text-align: left; background: #fdf6e6; box-shadow: var(--frame); margin: 0 3px; padding: 2px 6px; }
+.rc b { flex: none; width: 42px; font-size: 12px; text-transform: uppercase; }
+.rc.win b { color: #4a7a2e; } .rc.loss b { color: #b9503a; } .rc.tie b { color: #a9761c; }
+.rc span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc small { color: var(--muted); white-space: nowrap; }
+#profile .card { max-height: calc(100% - 8px); }
+/* ---------- the result podium */
+.podium { display: flex; justify-content: center; align-items: flex-end; gap: 4px; margin: 6px 0 0; height: 150px; }
+.pod { display: flex; flex-direction: column; align-items: center; width: 108px; }
+.podArt { height: 72px; display: flex; align-items: flex-end; }
+.podArt canvas { width: 64px; height: 72px; transition: transform .15s; }
+.podArt.up canvas { transform: translateY(-8px); }
+.podBlock { width: 100%; border: 10px solid transparent; border-image: var(--woodImg) 5 fill / 10px round; display: flex; align-items: center; justify-content: center; }
+.pod.p1 .podBlock { height: 70px; } .pod.p2 .podBlock { height: 42px; }
+.podBlock b { font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 26px; color: #a9761c; text-shadow: 0 2px 0 #fff3d0; }
+.pod.p2 .podBlock b { color: #8a7a66; font-size: 20px; }
+.podCards { display: flex; gap: 8px; justify-content: center; margin: 8px 0 4px; }
+.podCard { flex: 1; max-width: 250px; background: #fdf6e6; box-shadow: var(--frame); margin: 3px; padding: 4px 8px; text-align: left; }
+.podCard.win { background: #fff1c2; }
+.podCard > b { display: block; font-size: 17px; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcRow { display: flex; justify-content: space-between; gap: 6px; font-size: 14px; color: var(--muted); }
+.pcRow i { font-style: normal; color: var(--ink); font-weight: 700; }
+.pcRow i small { color: var(--muted); font-weight: 600; }
+@container app (max-height: 500px) {
+  .podium { height: 104px; } .podArt { height: 48px; } .podArt canvas { width: 40px; height: 45px; }
+  .pod { width: 84px; } .pod.p1 .podBlock { height: 50px; } .pod.p2 .podBlock { height: 32px; }
+  .podBlock { border-width: 8px; border-image-width: 8px; } .podBlock b { font-size: 18px; }
+  .pcRow { font-size: 12px; } .podCard > b { font-size: 15px; }
+  .statCards { grid-template-columns: repeat(5, 1fr); } .stc b { font-size: 15px; } .stc > small { font-size: 11px; }
+  .wardHead canvas { width: 40px; height: 45px; } button.ward { width: 34px; height: 38px; } button.ward canvas { width: 26px; height: 29px; }
+}
+.wardItems { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.wardItems::-webkit-scrollbar { display: none; }
+button.ward { flex: none; }
+.wardRow { min-width: 0; }
+@container app (max-height: 500px) {
+  .podScene { display: flex; align-items: flex-end; gap: 8px; justify-content: center; }
+  .podScene .podium { flex: none; margin: 0; }
+  .podScene .podCards { flex: 1; flex-direction: column; margin: 0; gap: 2px; max-width: 280px; }
+  .podCard { padding: 2px 6px; } .podCard > b { font-size: 14px; margin: 0; }
+  #profile .profTabs { margin-bottom: 4px; } .wardHead { margin-bottom: 2px; } .wardRow { margin: 2px 0; }
+}

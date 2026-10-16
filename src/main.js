@@ -56,7 +56,11 @@ const store = {
   set(k, v) { try { localStorage.setItem('trapdash-' + k, JSON.stringify(v)); } catch { /* private mode */ } },
 };
 const NICK = ['Ace', 'Pixel', 'Dash', 'Zip', 'Jinx', 'Moxie', 'Turbo', 'Scout'];
+import { HATS, SCARVES, TINTS, SLOTS as COS_SLOTS, dressed, cleanCos, unlocked, setGemCounter } from './cosmetics.js';
+import { stats, recordRun, recordCatch, recordTrapPoints, recordResult } from './stats.js';
 const me = store.get('me2', { name: NICK[Math.floor(Math.random() * NICK.length)] + Math.floor(Math.random() * 90 + 10), char: CHARS[Math.floor(Math.random() * CHARS.length)].id });
+me.cos = cleanCos(me.cos);
+setGemCounter(() => stats().gems);
 const saveMe = () => store.set('me2', me);
 const otherChar = id => CHARS[(CHARS.findIndex(c => c.id === id) + 1) % CHARS.length].id;
 
@@ -89,9 +93,9 @@ let toastT;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 3200); }
 
 // A character sprite as a small canvas (CSS scales it up with image-rendering: pixelated).
-function portrait(charId, frame = 'idle') {
+function portrait(who, frame = 'idle') {   // who: a character id, or a player { char, cos }
   const c = document.createElement('canvas'); c.width = 16; c.height = 18; c.className = 'pix';
-  c.getContext('2d').drawImage(charFrame(charOf(charId), frame, 1, 0), 2, 1);
+  c.getContext('2d').drawImage(charFrame(typeof who === 'string' ? charOf(who) : dressed(who), frame, 1, 0), 2, 1);
   return c;
 }
 
@@ -139,7 +143,8 @@ function logoLetter(word, k) {
     for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, () => drawKnob(c, { r: 12, pal, icon: TICON[icon] }));
   }
   document.documentElement.style.setProperty('--starImg', `url(${PLANK.star.toDataURL()})`);
-  $('profileBtn').onclick = () => { sfx.click(); show('profile'); };
+  $('profileBtn').onclick = () => { sfx.click(); profTab('runner'); show('profile'); };
+  for (const b of $('profTabs').children) b.onclick = () => { sfx.click(); profTab(b.dataset.ptab); };
   $('profileDone').onclick = () => { sfx.click(); if (welcoming) return welcomeStep2(); show('title'); buildTitle(); };
   // the small buttons get pixel icons too (no emoji: they'd break the pixel look)
   for (const [id, icon, text] of [['howBtn', 'help', 'How to play'], ['setBtn', 'gear', 'Settings'], ['itemsBtn', 'book', 'Items'], ['troBtn', 'trophy', 'Trophies']]) {
@@ -162,14 +167,15 @@ function animateTitle(dt) {
   const f = ['run0', 'run1', 'run2', 'run1'][Math.floor(titleAnimT * 10) % 4];
   const c = $('profileArt'), x = c.getContext('2d'); x.clearRect(0, 0, 12, 16);
   const [pf, pb] = titleAnimT % 8 < 2.4 ? runnerPose(titleAnimT, 0, false) : [f, Math.floor(titleAnimT * 2) % 2];
-  x.drawImage(charFrame(charOf(me.char), pf, 1, pb), 0, 0);
+  x.drawImage(charFrame(dressed(me), pf, 1, pb), 0, 0);
+  const wc = $('wardArt'); if (wc && !$('wardrobe').classList.contains('hidden')) { const wg = wc.getContext('2d'), [wf, wb] = runnerPose(titleAnimT, 0, false); wg.clearRect(0, 0, 16, 18); wg.drawImage(charFrame(dressed(me), wf, 1, wb), 2, 1); }
   if ($('profile').classList.contains('hidden')) return;
   [...document.querySelectorAll('#colors .swatch')].forEach((b, k) => {
     const cv = b.querySelector('canvas'), g = cv.getContext('2d'), id = CHARS[k] && CHARS[k].id, on = b.classList.contains('on');
     if (!id) return;
     const [fr, bob] = runnerPose(titleAnimT, k, on);
     const sig = fr + bob; if (cv.sig === sig) return; cv.sig = sig;
-    g.clearRect(0, 0, 16, 18); g.drawImage(charFrame(charOf(id), fr, 1, bob), 2, 1);
+    g.clearRect(0, 0, 16, 18); g.drawImage(charFrame(dressed({ char: id, cos: me.cos }), fr, 1, bob), 2, 1);
   });
 }
 try { document.fonts.load('bold 8px Silkscreen'); } catch { /* old browser */ }
@@ -181,12 +187,12 @@ function welcome() {
   welcoming = true; saveMe();
   $('profile').querySelector('h2').textContent = 'Welcome! Who\'s running?';
   $('profileDone').textContent = 'Next';
-  $('profileStep').classList.remove('hidden');
+  $('profileStep').classList.remove('hidden'); $('profTabs').classList.add('hidden');
   buildTitle(); show('profile');
 }
 function welcomeStep2() {
   welcoming = false;
-  $('profile').querySelector('h2').textContent = 'Your runner'; $('profileDone').textContent = 'Done'; $('profileStep').classList.add('hidden');
+  $('profile').querySelector('h2').textContent = 'Your runner'; $('profileDone').textContent = 'Done'; $('profileStep').classList.add('hidden'); $('profTabs').classList.remove('hidden');
   show('title'); buildTitle();
   panel(`<h2>Nice to meet you, ${esc(me.name)}!</h2><p class="wStep">Step 2 of 2</p>
     <p>One player runs to the flag, the other springs the traps. Then you swap. Want a quick training first?</p>
@@ -201,6 +207,52 @@ if (firstLaunch) setTimeout(welcome, 3400);
 if (/iP(hone|od)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches)
   setTimeout(() => toast('Tip: Share → Add to Home Screen plays in full screen'), 1500);
 
+// ---------- the profile card: Runner (name + picker), Wardrobe (cosmetics, unlocked by trophies and gems), Stats
+function profTab(tab) {
+  for (const b of $('profTabs').children) b.classList.toggle('on', b.dataset.ptab === tab);
+  for (const el of $('profile').querySelectorAll('[data-pane]')) el.classList.toggle('hidden', el.dataset.pane !== tab);
+  if (tab === 'wardrobe') buildWardrobe();
+  if (tab === 'stats') buildStats();
+}
+const needText = item => item.need ? `Win the trophy “${(ACHIEVEMENTS.find(a => a.id === item.need) || {}).name}”` : `Collect ${item.gems} gems (you have ${stats().gems})`;
+function buildWardrobe() {
+  const box = $('wardrobe'); box.innerHTML = '';
+  const head = document.createElement('div'); head.className = 'wardHead';
+  const art = document.createElement('canvas'); art.id = 'wardArt'; art.className = 'pix'; art.width = 16; art.height = 18;
+  const owned = Object.values(COS_SLOTS).reduce((n, set) => n + Object.values(set).filter(unlocked).length, 0), total = Object.values(COS_SLOTS).reduce((n, set) => n + Object.keys(set).length, 0);
+  head.append(art); head.insertAdjacentHTML('beforeend', `<div><b>${esc(me.name)}</b><small>${owned} of ${total} unlocked · trophies and gems unlock more</small></div>`);
+  box.append(head);
+  for (const [slot, set, label] of [['hat', HATS, 'Hat'], ['scarf', SCARVES, 'Scarf'], ['tint', TINTS, 'Shirt']]) {
+    const row = document.createElement('div'); row.className = 'wardRow';
+    row.innerHTML = `<span class="wardLab">${label}</span>`;
+    const items = document.createElement('div'); items.className = 'wardItems';
+    for (const id of [null, ...Object.keys(set)]) {
+      const item = id && set[id], open = !id || unlocked(item), on = (me.cos[slot] || null) === id;
+      const b = document.createElement('button'); b.className = 'ward' + (on ? ' on' : '') + (open ? '' : ' locked');
+      b.title = id ? item.name + (open ? '' : ' · ' + needText(item)) : 'None';
+      b.appendChild(portrait({ char: me.char, cos: id ? { [slot]: id } : {} }));
+      if (!open) b.insertAdjacentHTML('beforeend', PI('lock', 'pi wardLock'));
+      b.onclick = () => {
+        if (!open) { sfx.denied(); toast(`${item.name}: ${needText(item)} to unlock.`); return; }
+        sfx.click(); me.cos = { ...me.cos }; if (id) me.cos[slot] = id; else delete me.cos[slot]; saveMe(); buildWardrobe(); buildTitle();
+      };
+      items.appendChild(b);
+    }
+    row.appendChild(items); box.appendChild(row);
+    const on = items.querySelector('.on'); if (on) items.scrollLeft = Math.max(0, on.offsetLeft - items.offsetLeft - items.clientWidth / 2 + on.offsetWidth / 2);
+  }
+}
+const fmtT = t => t.toFixed(1) + 's';
+function buildStats() {
+  const s = stats(), box = $('statsPane');
+  const cards = [['Runs', s.runs], ['Flags reached', s.flags], ['Falls', s.falls], ['Catches', s.catches], ['Trap points', s.trapPts],
+    ['Levels won', `${s.levelsWon}<small> / ${s.levelsWon + s.levelsLost}</small>`], ['Matches won', `${s.matchesWon}<small> / ${s.matchesPlayed}</small>`], ['Trophies', `${achCount()}<small> / ${ACHIEVEMENTS.length}</small>`], ['Gems', s.gems]];
+  const best = Object.values(s.best).sort((a, b) => a.name.localeCompare(b.name)).slice(0, 12);
+  const OUT = { win: ['Won', 'win'], loss: ['Lost', 'loss'], tie: ['Tie', 'tie'], done: ['Done', 'tie'] };
+  box.innerHTML = `<div class="statCards">${cards.map(([k, v]) => `<div class="stc"><b>${v}</b><small>${k}</small></div>`).join('')}</div>
+    <h3>Best times</h3>${best.length ? `<div class="bestList">${best.map(b => `<span><i>${esc(b.name)}</i><b>${fmtT(b.t)}</b></span>`).join('')}</div>` : '<p class="status">Reach a flag to set one.</p>'}
+    <h3>Recent</h3>${s.recent.length ? `<div class="recent">${s.recent.slice(0, 6).map(r => `<div class="rc ${(OUT[r.outcome] || OUT.done)[1]}"><b>${(OUT[r.outcome] || OUT.done)[0]}</b><span>${r.kind === 'match' ? 'Match' : esc(r.level || '')}${r.opp ? ' vs ' + esc(r.opp) : ''}</span><small>${esc(r.score || '')}</small></div>`).join('')}</div>` : '<p class="status">Nothing yet: go play!</p>'}`;
+}
 function buildTitle() {
   offerRejoin();
   $('name').value = me.name;
@@ -209,7 +261,7 @@ function buildTitle() {
   for (const c of CHARS) {
     const b = document.createElement('button');
     b.className = 'swatch' + (c.id === me.char ? ' on' : ''); b.title = c.name; b.setAttribute('aria-label', c.name);
-    b.appendChild(portrait(c.id, c.id === me.char ? 'jump' : 'idle'));
+    b.appendChild(portrait({ char: c.id, cos: me.cos }, c.id === me.char ? 'jump' : 'idle'));
     b.onclick = () => { const was = me.char; me.char = c.id; saveMe(); sfx.click(); if (was !== c.id) { pickT = titleAnimT; sfx.jump(); } buildTitle(); };
     box.appendChild(b);
   }
@@ -299,12 +351,12 @@ function nav(where) {
   if (where === 'match') return openMatchmaking();
   if (where === 'local') {
     mode = 'local'; isHost = true;
-    players = { a: { name: me.name, char: me.char }, b: { name: 'Player 2', char: otherChar(me.char) } };
+    players = { a: { name: me.name, char: me.char, cos: me.cos }, b: { name: 'Player 2', char: otherChar(me.char) } };
     score = { a: 0, b: 0 }; loadLobbyPrefs(); openLobby(); return;
   }
   if (where === 'practice') {
     mode = 'practice'; isHost = true;
-    players = { a: { name: me.name, char: me.char }, b: { name: 'Trap Bot', char: otherChar(me.char) } };
+    players = { a: { name: me.name, char: me.char, cos: me.cos }, b: { name: 'Trap Bot', char: otherChar(me.char) } };
     score = { a: 0, b: 0 }; loadLobbyPrefs(); openLobby(); return;
   }
 }
@@ -312,7 +364,7 @@ function nav(where) {
 // ---------- online
 async function hostParty() {
   mode = 'online'; isHost = true; score = { a: 0, b: 0 };
-  players = { a: { name: me.name, char: me.char }, b: null };
+  players = { a: { name: me.name, char: me.char, cos: me.cos }, b: null };
   roomCode = ''; loadLobbyPrefs();
   openLobby();
   $('lobbyStatus').textContent = 'Opening a room…';
@@ -351,8 +403,8 @@ $('joinGo').onclick = async () => {
   try {
     await net.join(code);
     saveSession();
-    net.send({ t: 'hi', name: me.name, char: me.char });
-    players = { a: null, b: { name: me.name, char: me.char } };
+    net.send({ t: 'hi', name: me.name, char: me.char, cos: me.cos });
+    players = { a: null, b: { name: me.name, char: me.char, cos: me.cos } };
     openLobby();
   } catch (e) {
     console.warn(e);
@@ -368,7 +420,7 @@ net.onMessage = m => {
   if (m.t === 'hi' && isHost) {
     const char = charOf(m.char).id === players.a.char ? otherChar(players.a.char) : charOf(m.char).id;
     const back = m.rejoin && players.b;
-    players.b = { name: String(m.name || 'Friend').slice(0, 12), char };
+    players.b = { name: String(m.name || 'Friend').slice(0, 12), char, cos: cleanCos(m.cos, false) };
     if (!back && !(m.rejoin && restoredScore)) { score = { a: 0, b: 0 }; runs = []; }
     restoredScore = false; saveSession();
     if (back && run && performance.now() - lastRestart > 3000) restartRound();
@@ -450,8 +502,8 @@ async function guestRejoin(fromReload) {
       await net.join(code, gid);
       netBanner(null); toast('Reconnected!'); sfx.cp();
       saveSession();
-      if (fromReload) players = { a: null, b: { name: me.name, char: me.char } };
-      net.send({ t: 'hi', name: me.name, char: me.char, rejoin: true });   // also tells a host who reopened the party who's back
+      if (fromReload) players = { a: null, b: { name: me.name, char: me.char, cos: me.cos } };
+      net.send({ t: 'hi', name: me.name, char: me.char, cos: me.cos, rejoin: true });   // also tells a host who reopened the party who's back
       return true;
     } catch (e) {
       if (e && e.type === 'full') break;
@@ -480,7 +532,7 @@ async function rejoinParty(s, auto = false) {
   unlockAudio();
   if (s.role === 'host') {
     mode = 'online'; isHost = true; score = s.score || { a: 0, b: 0 }; restoredScore = true;
-    players = { a: { name: me.name, char: me.char }, b: null }; roomCode = '';
+    players = { a: { name: me.name, char: me.char, cos: me.cos }, b: null }; roomCode = '';
     openLobby(); $('lobbyStatus').textContent = `Reopening party ${s.code}…`;
     try {
       roomCode = await net.host(s.code);
@@ -522,7 +574,7 @@ let matchmade = false, mmArtT = 0;
 const mm = new Matchmaker({
   async host() {   // open a room quietly; the lobby shows once the other player says hi
     mode = 'online'; isHost = true; matchmade = true; score = { a: 0, b: 0 }; runs = [];
-    players = { a: { name: me.name, char: me.char }, b: null };
+    players = { a: { name: me.name, char: me.char, cos: me.cos }, b: null };
     roomCode = await net.host(); saveSession(); return roomCode;
   },
   unhost() { if (mode === 'online' && isHost && !players.b) { net.close(); mode = null; } },
@@ -531,8 +583,8 @@ const mm = new Matchmaker({
     try {
       await net.join(code);
       mm.matched(); saveSession();
-      net.send({ t: 'hi', name: me.name, char: me.char });
-      players = { a: null, b: { name: me.name, char: me.char } };
+      net.send({ t: 'hi', name: me.name, char: me.char, cos: me.cos });
+      players = { a: null, b: { name: me.name, char: me.char, cos: me.cos } };
       openLobby(); toast(`Matched with ${name || 'a player'}!`); sfx.cp();
     } catch { mode = null; matchmade = false; mm.start({ name: me.name }); }
   },
@@ -611,7 +663,7 @@ function openLobby() {
     const p = players[s], d = document.createElement('div');
     if (!p) { d.className = 'player empty'; d.textContent = 'Waiting for a friend…'; box.appendChild(d); continue; }
     d.className = 'player';
-    d.appendChild(portrait(p.char));
+    d.appendChild(portrait(p));
     const nm = document.createElement('b'); nm.textContent = p.name + (online && s === mySide() ? ' (you)' : ''); d.appendChild(nm);
     if (mode === 'local' && s === 'b') {   // let player 2 rename
       nm.contentEditable = 'true'; nm.spellcheck = false; nm.style.userSelect = 'text';
@@ -1189,7 +1241,7 @@ function layoutControls() {
 function startTutorial(role) {
   unlockAudio(); hidePanel();
   mode = 'tutorial'; isHost = true;
-  players = { a: { name: me.name, char: me.char }, b: { name: 'Coach Bot', char: otherChar(me.char) } };
+  players = { a: { name: me.name, char: me.char, cos: me.cos }, b: { name: 'Coach Bot', char: otherChar(me.char) } };
   score = { a: 0, b: 0 }; runs = [];
   startRun(TRAINING, role === 'runner' ? 'a' : 'b', 1, null, role);
 }
@@ -1210,7 +1262,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   run = {
     level, runner, n, world, phase: 'count', countT: 3.2, previewT: 0, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
     runnerHere, trapperHere: mode === 'local' || (online && !runnerHere) || (mode === 'tutorial' && !runnerHere), simOwner: runnerHere || mode === 'tutorial', held: new Map(),
-    bot: mode === 'practice' ? new Bot(0.35) : null, colors: charOf(players[runner].char), paused: false, endT: 0, hintT: 5, endless,
+    bot: mode === 'practice' ? new Bot(0.35) : null, colors: dressed(players[runner]), paused: false, endT: 0, hintT: 5, endless,
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
   if (tutRole) { run.tut = new Tutorial(tutRole, touchDevice, kind => { const i = (run.slots || []).findIndex(t => t && t.kind === kind); return i < 0 ? '' : i + 1; }); run.countT = 1.5; }
@@ -1337,6 +1389,7 @@ $('itemsBtn').onclick = () => { sfx.click(); openGuide(hidePanel); };
 // ---------- the trapper's score: a big gold popup for every catch, combos stack up
 function onCatch(credit) {
   const r = run.score.catch(credit, run.world.time), mine = run.trapperHere;
+  if (mine && run.bot == null && !(mode === 'local' && run.runner === 'a') && mode !== 'tutorial') recordCatch();
   if (mine && run.bot == null) {
     achieve('first_catch');
     if (credit === 'assist') achieve('assist');
@@ -1478,7 +1531,13 @@ function finishRun(res) {
     if (L.random && L.stars === 3) achieve('daredevil');
     if (run.ghost && res.time < run.ghost.trail.length / 30) achieve('ghostbuster');
   }
-  if (res.trail) lastGhost = { key: levelKey(run.level), trail: res.trail, charObj: charOf(players[res.runner].char) };
+  // the profile's numbers: your own runs, and the trap points you scored on the other player's run
+  if (mode !== 'tutorial') {
+    const L = levelOf(run.level), iRan = mode === 'local' ? res.runner === 'a' : run.runnerHere;
+    if (iRan) recordRun({ levelId: L.random ? null : L.id, levelName: L.name, time: res.time, finished: res.finished, deaths: res.deaths });
+    else if (mode !== 'practice') recordTrapPoints(res.tp);
+  }
+  if (res.trail) lastGhost = { key: levelKey(run.level), trail: res.trail, charObj: dressed(players[res.runner]) };
   if (mode === 'online' && run.simOwner) net.send({ t: 'done', res });
   runs.push(res);
   for (const id of ['hint', 'pad', 'padTop']) $(id).classList.add('hidden');
@@ -1494,7 +1553,7 @@ function resultOf(world, runner) {
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
 function line(r, win) {
   const p = players[r.runner];
-  return `<div class="line${win ? ' win' : ''}" data-portrait="${p.char}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
+  return `<div class="line${win ? ' win' : ''}" data-portrait="${r.runner}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
 }
 // Who trapped best this level: the trapper of each run is the other player.
 function trapKing(r1, r2) {
@@ -1507,6 +1566,35 @@ function trapKing(r1, r2) {
   return `<div class="trapKing"><div class="tkTitle">${PI('spikes')} Trap points</div>${[a, b].map(t => `<div class="tkRow${t === k ? ' king' : ''}"><span>${esc(players[t.who].name)}${t === k ? ' ' + PI('crown') : ''}</span><small>${t.c} ${t.c === 1 ? 'catch' : 'catches'} · ${titleFor(t.pts)}</small><b>${t.pts}</b></div>`).join('')}${pb}</div>`;
 }
 const mySideOrA = () => mode === 'online' ? mySide() : 'a';
+// The level result as a little podium scene: the winner on the tall block (cheering), the other beside them, and a
+// stat card each: run time, falls, and what they scored with the traps on the other run.
+function podium(r1, r2, win) {
+  const order = win ? [win, win === r1 ? r2 : r1] : [r1, r2], other = r => (r === r1 ? r2 : r1);
+  const pb = trapKing(r1, r2).includes('personal best') ? '<div class="pb">New trap personal best!</div>' : '';
+  return `<div class="podScene"><div class="podium">${order.map((r, i) => {
+      const place = !win ? 1 : i + 1, p = players[r.runner];
+      return `<div class="pod p${place}"><div class="podArt" data-pod="${r.runner}" data-win="${r === win ? 1 : 0}"></div><div class="podBlock"><b>${place}</b></div></div>`;
+    }).join('')}</div>
+    <div class="podCards">${order.map(r => {
+      const o = other(r), p = players[r.runner], tp = o && o.tp != null ? o.tp : null;
+      return `<div class="podCard${r === win ? ' win' : ''}"><b>${esc(p.name)}${r === win ? ' ' + PI('crown') : ''}</b>
+        <div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}</i></div>
+        <div class="pcRow"><span>${PI('warn')} Falls</span><i>${r.deaths}</i></div>
+        ${tp != null ? `<div class="pcRow"><span>${PI('spikes')} Traps</span><i>${tp}<small> pts · ${o.tc || 0} ${o.tc === 1 ? 'catch' : 'catches'}</small></i></div>` : ''}</div>`;
+    }).join('')}</div></div>${pb}`;
+}
+// the podium runners: the winner hops and waves, the other one stands and breathes
+function animatePodium(t) {
+  for (const el of document.querySelectorAll('#panel:not(.hidden) .podArt')) {
+    const p = players[el.dataset.pod]; if (!p) continue;
+    let c = el.querySelector('canvas'); if (!c) { c = document.createElement('canvas'); c.width = 16; c.height = 18; c.className = 'pix'; el.appendChild(c); }
+    const win = el.dataset.win === '1', ph = t % 2.4;
+    const [fr, bob] = win ? (ph < 0.5 ? ['jump', 0] : ph < 1.6 ? [Math.floor(ph * 5) % 2 ? 'wave1' : 'wave0', 0] : ['idle', Math.floor(t * 2) % 2]) : ['idle', Math.floor(t * 1.5) % 2];
+    el.classList.toggle('up', win && ph < 0.5);
+    const sig = fr + bob; if (c.sig === sig) continue; c.sig = sig;
+    const g = c.getContext('2d'); g.clearRect(0, 0, 16, 18); g.drawImage(charFrame(dressed(p), fr, 1, bob), 2, 1);
+  }
+}
 const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.progress > y.progress;
 
 function showRunResult(res) {
@@ -1528,6 +1616,7 @@ function showRunResult(res) {
   if (mode === 'practice') {
     const best = store.get('best', {}), prev = L.random ? null : best[L.id];
     const record = res.finished && (!prev || res.time < prev);
+    if (!run.counted) { run.counted = true; recordResult({ kind: 'level', mode, level: L.name, outcome: 'done', score: res.finished ? 'flag in ' + fmt(res) : 'out of time · ' + fmt(res) }); }
     if (record && !L.random) { best[L.id] = res.time; store.set('best', best); }
     panel(`<div class="big-emoji">${PI(res.finished ? 'flag' : 'clock', 'bigpi')}</div><h2>${res.finished ? 'You made it!' : 'Out of time'}</h2>
       <div class="result">${line(res, false)}</div>
@@ -1552,13 +1641,16 @@ function showRunResult(res) {
   const tie = r1 && r2 && !better(r1, r2) && !better(r2, r1);
   const win = tie ? null : better(r1, r2) ? r1 : r2;
   if (win && !run.scored) { score[win.runner]++; run.scored = true; }
-  if (!run.counted) { run.counted = true; if (bump('levels') >= 10) achieve('rivals'); }
+  if (!run.counted) {
+    run.counted = true; if (bump('levels') >= 10) achieve('rivals');
+    const mine = mySideOrA();
+    recordResult({ kind: 'level', mode, level: L.name, opp: players[other(mine)].name, outcome: tie ? 'tie' : win.runner === mine ? 'win' : 'loss', score: `${fmt(runs.slice(-2).find(r => r.runner === mine) || r1)} vs ${fmt(runs.slice(-2).find(r => r.runner !== mine) || r2)}` });
+  }
   if (lobby.bo3 && win && score[win.runner] >= 2) return trophyScreen(win.runner, r1, r2);
   const nextLevel = controls ? nextOf(run.level) : null;
   const firstNext = other(r1.runner);   // whoever ran second this time runs first next time
   panel(`<div class="big-emoji">${PI(tie ? 'flag' : 'trophy', 'bigpi')}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
-    <div class="result">${[r1, r2].map(r => line(r, r === win)).join('')}</div>
-    ${trapKing(r1, r2)}
+    ${podium(r1, r2, win)}
     <p>Score: ${esc(players.a.name)} <b>${score.a}</b> – <b>${score.b}</b> ${esc(players.b.name)}</p>
     <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(nextLevel.name || levelOf(nextLevel).name)}</button>` : ''}
       <div class="row"><button class="mid gold" id="again">Rematch</button>${controls ? `<button class="mid" id="toLobby">Lobby</button>` : ''}</div>
@@ -1599,8 +1691,9 @@ function trophyScreen(winner, r1, r2) {
   const controls = mode !== 'online' || isHost, loser = other(winner);
   sfx.goal(); buzz([60, 40, 60, 40, 120]);
   if (mode !== 'online' || winner === mySide()) achieve('champion');
+  if (!run.matchCounted) { run.matchCounted = true; recordResult({ kind: 'match', mode, opp: players[other(mySideOrA())].name, outcome: winner === mySideOrA() ? 'win' : 'loss', score: `${score[mySideOrA()]}–${score[other(mySideOrA())]}` }); }
   panel(`<div class="trophy">${PI('trophy', 'bigpi')}</div><h2>${esc(players[winner].name)} wins the match!</h2>
-    <div class="champ" data-portrait="${players[winner].char}"></div>
+    <div class="champ" data-portrait="${winner}"></div>
     <p class="matchScore"><b>${score[winner]}</b> – <b>${score[loser]}</b></p>
     ${trapKing(r1, r2)}
     <div class="buttons"><button class="big gold" id="again">Rematch</button>${controls ? `<button class="mid" id="toLobby">Lobby</button>` : ''}${rematchNote()}</div>`);
@@ -1631,7 +1724,7 @@ function panel(html) {
   const was = !$('panel').classList.contains('hidden');
   $('panelCard').innerHTML = html; $('panel').classList.remove('hidden'); $('panelCard').classList.remove('wide');
   if (!was) swingIn($('panelCard'));
-  for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(el.dataset.portrait));
+  for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(players[el.dataset.portrait] || el.dataset.portrait));
 }
 function hidePanel() { $('panel').classList.add('hidden'); }
 
@@ -1839,6 +1932,7 @@ function tick(dt, now) {
   if (run.ambT <= 0) { run.ambT = 3 + Math.random() * 6; const th = w.level.theme; (th === 'night' || th === 'dusk' || th === 'haunted' ? sfx.cricket : th === 'lava' || th === 'ice' ? sfx.drip : sfx.chirp)(); }
   updateGadgets();
   tickTips(dt);
+  if (run.phase === 'end') animatePodium(performance.now() / 1000);
   if (run.trapperHere) updateTrapBar();
   R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, slots: run.trapperHere ? run.slots : null, slotColors: SLOT_COLORS, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;

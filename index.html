@@ -59,7 +59,10 @@
   <div class="card">
     <h2>Your runner</h2>
     <p class="wStep hidden" id="profileStep">Step 1 of 2 · pick a name and a runner</p>
-    <div class="me">
+    <div class="seg profTabs" id="profTabs"><button data-ptab="runner" class="on">Runner</button><button data-ptab="wardrobe">Wardrobe</button><button data-ptab="stats">Stats</button></div>
+    <div class="wardrobe hidden" data-pane="wardrobe" id="wardrobe"></div>
+    <div class="statsPane hidden" data-pane="stats" id="statsPane"></div>
+    <div class="me" data-pane="runner">
       <label>Your name <input id="name" maxlength="12" autocomplete="off" spellcheck="false"></label>
       <div class="pickLabel">Runner: <b id="charName"></b></div>
       <p class="charLine" id="charLine"></p>
