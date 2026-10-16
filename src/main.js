@@ -23,6 +23,7 @@ import { drawKnob, drawStick, KICON, TICON, PLANK, pixURL, woodFrame } from './k
 // the pixel wood every frame in the menus is cut from (see style.css: --woodImg)
 document.documentElement.style.setProperty('--woodImg', `url(${woodFrame()})`);
 document.documentElement.style.setProperty('--woodImgDark', `url(${woodFrame('#3a2a1e')})`);
+for (const k of ['coin', 'skull', 'clock']) document.documentElement.style.setProperty('--' + k + 'Img', `url(${pixURL(k)})`);   // the HUD's pixel medals
 // the tagline sign's pixel stars (see PLANK.star) — set once the icons are drawn, below
 // Pixel icons inside menu text: colour ones (PI) and the white button icons (PIW, darkened on paper buttons).
 const PI = (name, cls = 'pi') => `<img class="${cls}" alt="" src="${pixURL(name)}">`;
@@ -76,8 +77,14 @@ const other = s => (s === 'a' ? 'b' : 'a');
 
 // ---------- screens
 function show(id) {
-  for (const s of document.querySelectorAll('.screen')) s.classList.toggle('hidden', s.id !== id);
+  for (const s of document.querySelectorAll('.screen')) {
+    const was = !s.classList.contains('hidden');
+    s.classList.toggle('hidden', s.id !== id);
+    if (s.id === id && !was) swingIn(s.querySelector('.card'));
+  }
 }
+// Cards arrive like a wooden sign: they drop in on their ropes and swing to a stop.
+function swingIn(card) { if (!card) return; card.classList.remove('swing'); void card.offsetWidth; card.classList.add('swing'); }
 let toastT;
 function toast(msg) { const t = $('toast'); t.textContent = msg; t.classList.remove('hidden'); clearTimeout(toastT); toastT = setTimeout(() => t.classList.add('hidden'), 3200); }
 
@@ -141,14 +148,29 @@ function logoLetter(word, k) {
     b.textContent = text; b.prepend(c);
   }
 })();
-let titleAnimT = 0;
+let titleAnimT = 0, pickT = -9;
+// The runners are alive: they breathe, now and then one waves, and the one you pick hops for joy.
+function runnerPose(t, k, picked) {
+  if (picked && t - pickT < 0.45) return ['jump', 0];
+  const cyc = (t + k * 1.7) % 6.5;   // each runner waves on its own schedule
+  if (cyc < 1.2) return [Math.floor(cyc * 5) % 2 ? 'wave1' : 'wave0', 0];
+  return ['idle', Math.floor(t * 1.6 + k * 0.5) % 2];
+}
 function animateTitle(dt) {
   if ($('title').classList.contains('hidden') && $('profile').classList.contains('hidden')) return;
   titleAnimT += dt;
   const f = ['run0', 'run1', 'run2', 'run1'][Math.floor(titleAnimT * 10) % 4];
-  const c = $('profileArt'), x = c.getContext('2d'); x.clearRect(0, 0, 12, 16); x.drawImage(charFrame(charOf(me.char), titleAnimT % 4 < 2.4 ? 'idle' : f, 1, Math.floor(titleAnimT * 2) % 2), 0, 0);
-  const on = document.querySelector('.swatch.on canvas');
-  if (on) { const y = on.getContext('2d'); y.clearRect(0, 0, 16, 18); y.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1); }
+  const c = $('profileArt'), x = c.getContext('2d'); x.clearRect(0, 0, 12, 16);
+  const [pf, pb] = titleAnimT % 8 < 2.4 ? runnerPose(titleAnimT, 0, false) : [f, Math.floor(titleAnimT * 2) % 2];
+  x.drawImage(charFrame(charOf(me.char), pf, 1, pb), 0, 0);
+  if ($('profile').classList.contains('hidden')) return;
+  [...document.querySelectorAll('#colors .swatch')].forEach((b, k) => {
+    const cv = b.querySelector('canvas'), g = cv.getContext('2d'), id = CHARS[k] && CHARS[k].id, on = b.classList.contains('on');
+    if (!id) return;
+    const [fr, bob] = runnerPose(titleAnimT, k, on);
+    const sig = fr + bob; if (cv.sig === sig) return; cv.sig = sig;
+    g.clearRect(0, 0, 16, 18); g.drawImage(charFrame(charOf(id), fr, 1, bob), 2, 1);
+  });
 }
 try { document.fonts.load('bold 8px Silkscreen'); } catch { /* old browser */ }
 // First launch: two quick steps, your name and runner, then an offer to try the training (or just play).
@@ -188,10 +210,12 @@ function buildTitle() {
     const b = document.createElement('button');
     b.className = 'swatch' + (c.id === me.char ? ' on' : ''); b.title = c.name; b.setAttribute('aria-label', c.name);
     b.appendChild(portrait(c.id, c.id === me.char ? 'jump' : 'idle'));
-    b.onclick = () => { me.char = c.id; saveMe(); sfx.click(); buildTitle(); };
+    b.onclick = () => { const was = me.char; me.char = c.id; saveMe(); sfx.click(); if (was !== c.id) { pickT = titleAnimT; sfx.jump(); } buildTitle(); };
     box.appendChild(b);
   }
   $('charName').textContent = charOf(me.char).name;
+  $('charLine').textContent = '“' + (charOf(me.char).line || '') + '”';
+  const on = box.querySelector('.swatch.on'); if (on && titleAnimT - pickT < 0.1) { on.classList.remove('hop'); void on.offsetWidth; on.classList.add('hop'); }
   $('profileName').textContent = me.name;
 }
 $('setBtn').onclick = () => { sfx.click(); openSettings(hidePanel); };
@@ -662,7 +686,8 @@ function openLobby() {
   $('startBtn').textContent = online && !isHost ? 'Waiting for the host…' : 'Start!';
 }
 
-$('startBtn').onclick = () => { unlockAudio(); sfx.click(); runs = []; if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); } hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
+$('startBtn').onclick = () => wipeThen(startFromLobby);
+function startFromLobby() { unlockAudio(); sfx.click(); runs = []; if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); } hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
 $('leaveBtn').onclick = () => { sfx.click(); nav('title'); };
 $('shareBtn').onclick = async () => {
   const url = `${location.origin}${location.pathname}?join=${roomCode}`;
@@ -1200,6 +1225,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   run.preview = settings.preview && !(endless && endless.stage > 1) && !tutRole;
   if (endless && endless.score) Object.assign(run.score, endless.score, { kinds: new Set(), lastT: -99, streak: 0 });
   R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
+  if (!(endless && endless.stage > 1)) requestAnimationFrame(() => { if (run && run.world === world) { const at = R.toUIPoint(world.player.x + 5, world.player.y + 6); wipeOpen(at.x, at.y); } });   // the iris opens on your runner
   $('hud').classList.remove('hidden');
   const role = $('role');
   if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
@@ -1595,13 +1621,16 @@ function confetti() {
 }
 
 function endRunView() {
+  if (run && !wipe) wipeOpen();   // leaving a round: the iris opens on the menu
   run = null; hidePanel(); R.setInsets(0, 0); clearTips();
   for (const id of ['hud', 'hint', 'count', 'rotate', 'pad', 'padTop', 'preview']) $(id).classList.add('hidden');
   document.body.classList.remove('playing', 'dualpad');
 }
 
 function panel(html) {
+  const was = !$('panel').classList.contains('hidden');
   $('panelCard').innerHTML = html; $('panel').classList.remove('hidden'); $('panelCard').classList.remove('wide');
+  if (!was) swingIn($('panelCard'));
   for (const el of $('panelCard').querySelectorAll('[data-portrait]')) el.prepend(portrait(el.dataset.portrait));
 }
 function hidePanel() { $('panel').classList.add('hidden'); }
@@ -1660,13 +1689,86 @@ $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
 addEventListener('pointerdown', () => { try { screen.orientation?.lock?.('landscape').catch(() => {}); } catch { /* not allowed here */ } }, { once: true });
 { const c = document.createElement('canvas'); c.className = 'pix knob'; drawKnob(c, { r: 5, pal: 'dark', icon: KICON.pause }); sizeArt(c); $('pauseBtn').textContent = ''; $('pauseBtn').append(c); }
 
+// ---------- transitions: a pixel iris. Going into a round it closes on the menu, and opens again on your runner.
+const WIPE_CLOSE = 0.26, WIPE_OPEN = 0.42;
+let wipe = null;
+function wipeDraw() {
+  const cv = $('wipe'), k = 6, W = Math.ceil(UI.w / k), H = Math.ceil(UI.h / k);
+  if (cv.width !== W || cv.height !== H) { cv.width = W; cv.height = H; }
+  const g = cv.getContext('2d'), u = Math.max(0, Math.min(1, wipe.t / wipe.dur)), e = wipe.open ? u * u : 1 - (1 - u) * (1 - u);
+  const maxR = Math.hypot(Math.max(wipe.x, UI.w - wipe.x), Math.max(wipe.y, UI.h - wipe.y)) / k + 2;
+  const r = (wipe.open ? e : 1 - e) * maxR, cx = wipe.x / k, cy = wipe.y / k;
+  g.fillStyle = '#2a1810'; g.fillRect(0, 0, W, H);
+  for (let y = 0; y < H; y++) {   // clear the hole row by row: a stepped, pixel-art circle
+    const dy = y + 0.5 - cy; if (Math.abs(dy) >= r) continue;
+    const dx = Math.sqrt(r * r - dy * dy); g.clearRect(Math.round(cx - dx), y, Math.round(2 * dx), 1);
+  }
+}
+function tickWipe(dt) {
+  if (!wipe) return;
+  wipe.t += dt; wipeDraw();
+  if (wipe.t < wipe.dur) return;
+  const w = wipe; wipe = null;
+  if (w.open) $('wipe').classList.add('hidden');
+  if (w.then) w.then();
+}
+// close the iris (on the middle of the screen), then run fn; the round it starts opens it again
+function wipeThen(fn) {
+  if (wipe && !wipe.open) return;
+  wipe = { open: false, t: 0, dur: WIPE_CLOSE, x: UI.w / 2, y: UI.h / 2, then: fn };
+  $('wipe').classList.remove('hidden'); wipeDraw(); sfx.whoosh();
+}
+function wipeOpen(x = UI.w / 2, y = UI.h / 2) {
+  wipe = { open: true, t: 0, dur: WIPE_OPEN, x, y };
+  $('wipe').classList.remove('hidden'); wipeDraw();
+}
+
+// ---------- menus sparkle under your finger (a little burst of pixel stars), and the mouse is a pixel cursor
+const SPARK_COLS = ['#f0be4a', '#fdf6e6', '#ffd98a', '#9cc966'];
+addEventListener('pointerdown', e => {
+  if (run || settings.graphics === 'low') return;
+  const at = toUI(e.clientX, e.clientY);
+  for (let i = 0; i < 7; i++) {
+    const s = document.createElement('i'), a = i / 7 * Math.PI * 2 + Math.random() * 0.6, d = 18 + Math.random() * 16;
+    s.className = 'spark' + (i % 3 === 0 ? ' big' : '');
+    s.style.cssText = `left:${at.x}px;top:${at.y}px;background:${SPARK_COLS[i % SPARK_COLS.length]};--dx:${Math.round(Math.cos(a) * d)}px;--dy:${Math.round(Math.sin(a) * d - 6)}px`;
+    $('app').appendChild(s); setTimeout(() => s.remove(), 520);
+  }
+}, true);
+function pixCursor(rows, scale = 2) {
+  const C = { K: '#3a2417', W: '#fdf6e6', Y: '#f0be4a', L: '#e6cf9a' }, c = document.createElement('canvas');
+  c.width = rows[0].length * scale; c.height = rows.length * scale;
+  const g = c.getContext('2d');
+  rows.forEach((r, y) => [...r].forEach((ch, x) => { if (C[ch]) { g.fillStyle = C[ch]; g.fillRect(x * scale, y * scale, scale, scale); } }));
+  return c.toDataURL();
+}
+if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  const arrow = pixCursor(['K.........', 'KK........', 'KWK.......', 'KWWK......', 'KWWWK.....', 'KWWWWK....', 'KWWWWWK...', 'KWWWWWWK..', 'KWWWWWWWK.', 'KWWWWKKKKK', 'KWWKWK....', 'KWK.KWK...', 'KK..KWK...', 'K....KWK..', '.....KKK..']);
+  const hand = pixCursor(['....KK......', '...KWWK.....', '...KWWK.....', '...KWWK.....', '...KWWKKK...', '...KWWKWWKK.', '.KKKWWKWWKWK', 'KWWKWWWWWKWK', 'KWWWWWWWWWWK', '.KWWWWWWWWWK', '.KWWWWWWWWK.', '..KWWWWWWWK.', '..KWWWWWWK..', '...KLLLLLK..', '...KKKKKKK..']);
+  document.documentElement.style.setProperty('--curArrow', `url(${arrow}) 0 0`);
+  document.documentElement.style.setProperty('--curHand', `url(${hand}) 8 0`);
+  document.documentElement.classList.add('pixcursor');
+}
+
+// ---------- the launch splash: the logo is stamped onto the screen, then the title world fades in behind it
+const SPLASH = !navigator.webdriver || new URLSearchParams(location.search).has('splash');
+function splash() {
+  const sp = $('splash'), logo = document.createElement('div');
+  logo.className = 'logo';
+  LOGO_WORDS.forEach((word, w) => { const sw = document.createElement('span'); for (let k = 0; k < word.length; k++) { const i = document.createElement('i'); i.appendChild(logoLetter(w, k)); sw.appendChild(i); } logo.appendChild(sw); });
+  $('splashLogo').appendChild(logo); sp.classList.remove('hidden');
+  setTimeout(() => { sp.classList.add('out'); }, 1250);
+  setTimeout(() => sp.remove(), 1700);
+}
+if (SPLASH) splash();
+
 // ---------- main loop
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = Math.max(0, Math.min(0.1, (now - last) / 1000)); last = now;   // rAF time can trail performance.now() on the first frame
   watchSpeed(dt);
-  try { tick(dt, now); } catch (e) { console.error(e); showError(e); }
+  try { tickWipe(dt); tick(dt, now); } catch (e) { console.error(e); showError(e); }
 }
 function showError(e) { if (DEBUG) toast('Error: ' + e.message); }
 

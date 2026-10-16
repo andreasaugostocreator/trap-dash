@@ -419,3 +419,21 @@ so nobody waits on a stranger. The search screen shows your runner jogging, how 
   or trapper training, or "Skip, let's play!".
 
 `tools/batchA-test.mjs` checks all of these, including a two-browser online rematch.
+
+## 20. Polish: wood, transitions, splash, sparkle
+
+- **Top bar in wood.** On the left a plank with the RUN / TRAP tag and who's who; in the middle the clock on a
+  parchment plaque hanging from two ropes (brick red and ticking in the last 15 s); on the right the trap points and
+  falls as pixel medals (a gold star coin, a pewter skull coin) on a plank, then the pause knob.
+- **The runner picker is alive.** Every runner breathes, each one waves now and then on its own schedule, and the one
+  you pick hops and jumps. Each has a one-line personality ("You never see them coming.").
+- **Transitions.** Starting a round closes a pixel iris on the menu (0.26 s) and opens it again centred on your
+  runner (0.42 s); leaving a round opens it on the menu. The iris is drawn at 1/6 scale row by row, so its edge is
+  stepped like pixel art. Cards and panels arrive like a wooden sign: they drop in and swing to a stop.
+- **Launch splash.** The logo is stamped onto walnut with a puff of dust ("a party game for two"), then fades into
+  the title world, whose own entrance is already under way behind it.
+- **Sparkle and cursor.** A tap in the menus throws a little burst of pixel stars (not on Low graphics); with a
+  mouse, the cursor is a pixel arrow and, over buttons, a pixel hand.
+
+`tools/batchB-shots.mjs` checks the splash, the iris, the picker and the sparkles; `tools/hud-shots.mjs` shoots
+the top bar.

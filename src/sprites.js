@@ -144,6 +144,24 @@ const BODIES = {
     '..KFFK.KFK..',
     '..KKK..KK...',
   ],
+  wave0: [   // a hand raised, for the runner picker
+    '...KAAAAKSK.',
+    '..KSAAAAAK..',
+    '..KSAaaAK...',
+    '...KBBBBK...',
+    '...KBKKBK...',
+    '...KFKKFFK..',
+    '...KKK.KKK..',
+  ],
+  wave1: [
+    '...KAAAAKKSK',
+    '..KSAAAAAKK.',
+    '..KSAaaAK...',
+    '...KBBBBK...',
+    '...KBKKBK...',
+    '...KFKKFFK..',
+    '...KKK.KKK..',
+  ],
   fall: [
     '.KSKAAAAKSK.',
     '..KKAAAAKK..',
@@ -156,12 +174,12 @@ const BODIES = {
 };
 
 export const CHARS = [
-  { id: 'explorer', name: 'Explorer', ui: '#4f9a4a', pal: { T: '#d8a860', t: '#7a4a28', H: '#6b4226', S: '#f2c29a', r: '#ec8f80', A: '#56a64e', a: '#3c7a37', B: '#8a6440', F: '#3d2a1f' } },
-  { id: 'knight', name: 'Knight', ui: '#3c6fd1', pal: { G: '#b9c2d0', g: '#7d8699', L: '#f2f5fa', P: '#e8414f', W: '#ffffff', S: '#b9c2d0', A: '#3c6fd1', a: '#2a4f9e', B: '#7d8699', F: '#3b3f52' } },
-  { id: 'astronaut', name: 'Astronaut', ui: '#ff8a3d', pal: { w: '#f1f4f8', V: '#8fd6ff', v: '#ffffff', S: '#f2c29a', A: '#f1f4f8', a: '#ff8a3d', B: '#d0d6e2', F: '#ff8a3d' } },
-  { id: 'ninja', name: 'Ninja', ui: '#e8414f', pal: { N: '#353a5c', n: '#252942', R: '#e8414f', S: '#f2c29a', A: '#353a5c', a: '#e8414f', B: '#353a5c', F: '#1b1e33' } },
-  { id: 'robot', name: 'Robot', ui: '#ffb43c', pal: { M: '#ffb43c', m: '#c97a1a', D: '#1b1e33', C: '#6ff7ff', Y: '#ff5d5d', S: '#9aa3b5', A: '#ffb43c', a: '#c97a1a', B: '#7d8699', F: '#4b5063' } },
-  { id: 'pirate', name: 'Pirate', ui: '#d63a3a', pal: { R: '#d63a3a', W: '#ffffff', H: '#2a2020', S: '#e8b48a', r: '#e0806a', A: '#f5f0e6', a: '#3a5bd1', B: '#4a3426', F: '#2a2020' } },
+  { id: 'explorer', line: "Never met a map they didn't like.", name: 'Explorer', ui: '#4f9a4a', pal: { T: '#d8a860', t: '#7a4a28', H: '#6b4226', S: '#f2c29a', r: '#ec8f80', A: '#56a64e', a: '#3c7a37', B: '#8a6440', F: '#3d2a1f' } },
+  { id: 'knight', line: 'Shiny armour, shinier courage.', name: 'Knight', ui: '#3c6fd1', pal: { G: '#b9c2d0', g: '#7d8699', L: '#f2f5fa', P: '#e8414f', W: '#ffffff', S: '#b9c2d0', A: '#3c6fd1', a: '#2a4f9e', B: '#7d8699', F: '#3b3f52' } },
+  { id: 'astronaut', line: 'Low gravity? High jumps.', name: 'Astronaut', ui: '#ff8a3d', pal: { w: '#f1f4f8', V: '#8fd6ff', v: '#ffffff', S: '#f2c29a', A: '#f1f4f8', a: '#ff8a3d', B: '#d0d6e2', F: '#ff8a3d' } },
+  { id: 'ninja', line: 'You never see them coming.', name: 'Ninja', ui: '#e8414f', pal: { N: '#353a5c', n: '#252942', R: '#e8414f', S: '#f2c29a', A: '#353a5c', a: '#e8414f', B: '#353a5c', F: '#1b1e33' } },
+  { id: 'robot', line: 'Beep. Calculating the fastest route.', name: 'Robot', ui: '#ffb43c', pal: { M: '#ffb43c', m: '#c97a1a', D: '#1b1e33', C: '#6ff7ff', Y: '#ff5d5d', S: '#9aa3b5', A: '#ffb43c', a: '#c97a1a', B: '#7d8699', F: '#4b5063' } },
+  { id: 'pirate', line: 'Arr, that flag be treasure!', name: 'Pirate', ui: '#d63a3a', pal: { R: '#d63a3a', W: '#ffffff', H: '#2a2020', S: '#e8b48a', r: '#e0806a', A: '#f5f0e6', a: '#3a5bd1', B: '#4a3426', F: '#2a2020' } },
 ];
 export const charOf = id => CHARS.find(c => c.id === id) || CHARS[0];
 

@@ -827,3 +827,61 @@ button.want { animation: wantGlow .8s ease-in-out infinite; }
 @keyframes wantGlow { 50% { filter: brightness(1.15) drop-shadow(0 0 8px #f0be4a); } }
 .rmState { margin: 0; min-height: 1.2em; }
 .wStep { color: #a9761c; font-size: 14px; text-transform: uppercase; letter-spacing: .1em; margin: 0 0 4px; }
+
+/* ---------- the in-game top bar in wood: a plank with your role and who's who on the left, the clock on a parchment
+   plaque hanging in the middle, the trap points and falls as pixel medals on a plank on the right. */
+.hud { background: linear-gradient(rgba(42, 26, 16, .45), rgba(42, 26, 16, 0)); }
+.hplank { display: inline-flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; padding: 0 6px 1px 2px;
+  border: 10px solid transparent; border-image: var(--woodImg) 5 fill / 10px round; box-shadow: 0 4px 0 -1px rgba(58, 36, 23, .35); }
+.hud .hplank .who { color: var(--ink); text-shadow: none; font-size: 16px; line-height: 1; }
+.hud .hplank .role { margin: 0; padding: 3px 6px 2px; font-size: 10px; box-shadow: 0 0 0 2px var(--ink); }
+.tplaque { position: relative; flex: none; padding: 0 2px; }
+.tplaque::before, .tplaque::after { content: ''; position: absolute; top: calc(-1 * var(--sa-top) - 10px); height: calc(var(--sa-top) + 12px); width: 3px; background: #6b4226; box-shadow: 0 0 0 1px var(--ink); }
+.tplaque::before { left: 22%; } .tplaque::after { right: 22%; }
+.hud .timer { position: relative; z-index: 1; background: none; color: var(--ink); text-shadow: none; box-shadow: 0 4px 0 -1px rgba(58, 36, 23, .35); min-width: 104px; padding: 0 6px 1px; font-size: 18px; line-height: 1;
+  border: 10px solid transparent; border-image: var(--woodImg) 5 fill / 10px round; }
+.hud .timer::before { width: 18px; height: 16px; background: var(--clockImg) center / contain no-repeat; }
+.hud .timer.low { color: #b9503a; animation: lowTick 1s steps(2) infinite; }
+@keyframes lowTick { 50% { color: #d9663f; } }
+.hud .medals { gap: 12px; padding: 0 6px 1px 4px; }
+.hud .medals .tscore, .hud .medals .deaths { color: var(--ink); text-shadow: none; font-size: 14px; line-height: 1; gap: 5px; }
+.hud .medals .tscore::before, .hud .medals .deaths::before { content: ''; width: 20px; height: 20px; font-size: 0; background: center / contain no-repeat; image-rendering: pixelated; }
+.hud .medals .tscore::before { background-image: var(--coinImg); }
+.hud .medals .deaths::before { background-image: var(--skullImg); }
+.hud .hudRight { gap: 8px; }
+@container app (max-height: 500px) {
+  .hplank, .hud .timer { border-width: 8px; border-image-width: 8px; }
+  .hud .hplank .who { font-size: 14px; } .hud .timer { font-size: 14px; min-width: 88px; }
+  .hud .medals .tscore::before, .hud .medals .deaths::before { width: 16px; height: 16px; }
+  .hud .timer::before { width: 14px; height: 12px; }
+  .hud .medals .tscore, .hud .medals .deaths { font-size: 12px; }
+}
+/* the runner picker */
+.charLine { margin: 0 0 4px; font-size: 15px; color: var(--muted); font-style: italic; min-height: 1.2em; }
+.swatch.hop canvas { animation: hop .45s cubic-bezier(.3, 1.6, .5, 1); }
+@keyframes hop { 0% { transform: none; } 40% { transform: translateY(-10px); } 100% { transform: none; } }
+/* cards swing in like a sign on ropes */
+.card.swing { animation: signIn .55s cubic-bezier(.3, 1.2, .5, 1) both; transform-origin: 50% -60px; }
+@keyframes signIn { 0% { transform: translateY(-40px) rotate(-4deg); opacity: 0; } 35% { transform: translateY(0) rotate(2.5deg); opacity: 1; } 65% { transform: rotate(-1.2deg); } 85% { transform: rotate(.4deg); } 100% { transform: none; } }
+/* the iris wipe between menus and rounds (drawn at 1/6 scale: a stepped pixel circle) */
+canvas.wipe { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 50; pointer-events: none; image-rendering: pixelated; }
+/* the launch splash: walnut, the logo stamped on with a puff of dust */
+.splash { position: fixed; inset: 0; z-index: 60; background: #2a1810; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; transition: opacity .4s; }
+.splash.out { opacity: 0; pointer-events: none; }
+.splash .logo { font-size: clamp(44px, 14cqh, 100px); margin: 0; animation: stamp .5s cubic-bezier(.2, 1.5, .4, 1) .15s both; filter: drop-shadow(0 6px 0 rgba(0, 0, 0, .4)); }
+.splash .logo .logoLetter { height: 1.25em; }
+.splash .logo i { display: inline-block; }
+.splash p { margin: 0; color: #c9a77a; font-size: clamp(14px, 3.6cqh, 20px); letter-spacing: .2em; text-transform: uppercase; animation: fadeUp .4s ease-out .7s both; }
+.splashLogo { position: relative; }
+.splashLogo::after { content: ''; position: absolute; left: 10%; right: 10%; bottom: -8px; height: 14px; background: radial-gradient(closest-side, rgba(201, 167, 122, .5), transparent); animation: dust .6s ease-out .45s both; }
+@keyframes stamp { 0% { transform: scale(2.4); opacity: 0; } 60% { transform: scale(.94); opacity: 1; } 100% { transform: none; } }
+@keyframes dust { 0% { transform: scaleX(.3); opacity: 0; } 30% { opacity: 1; } 100% { transform: scaleX(1.4); opacity: 0; } }
+@keyframes fadeUp { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* sparkles under your finger in the menus */
+i.spark { position: absolute; z-index: 70; width: 4px; height: 4px; margin: -2px 0 0 -2px; pointer-events: none; animation: spark .5s ease-out both; box-shadow: 0 0 0 1px rgba(58, 36, 23, .35); }
+i.spark.big { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+@keyframes spark { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.4); opacity: 0; } }
+/* the pixel cursor (mouse only) */
+html.pixcursor, html.pixcursor body, html.pixcursor canvas#game { cursor: var(--curArrow), auto; }
+html.pixcursor button:not(:disabled), html.pixcursor input[type=range], html.pixcursor [data-go] { cursor: var(--curHand), pointer; }
+html.pixcursor input:not([type=range]) { cursor: text; }

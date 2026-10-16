@@ -1,0 +1,23 @@
+// Batch B visuals: the splash, the iris, card swing, the runner picker, sparkles. Needs :8080.
+import { chromium } from 'playwright-core';
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell' });
+const errs = [], ok = {};
+const p = await b.newPage({ viewport: { width: 1280, height: 720 } }); p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
+await p.goto('http://localhost:8080/?splash'); await p.waitForTimeout(700);
+await p.screenshot({ path: 'shots/132-splash.png' });
+ok.splash = await p.isVisible('#splash');
+await p.waitForTimeout(1600); ok.splashGone = !(await p.$('#splash'));
+await p.waitForTimeout(1500);
+await p.click('#profileBtn'); await p.waitForTimeout(80); await p.screenshot({ path: 'shots/133-swing.png' });
+await p.waitForTimeout(1500); await p.click('.swatch >> nth=3'); await p.waitForTimeout(150);
+await p.screenshot({ path: 'shots/134-picker.png' });
+ok.line = (await p.textContent('#charLine')).length > 5;
+await p.mouse.click(300, 300); await p.waitForTimeout(80); ok.spark = (await p.$$('i.spark')).length > 0;
+await p.click('#profileDone'); await p.click('text=Practice'); await p.click('#startBtn'); await p.waitForTimeout(120);
+ok.closing = await p.isVisible('#wipe');
+await p.screenshot({ path: 'shots/135-wipe-close.png' });
+await p.waitForTimeout(400); await p.screenshot({ path: 'shots/136-wipe-open.png' });
+await p.waitForTimeout(600); ok.wipeDone = !(await p.isVisible('#wipe')) && !!(await p.evaluate(() => window.__td.run));
+console.log(JSON.stringify(ok)); console.log(Object.values(ok).every(Boolean) ? 'ALL OK' : 'FAILED');
+console.log(errs.length ? 'ERRORS\n' + errs.join('\n') : 'no errors');
+await b.close();

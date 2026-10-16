@@ -16,12 +16,12 @@ const x0 = await p.evaluate(() => window.__td.run.world.player.x);
 console.log('12 px right of ▶:', JSON.stringify(await held()), 'runner moved', (await p.evaluate(() => window.__td.run.world.player.x)) > x0 - 1 ? 'right' : 'no');
 await touch('touchEnd', []); await p.waitForTimeout(200);
 console.log('after release:', JSON.stringify(await held()));
-// 2. press 15 px above JUMP
+// 2. press 10 px right of JUMP (above it sits the gadget ring now)
 const y0 = await p.evaluate(() => window.__td.run.world.player.y);
-await touch('touchStart', [{ x: J.x + J.width / 2, y: J.y - 15, id: 2 }]); await p.waitForTimeout(150);
+await touch('touchStart', [{ x: Math.min(843, J.x + J.width + 10), y: J.y + J.height / 2, id: 2 }]); await p.waitForTimeout(150);
 const y1 = await p.evaluate(() => window.__td.run.world.player.y);
 await touch('touchEnd', []);
-console.log('15 px above JUMP: jumped', y1 < y0 - 2);
+console.log('10 px right of JUMP: jumped', y1 < y0 - 2);
 // 3. a press far from everything (in the empty middle of the panel) does nothing
 const D = await box('.rgad');
 await touch('touchStart', [{ x: (R.x + R.width + D.x) / 2, y: R.y + 4, id: 3 }]); await p.waitForTimeout(100);

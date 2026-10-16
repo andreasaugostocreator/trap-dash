@@ -62,6 +62,7 @@
     <div class="me">
       <label>Your name <input id="name" maxlength="12" autocomplete="off" spellcheck="false"></label>
       <div class="pickLabel">Runner: <b id="charName"></b></div>
+      <p class="charLine" id="charLine"></p>
       <div class="colors" id="colors"></div>
     </div>
     <div class="buttons"><button class="big pink" id="profileDone">Done</button></div>
@@ -106,9 +107,9 @@
 
 <!-- In-game HUD -->
 <div class="hud hidden" id="hud">
-  <div class="hudLeft"><span class="role" id="role">RUN</span><span class="who" id="who"></span></div>
-  <div class="timer" id="timer">0.0</div>
-  <div class="hudRight"><span class="tscore" id="tscore">0</span><span class="deaths" id="deaths">0</span><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
+  <div class="hudLeft"><div class="hplank"><span class="role" id="role">RUN</span><span class="who" id="who"></span></div></div>
+  <div class="tplaque"><div class="timer" id="timer">0.0</div></div>
+  <div class="hudRight"><div class="hplank medals"><span class="tscore" id="tscore">0</span><span class="deaths" id="deaths">0</span></div><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
 </div>
 <div class="hint hidden" id="hint"></div>
 <div class="count hidden" id="count">3</div>
@@ -132,6 +133,8 @@
 <!-- Results / menus drawn over the game -->
 <section class="screen hidden overlay" id="panel"><div class="card" id="panelCard"></div></section>
 <div class="toast hidden" id="toast"></div>
+<canvas class="wipe hidden" id="wipe"></canvas>
+<div class="splash hidden" id="splash"><div class="splashLogo" id="splashLogo"></div><p>a party game for two</p></div>
 
 </div>
 <script src="lib/peerjs.min.js"></script>

@@ -150,6 +150,7 @@ export class Renderer {
 
   get camX() { return Math.round(this.cam.x); }
   get camY() { return Math.round(this.cam.y); }
+  toUIPoint(wx, wy) { return { x: (wx - this.camX) * this.k / this.dpr + (this.ox || 0), y: (wy - this.camY) * this.k / this.dpr + (this.oy || 0) }; }   // world -> app frame
   toWorld(sx, sy) { const { x: cx, y: cy } = toUI(sx, sy); return { x: (cx - (this.ox || 0)) * this.dpr / this.k + this.camX, y: (cy - (this.oy || 0)) * this.dpr / this.k + this.camY }; }
 
   // ---------- events -> particles
