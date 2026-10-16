@@ -535,3 +535,37 @@ second browser and plays the level from its lobby.
   preview's gadgets drawn as the same little caps as the buttons and lined up under RUNNER / TRAPPER, no gems in
   mid-air (a crusher's gem needs floor under it), and the app frame can no longer be scrolled sideways by focusing a
   button near the edge (it used to push the joystick 19 px off screen now and then).
+
+## 26. Parties of three or four, and spectators
+
+**Everyone plays, nobody waits.** Up to four players can join a hosted party (the same code). With three, one runs
+and two set traps; with four, two runners race through the same level while two trappers work against them. The
+host picks who does what by tapping the RUN / TRAP tag on a player's card; the counts always add up (tapping swaps
+that player's role with someone who has the other one). "Roles: Keep" keeps everyone in their role level after
+level (the default); "Swap each level" passes the running on (three players: to the next seat; four: the teams
+trade). Everyone has to press Ready. "3 levels" plays three levels and crowns whoever has the most points.
+
+- **How it runs.** The host is the hub of a star (`src/net.js` now keeps a link per guest; guests only talk to the
+  host, which forwards what others need, tagged with who sent it). Each runner's own device runs its copy of the
+  world, as in two-player games, so running never lags. Trappers' orders carry who fired them and reach every
+  runner's device, so a trap fires in both runners' worlds at once. Trappers and spectators watch one runner (the
+  focus; with two runners an eye button in the top bar switches, and it switches by itself when that runner is
+  done), and the other runner appears as a see-through rival with their name over them; runners see each other the
+  same way. Snapshots go 20 times a second in bigger parties.
+- **Two trappers share the trapper's four gadgets**, two each (every other one), and share the three trap buttons.
+  Each catch is credited to the trapper who fired that trap (the world remembers who fired each trap and the last
+  trick), so each has their own trap points.
+- **Scoring per level.** Two runners: the faster one (or the one closer to the flag) gets a point. One runner: a
+  point for reaching the flag, otherwise the trappers' side wins it. Two trappers: whoever scored more trap points
+  gets a point. The host adds it up when every runner is done and sends the result to everyone: a compact podium of
+  the runners next to cards for every player and the party's score line. Rematch needs every player's tap; the
+  host also has Next level and Lobby.
+- **Spectators.** "Just watch" on the Join screen (or joining a full party) makes you a spectator: you see the lobby,
+  the rounds live (no controls, a WATCH tag, the eye button with two runners) and the results. The lobby shows how
+  many are watching. Players leaving close the gap: the others move up a seat and keep their points.
+- **How far a runner got** is now measured along the way to the flag (a flood fill of open tiles from the flag), so
+  "Reached 83% · 10 tiles to go" means the same on Cloud Climb, which climbs, as on a level that runs right, and
+  unfinished runs are compared by the tiles left.
+
+`tools/party-test.mjs` plays a three-player level (catch credit, the host's tally), then a four-player race with a
+spectator, and checks that the four-player lobby fits on phones.

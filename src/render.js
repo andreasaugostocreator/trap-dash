@@ -129,6 +129,18 @@ export class Renderer {
     this.cam.x = tx; this.cam.y = ty; this.lookX = 0;
   }
 
+  // Another runner racing in the same level (a bigger party): drawn a little see-through, with their name over them.
+  drawRival(r) {
+    if (r.dead) return;
+    const l = this.l, X = Math.round(r.x + PHYS.w / 2), Y = Math.round(r.y + PHYS.h);
+    const frame = !r.onGround ? (r.vy < 0 ? 'jump' : 'fall') : Math.abs(r.vx) > 20 ? ['run0', 'run1', 'run2', 'run1'][Math.floor(this.t * 12) % 4] : 'idle';
+    l.globalAlpha = 0.85; l.drawImage(charFrame(r.colors, frame, r.face < 0 ? -1 : 1, 0), X - 6, Y - 16); l.globalAlpha = 1;
+    if (r.name) {
+      l.font = '6px monospace'; const w = Math.ceil(l.measureText(r.name).width) + 4;
+      l.fillStyle = 'rgba(58,36,23,.75)'; l.fillRect(X - w / 2, Y - 25, w, 7); l.fillStyle = '#fdf6e6'; l.textAlign = 'center'; l.textBaseline = 'top'; l.fillText(r.name, X, Y - 25); l.textAlign = 'left';
+    }
+  }
+
   // The last run of this level, replayed as a see-through runner with its name over it.
   drawGhost(world, g) {
     const tr = g.trail, n = tr.length / 3, f = world.time * 10, i = Math.min(n - 1, Math.floor(f)), j = Math.min(n - 1, i + 1), u = f - Math.floor(f);
@@ -248,6 +260,7 @@ export class Renderer {
       l.globalAlpha = 1;
     }
     if (o.ghost) this.drawGhost(world, o.ghost);
+    if (o.rivals) for (const r of o.rivals) this.drawRival(r);   // the other runners in a bigger party
     if (!world.player.dead) this.drawPlayer(world.player, o.colors, dt);
     this.drawCreatures(world);
     this.drawBolts(world);

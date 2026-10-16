@@ -74,12 +74,21 @@ const touchDevice = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in
 // ---------- party state
 let mode = null;          // 'online' | 'local' | 'practice'
 let isHost = false, roomCode = '';
-let players = { a: null, b: null };  // a = host / player 1, b = guest / player 2
+let players = { a: null, b: null };  // a = host / player 1, b = guest / player 2, c and d in bigger parties
 let lobby = { level: 0, first: 'a' };
 let score = { a: 0, b: 0 };
 let runs = [];            // results of the runs on the current level
 let run = null;
-const mySide = () => (mode === 'online' && !isHost ? 'b' : 'a');
+// Seats: the host is 'a'; guests who play sit at 'b', 'c', 'd' (in the order they came), spectators at 'w'.
+const SIDES = ['a', 'b', 'c', 'd'];
+let mySeat = 'b';
+const seats = new Map(), watchers = new Map();   // host only: guest id -> side, guest id -> name (spectators)
+let watchCount = 0;
+const mySide = () => (mode === 'online' && !isHost ? mySeat : 'a');
+const watching = () => mode === 'online' && !isHost && mySeat === 'w';
+const partySides = () => SIDES.filter(s => players[s]);
+const partySize = () => partySides().length;
+const gidOf = side => { for (const [g, s] of seats) if (s === side) return g; return null; };
 const other = s => (s === 'a' ? 'b' : 'a');
 
 // ---------- screens
@@ -370,7 +379,7 @@ function nav(where) {
 
 // ---------- online
 async function hostParty() {
-  mode = 'online'; isHost = true; score = { a: 0, b: 0 };
+  mode = 'online'; isHost = true; score = { a: 0, b: 0 }; seats.clear(); watchers.clear(); net.maxGuests = 7;
   players = { a: { name: me.name, char: me.char, cos: me.cos }, b: null };
   roomCode = ''; loadLobbyPrefs();
   openLobby();
@@ -401,6 +410,9 @@ function forgetTyping() {
   bindCode();
   $('name').oninput = () => { me.name = $('name').value.trim().slice(0, 12) || 'Player'; saveMe(); };
 }
+let wantWatch = false;
+$('joinWatch').onclick = () => { wantWatch = true; $('joinGo').click(); };
+$('joinGo').addEventListener('pointerdown', () => { wantWatch = false; });
 $('joinGo').onclick = async () => {
   unlockAudio();
   const code = cleanCode($('code').value), st = $('joinStatus');
@@ -410,34 +422,56 @@ $('joinGo').onclick = async () => {
   try {
     await net.join(code);
     saveSession();
-    net.send({ t: 'hi', name: me.name, char: me.char, cos: me.cos });
-    players = { a: null, b: { name: me.name, char: me.char, cos: me.cos } };
+    mySeat = wantWatch ? 'w' : 'b';
+    net.send({ t: 'hi', name: me.name, char: me.char, cos: me.cos, watch: wantWatch });
+    players = { a: null, b: wantWatch ? null : { name: me.name, char: me.char, cos: me.cos } };
     openLobby();
   } catch (e) {
     console.warn(e);
     net.close(); mode = null;
-    st.textContent = e && e.type === 'peer-unavailable' ? 'No party with that code. Check the letters?' : e && e.type === 'full' ? 'That party already has two players.' : 'Could not reach the party. Is the host still on the lobby screen?';
+    st.textContent = e && e.type === 'peer-unavailable' ? 'No party with that code. Check the letters?' : e && e.type === 'full' ? 'That party is full.' : 'Could not reach the party. Is the host still on the lobby screen?';
     st.className = 'status err';
   }
   $('joinGo').disabled = false;
 };
 
 let pendingStart = null;
-net.onMessage = m => {
+net.onMessage = (m, gid) => {
+  const from = isHost ? seats.get(gid) : (m.from || 'a');
+  if (isHost && gid && from && from !== 'w') route(m, gid, from);
   if (m.t === 'hi' && isHost) {
-    const char = charOf(m.char).id === players.a.char ? otherChar(players.a.char) : charOf(m.char).id;
-    const back = m.rejoin && players.b;
-    players.b = { name: String(m.name || 'Friend').slice(0, 12), char, cos: cleanCos(m.cos, false) };
-    if (!back && !(m.rejoin && restoredScore)) { score = { a: 0, b: 0 }; runs = []; }
+    let side = seats.get(gid);
+    if (!side) {
+      const free = ['b', 'c', 'd'].find(s => !players[s]);
+      side = m.watch || !free || (matchmade && free !== 'b') || (run && free !== 'b') ? 'w' : free;
+      seats.set(gid, side);
+    }
+    const name = String(m.name || 'Friend').slice(0, 12);
+    if (side === 'w') {   // a spectator: they get the lobby, and the round in progress if there is one
+      watchers.set(gid, name); net.sendTo(gid, { t: 'seat', side: 'w' }); syncLobby(); sendRunTo(gid);
+      toast(`${name} is watching`); if (!run) openLobby(); return;
+    }
+    const used = new Set(partySides().filter(s => s !== side).map(s => players[s].char));
+    let char = charOf(m.char).id; for (let k = 0; k < CHARS.length && used.has(char); k++) char = otherChar(char);
+    const back = m.rejoin && players[side];
+    players[side] = { name, char, cos: cleanCos(m.cos, false) };
+    if (side === 'b' && !back && !(m.rejoin && restoredScore)) { score = { a: 0, b: 0 }; runs = []; }
+    if (score[side] == null) score[side] = 0;
+    if (side !== 'b' && !back) { for (const s2 of partySides()) score[s2] = score[s2] || 0; defaultRoles(); }
     restoredScore = false; saveSession();
+    net.sendTo(gid, { t: 'seat', side });
     if (back && run && performance.now() - lastRestart > 3000) restartRound();
     if (matchmade && !back && !run) { mm.matched(); return beginMatchmade(); }
     syncLobby(); if (!run) openLobby();
-    toast(players.b.name + ' joined!');
+    toast(name + (back ? ' is back!' : ' joined!'));
+  } else if (m.t === 'seat' && !isHost) {
+    mySeat = m.side;
+    if (mySeat === 'w') players.b = players.b && players.b.name === me.name ? null : players.b;
   } else if ((m.t === 'start' || m.t === 'stage') && !isHost && (!players.a || !players.b)) {
     pendingStart = m;   // after a reload we don't know the players yet: start once the lobby arrives
   } else if (m.t === 'lobby' && !isHost) {
-    players = m.players; lobby = m.lobby; score = m.score;
+    players = m.players; lobby = m.lobby; score = m.score; watchCount = m.watching || 0;
+    if (m.seats && m.seats[net.gid]) mySeat = m.seats[net.gid];
     if (pendingStart) { const p = pendingStart; pendingStart = null; net.onMessage(p); return; }
     if (!run) openLobby();
   } else if (m.t === 'full') {
@@ -448,52 +482,73 @@ net.onMessage = m => {
   } else if (m.t === 'stage') {          // endless: the next stage (from the runner) or a fresh run after a swap (from the host)
     lobby.level = m.level; startRun(m.level, m.runner, 0, m.endless);
   } else if (m.t === 'ready') {
-    if (run && run.phase === 'preview') { run.peerReady = true; if (run.meReady) endPreview(); }
-    else if (run) run.peerReadyEarly = true;
+    if (run) { run.readyFrom.add(m.from || from || 'x'); if (run.phase === 'preview') checkPreviewReady(); }
   } else if (m.t === 'swap' && isHost && run && run.endless) {
-    toast(players.b.name + ' swapped sides'); startEndless(run.endless.stars, other(run.runner));
-  } else if (m.t === 'snap' && run && !run.simOwner) {
+    toast(players[from].name + ' swapped sides'); startEndless(run.endless.stars, other(run.runner));
+  } else if (m.t === 'snap' && run && (!run.simOwner || run.multi)) {
     receiveSnap(m);
-  } else if (m.t === 'gad' && run && run.simOwner && run.phase === 'play') {
-    run.world.useGadget('trapper', m.id, m.x, m.y, Math.max(0, Math.min(0.3, +m.lead || 0)));
-  } else if (m.t === 'act' && run && run.simOwner && run.phase === 'play') {
-    run.world.trigger(m.id, Math.max(0, Math.min(0.3, +m.lead || 0)), !!m.hold);
+  } else if (m.t === 'gad' && run && run.simOwner && run.phase === 'play' && !run.tut) {
+    run.world.useGadget('trapper', m.id, m.x, m.y, Math.max(0, Math.min(0.3, +m.lead || 0)), m.by || from);
+  } else if (m.t === 'act' && run && run.simOwner && run.phase === 'play' && !run.tut) {
+    run.world.trigger(m.id, Math.max(0, Math.min(0.3, +m.lead || 0)), !!m.hold, m.by || from);
   } else if (m.t === 'rel' && run && run.simOwner) {
     run.world.release(m.id);
+  } else if (m.t === 'done' && run && run.multi) {
+    multiDone(m.res, m.from || from);
   } else if (m.t === 'done' && run && !run.simOwner) {
     finishRun(m.res);
+  } else if (m.t === 'mres' && run && !isHost) {
+    showMultiResult(m);
   } else if (m.t === 'rematch' && run && run.phase === 'end') {
-    voteRematch(other(mySide()));
+    voteRematch(m.from || from || other(mySide()));
   } else if (m.t === 'lready' && isHost && !run) {
-    lobby.ready = { ...(lobby.ready || {}), b: !!m.on }; syncLobby(); openLobby(); bothReady();
+    lobby.ready = { ...(lobby.ready || {}), [from]: !!m.on }; syncLobby(); openLobby(); bothReady();
   } else if (m.t === 'toLobby' && !isHost) {
     endRunView(); openLobby();
   } else if (m.t === 'bye') {
-    friendLeft();
+    if (isHost && from === 'w') { watchers.delete(gid); seats.delete(gid); net.dropGuest(gid); syncLobby(); if (!run) openLobby(); return; }
+    friendLeft(isHost ? from : 'a');
   }
 };
+// The host is the hub: what one guest sends that others need, it passes on (tagged with who sent it). Snapshots and
+// results of a runner go to everyone else; trap and gadget orders go to the runners' devices (the others ignore them).
+function route(m, gid, from) {
+  if (m.t === 'snap' || m.t === 'done') { m.from = from; net.send(m, gid); }
+  else if (m.t === 'act' || m.t === 'gad' || m.t === 'rel') { m.by = from; if (run && (run.multi || watchers.size)) net.send(m, gid); }
+  else if ((m.t === 'ready' || m.t === 'rematch') && partySize() > 2) { m.from = from; net.send(m, gid); }
+}
+// a spectator who arrives mid-round gets the round's start, then the snapshots
+function sendRunTo(gid) {
+  if (!run || run.phase === 'end') return;
+  if (run.endless) net.sendTo(gid, { t: 'stage', level: run.level, runner: run.runner, endless: run.endless });
+  else net.sendTo(gid, { t: 'start', level: run.level, runner: run.multi ? run.multi.runners : run.runner, n: run.n, multi: !!run.multi });
+}
 // ---------- reconnecting: the host keeps the friend's place for a minute, the guest keeps trying with the same id
 const REJOIN_WAIT = 60;
 let waitTimer = null;
 function netBanner(text) { const b = $('netWait'); if (!text) { b.classList.add('hidden'); return; } b.innerHTML = text; b.classList.remove('hidden'); }
-net.onLost = () => {
+net.onLost = gid => {
   if (mode !== 'online') return;
-  if (run) run.paused = true;
+  if (isHost && gid && seats.get(gid) === 'w') { watchers.delete(gid); seats.delete(gid); net.dropGuest(gid); syncLobby(); return; }   // a spectator went away
+  if (run && !watching()) run.paused = true;
   if (isHost) {
-    if (!players.b) return friendLeft();
-    const until = performance.now() + REJOIN_WAIT * 1000, name = esc(players.b.name);
+    const side = (gid && seats.get(gid)) || 'b';
+    if (!players[side]) return friendLeft(side);
+    const until = performance.now() + REJOIN_WAIT * 1000, name = esc(players[side].name);
     clearInterval(waitTimer);
     const tick = () => {
       const left = Math.ceil((until - performance.now()) / 1000);
-      if (left <= 0) { clearInterval(waitTimer); netBanner(null); return friendLeft(); }
+      if (left <= 0) { clearInterval(waitTimer); netBanner(null); return friendLeft(side); }
       netBanner(`<b>${PI('warn')} Lost ${name}</b><small>Waiting for them to come back… ${left}s</small>`);
     };
     tick(); waitTimer = setInterval(tick, 500);
   } else guestRejoin();
 };
-net.onBack = () => {
+net.onBack = gid => {
+  const side = (gid && seats.get(gid)) || 'b';
+  if (side === 'w') return;
   clearInterval(waitTimer); netBanner(null);
-  toast(players.b.name + ' is back!'); sfx.cp();
+  if (players[side]) toast(players[side].name + ' is back!'); sfx.cp();
   syncLobby();
   if (run) restartRound();
 };
@@ -501,7 +556,7 @@ let lastRestart = -1e9;
 function restartRound() {   // after a reconnect the round starts over; the score stays
   const r = run; lastRestart = performance.now();
   if (r.endless) { const e = { ...r.endless }; net.send({ t: 'stage', level: r.level, runner: r.runner, endless: e }); startRun(r.level, r.runner, 0, e); }
-  else hostStart(r.level, r.runner, r.n || 1);
+  else hostStart(r.level, r.multi ? r.multi.runners : r.runner, r.n || 1);
 }
 async function guestRejoin(fromReload) {
   const code = roomCode, gid = net.gid, until = performance.now() + REJOIN_WAIT * 1000;
@@ -540,7 +595,7 @@ let restoredScore = false;
 async function rejoinParty(s, auto = false) {
   unlockAudio();
   if (s.role === 'host') {
-    mode = 'online'; isHost = true; score = s.score || { a: 0, b: 0 }; restoredScore = true;
+    mode = 'online'; isHost = true; score = s.score || { a: 0, b: 0 }; restoredScore = true; seats.clear(); watchers.clear(); net.maxGuests = 7;
     players = { a: { name: me.name, char: me.char, cos: me.cos }, b: null }; roomCode = '';
     openLobby(); $('lobbyStatus').textContent = `Reopening party ${s.code}…`;
     try {
@@ -564,25 +619,37 @@ function offerRejoin() {
   if (ok) { const l = b.querySelector('.tlabel'); if (l) l.innerHTML = `Rejoin <b>${esc(s.code)}</b>`; b.onclick = () => { sfx.click(); rejoinParty(s); }; }
 }
 
-function friendLeft() {
+function friendLeft(side = 'b') {
   if (mode !== 'online') return;
   clearInterval(waitTimer); netBanner(null);
   if (isHost) {
-    const n = players.b ? players.b.name : 'Your friend';
-    net.dropGuest();
-    players.b = null; score = { a: 0, b: 0 };
-    endRunView(); openLobby(); toast(n + ' left the party.');
+    const n = players[side] ? players[side].name : 'Your friend', gid = gidOf(side);
+    if (gid) { net.dropGuest(gid); seats.delete(gid); } else if (partySize() <= 2) net.dropGuest();
+    players[side] = null;
+    if (partySize() <= 1) score = { a: 0, b: 0 };
+    compactSeats();
+    endRunView(); syncLobby(); openLobby(); toast(n + ' left the party.');
   } else {
     toast('The host closed the party.');
     endRunView(); leaveParty(); show('title'); buildTitle();
   }
 }
 
+// After someone leaves, the players move up so the seats stay a, b, c… without gaps (scores move with them).
+function compactSeats() {
+  const order = SIDES.filter(s => players[s]), np = { a: null, b: null }, ns = {}, move = {};
+  order.forEach((s, i) => { np[SIDES[i]] = players[s]; ns[SIDES[i]] = score[s] || 0; move[s] = SIDES[i]; });
+  for (const [g, s] of seats) if (s !== 'w') seats.set(g, move[s] || 'w');
+  players = np; score = { a: 0, b: 0, ...ns }; runs = [];
+  if (partySize() > 2) defaultRoles(); else delete lobby.roles;
+  lobby.ready = {};
+}
+
 // ---------- matchmaking (src/matchmaker.js): a random opponent, no code to share
 let matchmade = false, mmArtT = 0;
 const mm = new Matchmaker({
   async host() {   // open a room quietly; the lobby shows once the other player says hi
-    mode = 'online'; isHost = true; matchmade = true; score = { a: 0, b: 0 }; runs = [];
+    mode = 'online'; isHost = true; matchmade = true; score = { a: 0, b: 0 }; runs = []; seats.clear(); watchers.clear(); net.maxGuests = 1;
     players = { a: { name: me.name, char: me.char, cos: me.cos }, b: null };
     roomCode = await net.host(); saveSession(); return roomCode;
   },
@@ -637,10 +704,37 @@ function leaveParty() {
   matchmade = false;
   if (mode === 'online') { net.close(); forgetSession(); }
   clearInterval(waitTimer); netBanner(null);
+  seats.clear(); watchers.clear(); watchCount = 0; mySeat = 'b';
   mode = null; players = { a: null, b: null }; endRunView();
 }
 
-function syncLobby() { if (mode === 'online' && isHost) { net.send({ t: 'lobby', players, lobby, score }); saveSession(); } }
+function syncLobby() { if (mode === 'online' && isHost) { net.send({ t: 'lobby', players, lobby, score, seats: Object.fromEntries(seats), watching: watchers.size }); saveSession(); } }
+// Bigger parties (3 or 4 players): everyone plays every round. Three players: 1 runner and 2 trappers; four: 2 runners
+// and 2 trappers. The host picks who does what in the lobby (tap a player's tag); "Roles: swap each level" passes the
+// running on, otherwise everyone keeps their role.
+function defaultRoles() {
+  const sides = partySides(), n = sides.length, runners = n >= 4 ? 2 : 1;
+  lobby.roles = {}; sides.forEach((s, i) => { lobby.roles[s] = i < runners ? 'run' : 'trap'; });
+}
+const runnersWanted = () => (partySize() >= 4 ? 2 : 1);
+function rolesOk() {
+  if (partySize() <= 2) return true;
+  const r = lobby.roles || {}, sides = partySides();
+  return sides.every(s => r[s]) && sides.filter(s => r[s] === 'run').length === runnersWanted();
+}
+// tap a player's role: they swap roles with the first player who has the other one, so the numbers always add up
+function flipRole(side) {
+  if (!rolesOk()) defaultRoles();
+  const r = lobby.roles, want = r[side] === 'run' ? 'trap' : 'run', partner = partySides().find(s => s !== side && r[s] === want);
+  if (!partner) return;
+  r[partner] = r[side]; r[side] = want; unready();
+}
+// the next level with "swap each level": the running moves one seat on (3 players) or the teams swap (4)
+function rotateRoles() {
+  const sides = partySides(), r = lobby.roles;
+  if (sides.length >= 4) { for (const s of sides) r[s] = r[s] === 'run' ? 'trap' : 'run'; return; }
+  const i = sides.findIndex(s => r[s] === 'run'); sides.forEach(s => { r[s] = 'trap'; }); r[sides[(i + 1) % sides.length]] = 'run';
+}
 
 // ---------- lobby
 // Each mode remembers its last choices (level, match length, who runs first), so "one more" is one tap away.
@@ -662,16 +756,29 @@ function openLobby() {
   $('roomBox').classList.toggle('hidden', !online || !roomCode);
   $('roomCode').textContent = roomCode || '----';
   const st = $('lobbyStatus'); st.className = 'status';
-  if (online) st.textContent = !players.b || !players.a ? (isHost ? (roomCode ? 'Send your friend the code or the link.' : 'Opening a room…') : 'Waiting for the host…')
-    : (isHost ? 'Pick a level and start!' : 'The host picks the level.') + (net.link === 'direct' ? ' (direct link)' : ' (relay link)');
+  const big = online && partySize() > 2;
+  if (big && !rolesOk() && isHost) defaultRoles();
+  $('lobby').querySelector('.card').classList.toggle('bigParty', big);
+  if (online) st.textContent = watching() ? `You're watching. ${players.a ? players.a.name + ' picks the level.' : ''}`
+    : !players.b || !players.a ? (isHost ? (roomCode ? 'Send your friends the code or the link (up to 4 players).' : 'Opening a room…') : 'Waiting for the host…')
+    : (big ? (isHost ? 'Tap a RUN / TRAP tag to choose who does what.' : 'The host picks the level and the roles.') : (isHost ? 'Pick a level and start! (Up to 4 can join.)' : 'The host picks the level.')) + (watchCount || watchers.size ? ` · ${PI('eye')} ${isHost ? watchers.size : watchCount} watching` : '');
+  if (online && st.textContent.includes('<img')) st.innerHTML = st.textContent;
   else if (practice) st.textContent = 'You run, a bot fires the traps.';
   else st.textContent = 'One runs on the keyboard (or the touch buttons), the other clicks the traps.';
 
   const box = $('players'); box.innerHTML = '';
-  for (const s of practice ? ['a'] : ['a', 'b']) {
+  const shown = practice ? ['a'] : big ? partySides() : ['a', 'b'];
+  box.classList.toggle('many', shown.length > 2);
+  for (const s of shown) {
     const p = players[s], d = document.createElement('div');
-    if (!p) { d.className = 'player empty'; d.textContent = 'Waiting for a friend…'; box.appendChild(d); continue; }
+    if (!p) { d.className = 'player empty'; d.textContent = s === '+' ? 'Room for one more…' : 'Waiting for a friend…'; box.appendChild(d); continue; }
     d.className = 'player';
+    if (big) {   // the role tag: RUN or TRAP, the host taps it to change who does what
+      const tag = document.createElement('button'), r = (lobby.roles || {})[s] || 'trap';
+      tag.className = 'roleTag ' + r; tag.textContent = r === 'run' ? 'RUN' : 'TRAP'; tag.disabled = !isHost;
+      tag.onclick = e => { e.stopPropagation(); sfx.click(); flipRole(s); syncLobby(); openLobby(); };
+      d.appendChild(tag);
+    }
     d.appendChild(portrait(p));
     const nm = document.createElement('b'); nm.textContent = p.name + (online && s === mySide() ? ' (you)' : ''); d.appendChild(nm);
     if (mode === 'local' && s === 'b') {   // let player 2 rename
@@ -684,11 +791,11 @@ function openLobby() {
     box.appendChild(d);
   }
 
-  const ready = !online || (players.a && players.b);
+  const ready = !online || (players.a && players.b && rolesOk());
   const best = Object.fromEntries(Object.entries(stats().best).map(([k, v]) => [k, v.t]));   // best times in any mode
   // the level select is a little world map (src/worldmap.js): pins along a trail, your runner on the chosen one
   const lv = $('levels'); lv.innerHTML = ''; lv.classList.add('wmap');
-  const MH = UI.h < 380 ? 64 : UI.h < 440 ? 76 : UI.h < 500 ? 90 : 150, inner = document.createElement('div');
+  const MH = Math.max(56, (UI.h < 380 ? 64 : UI.h < 440 ? 76 : UI.h < 500 ? 90 : 150) - (big ? (UI.h < 500 ? 12 : 40) : 0)), inner = document.createElement('div');
   inner.className = 'wmapIn'; inner.style.width = mapSize(LEVELS.length).w + 'px'; inner.style.height = MH + 'px';
   if (!mapArt || mapArt.h !== MH) { const c = document.createElement('canvas'); c.className = 'pix wmapArt'; paintMap(c, LEVELS.map(L => L.theme), MH); paintTrail(c, LEVELS.length, MH); mapArt = { h: MH, c }; }
   inner.appendChild(mapArt.c);
@@ -743,10 +850,12 @@ function openLobby() {
     b.onclick = () => { unlockAudio(); sfx.click(); runs = []; startEndless(n, practice ? 'a' : lobby.first); };
     er.appendChild(b);
   }
+  er.classList.toggle('hidden', big);   // endless is a two-player mode
 
   $('firstRow').classList.toggle('hidden', practice);
+  $('firstLab').textContent = big ? 'Roles:' : 'Runs first:';
   const ms = $('matchSeg'); ms.innerHTML = '';
-  for (const [v, label] of [[false, '1 level'], [true, 'Best of 3']]) {
+  for (const [v, label] of [[false, '1 level'], [true, big ? '3 levels' : 'Best of 3']]) {
     const b = document.createElement('button');
     b.textContent = label; b.className = !!lobby.bo3 === v ? 'on' : '';
     b.disabled = online && !isHost;
@@ -754,19 +863,28 @@ function openLobby() {
     ms.appendChild(b);
   }
   const seg = $('firstSeg'); seg.innerHTML = '';
-  for (const s of ['a', 'b']) {
+  if (big) for (const [v, label] of [[false, 'Keep'], [true, 'Swap each level']]) {   // bigger parties: keep the roles, or pass the running on
+    const b = document.createElement('button');
+    b.textContent = label; b.className = !!lobby.swapRoles === v ? 'on' : '';
+    b.disabled = !isHost;
+    b.onclick = () => { lobby.swapRoles = v; unready(); sfx.click(); syncLobby(); openLobby(); };
+    seg.appendChild(b);
+  } else for (const s of ['a', 'b']) {
     const b = document.createElement('button');
     b.textContent = players[s] ? players[s].name : '…'; b.className = lobby.first === s ? 'on' : '';
     b.disabled = online && !isHost;
     b.onclick = () => { lobby.first = s; unready(); sfx.click(); syncLobby(); openLobby(); };
     seg.appendChild(b);
   }
-  // online, both players say Ready (the host's Start is their Ready); the round starts the moment both have
-  const rd = lobby.ready || {}, mine = rd[mySide()], theirs = rd[other(mySide())], friend = players[other(mySide())];
+  // online, everyone says Ready (the host's Start is their Ready); the round starts the moment all have
+  const rd = lobby.ready || {}, mine = rd[mySide()], others = partySides().filter(s => s !== mySide());
+  const waitNames = others.filter(s => !rd[s]).map(s => players[s].name), readyNames = others.filter(s => rd[s]).map(s => players[s].name);
+  $('startBtn').classList.toggle('hidden', watching());
   $('startBtn').disabled = !ready;
-  $('startBtn').classList.toggle('want', !!(online && ready && theirs && !mine));
-  $('startBtn').textContent = !online ? 'Start!' : !ready ? 'Waiting for a friend…' : mine ? `Ready ✓ · waiting for ${friend.name}` : theirs ? `${friend.name} is ready! Ready?` : 'Ready!';
-  for (const s of ['a', 'b']) { const card = $('players').children[s === 'a' ? 0 : 1]; if (online && card && rd[s]) card.classList.add('isReady'); }
+  $('startBtn').classList.toggle('want', !!(online && ready && readyNames.length && !mine));
+  $('startBtn').textContent = !online ? 'Start!' : !ready ? (players.b && !rolesOk() ? 'Pick the roles…' : 'Waiting for a friend…') : mine ? `Ready ✓ · waiting for ${waitNames.join(' & ') || '…'}`
+    : readyNames.length ? `${readyNames.join(' & ')} ${readyNames.length > 1 ? 'are' : 'is'} ready! Ready?` : 'Ready!';
+  [...$('players').children].forEach((card, i) => { const s = shown[i]; if (online && card && rd[s]) card.classList.add('isReady'); });
 }
 
 $('startBtn').onclick = () => {
@@ -779,13 +897,23 @@ $('startBtn').onclick = () => {
 const AUTOREADY = new URLSearchParams(location.search).has('autoready');   // tests: the host's Start starts at once
 function bothReady() {
   const rd = lobby.ready || {};
-  if (!(isHost && mode === 'online' && players.b && rd.a && rd.b && !run)) return;
-  lobby.ready = {}; toast('Both ready!'); sfx.cp();
+  if (!(isHost && mode === 'online' && players.b && partySides().every(s => rd[s]) && !run && rolesOk())) return;
+  lobby.ready = {}; toast(partySize() > 2 ? 'Everyone is ready!' : 'Both ready!'); sfx.cp();
   setTimeout(() => { if (mode === 'online' && players.b && !run) wipeThen(startFromLobby); }, 500);
 }
 // a change of level or match settings asks both players again
 const unready = () => { if (lobby.ready && (lobby.ready.a || lobby.ready.b)) lobby.ready = {}; };
-function startFromLobby() { unlockAudio(); sfx.click(); runs = []; lobby.ready = {}; if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); } hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1); };
+function startFromLobby() {
+  unlockAudio(); sfx.click(); runs = []; lobby.ready = {};
+  if (mode === 'online' && partySize() > 2) {   // a bigger party: everyone plays, in the roles from the lobby
+    if (!rolesOk()) defaultRoles();
+    lobby.played = 0; for (const s2 of partySides()) score[s2] = 0; syncLobby();
+    return hostStart(lobby.level, partyRunners(), 1);
+  }
+  if (lobby.bo3) { score = { a: 0, b: 0 }; syncLobby(); }
+  hostStart(lobby.level, mode === 'practice' ? 'a' : lobby.first, 1);
+}
+const partyRunners = () => partySides().filter(s => lobby.roles[s] === 'run');
 $('leaveBtn').onclick = () => { sfx.click(); nav('title'); };
 $('shareBtn').onclick = async () => {
   const url = `${location.origin}${location.pathname}?join=${roomCode}`;
@@ -847,6 +975,99 @@ function swapSides() {
   startEndless(run.endless.stars, other(run.runner));
 }
 
+// ---------- bigger parties: the round ends when every runner is done; the host adds it up and tells everyone
+function multiFinish(res) {   // my run is over (flag or clock); the others may still be going
+  run.phase = 'end';
+  if (res.finished) achieve('first_flag');
+  const L = levelOf(run.level);
+  if (res.gems) recordGems(res.gems);
+  recordRun({ levelId: L.random ? null : L.id, levelName: L.name, time: res.time, finished: res.finished, deaths: res.deaths });
+  for (const id of ['hint', 'pad', 'padTop']) $(id).classList.add('hidden');
+  net.send({ t: 'done', res, from: mySide() });
+  multiDone(res, mySide());
+}
+function multiDone(res, side) {
+  const M = run.multi; if (!M || M.results[side]) return;
+  M.results[side] = res;
+  const left = M.runners.filter(s => !M.results[s]);
+  if (left.length && !run.runnerHere && M.focus === side) setFocus(left[0]);   // watch whoever is still running
+  if (side === mySide() || (run.runnerHere && run.phase === 'end')) {
+    if (left.length) panel(`<div class="big-emoji">${PI(res.finished ? 'flag' : 'clock', 'bigpi')}</div><h2>${res.finished ? 'You made it!' : 'Out of time'}</h2>
+      <div class="result">${line(M.results[mySide()], false)}</div><p class="status">Waiting for ${left.map(s => esc(players[s].name)).join(' & ')}…</p>`);
+  }
+  if (isHost && !left.length) setTimeout(tallyMulti, 400);
+}
+function tallyMulti() {
+  const M = run && run.multi; if (!M || M.tallied) return;
+  M.tallied = true;
+  const rs = M.runners.map(s => M.results[s]);
+  const tp = {}; for (const s of M.trappers) { const t = M.tscores[s]; tp[s] = { pts: t ? t.pts : 0, c: t ? t.catches : 0 }; }
+  let runWin = null, trapWin = null;
+  if (rs.length >= 2) runWin = better(rs[0], rs[1]) ? rs[0].runner : better(rs[1], rs[0]) ? rs[1].runner : null;
+  else if (rs[0] && rs[0].finished) runWin = rs[0].runner;
+  const [t0, t1] = M.trappers;
+  if (t1) trapWin = tp[t0].pts > tp[t1].pts ? t0 : tp[t1].pts > tp[t0].pts ? t1 : null;
+  else if (t0 && rs[0] && !rs[0].finished) trapWin = t0;
+  if (runWin) score[runWin] = (score[runWin] || 0) + 1;
+  if (trapWin) score[trapWin] = (score[trapWin] || 0) + 1;
+  lobby.played = (lobby.played || 0) + 1;
+  const final = !!lobby.bo3 && lobby.played >= 3;
+  const msg = { t: 'mres', results: M.results, tp, runWin, trapWin, score, final, played: lobby.played };
+  net.send(msg); syncLobby(); showMultiResult(msg);
+}
+function showMultiResult(m) {
+  const M = run.multi; if (!M) return;
+  run.phase = 'end'; M.final = m; score = m.score; lobby.played = m.played;
+  for (const id of ['hint', 'pad', 'padTop']) $(id).classList.add('hidden');
+  if (run.trapperHere && m.tp[mySide()]) recordTrapPoints(m.tp[mySide()].pts);
+  const name = s => esc(players[s] ? players[s].name : '?'), sides = partySides();
+  const best = Math.max(...sides.map(s => score[s] || 0)), champs = sides.filter(s => (score[s] || 0) === best);
+  if (m.final && champs.includes(mySide())) achieve('champion');
+  const title = m.final ? (champs.length === 1 ? `${name(champs[0])} wins the party!` : `${champs.map(name).join(' & ')} share the win!`)
+    : m.runWin ? `${name(m.runWin)} ${M.runners.length > 1 ? 'wins the race!' : 'made it!'}` : M.runners.length > 1 ? "It's a tie!" : 'The trappers win!';
+  const rs = M.runners.map(s => m.results[s]).filter(Boolean).sort((a, b) => (better(a, b) ? -1 : better(b, a) ? 1 : 0));
+  const runCards = rs.map((r, i) => `<div class="pod ${m.runWin === r.runner ? 'p1' : 'p2'}"><div class="podArt" data-pod="${r.runner}" data-win="${m.runWin === r.runner ? 1 : 0}"></div><div class="podBlock"><b>${fmt(r)}</b></div></div>`).join('');
+  const trapCards = M.trappers.map(s => `<div class="podCard${m.trapWin === s ? ' win' : ''}"><b>${name(s)}${m.trapWin === s ? ' ' + PI('crown') : ''}</b><div class="pcRow"><span>${PI('spikes')} Traps</span><i>${m.tp[s] ? m.tp[s].pts : 0}<small> pts · ${m.tp[s] ? m.tp[s].c : 0} catches</small></i></div></div>`).join('');
+  const runRows = rs.map(r => `<div class="podCard${m.runWin === r.runner ? ' win' : ''}"><b>${name(r.runner)}${m.runWin === r.runner ? ' ' + PI('crown') : ''}</b><div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}${!r.finished && r.left != null ? `<small> · ${r.left} tiles to go</small>` : ''}</i></div><div class="pcRow"><span>${PI('warn')} Falls</span><i>${r.deaths}</i></div></div>`).join('');
+  const controls = isHost;
+  panel(`<h2>${PI(m.final || m.runWin ? 'trophy' : 'flag')} ${title}</h2>
+    <div class="podScene compact"><div class="podium">${runCards}</div><div class="podCards multi">${runRows}${trapCards}</div></div>
+    <p class="partyScore">${sides.map(s => `<span${champs.includes(s) && best > 0 ? ' class="lead"' : ''}>${name(s)} <b>${score[s] || 0}</b></span>`).join('')}${lobby.bo3 ? `<small> · level ${Math.min(3, m.played)} of 3</small>` : ''}</p>
+    <div class="buttons">${controls && !m.final ? `<button class="big pink" id="nextLv">Next level</button>` : ''}
+      <div class="row"><button class="mid gold" id="again">${m.final ? 'Play again' : 'Rematch'}</button>${controls ? `<button class="mid" id="toLobby">Lobby</button>` : ''}</div>${rematchNote()}</div>`);
+  if (m.final) confetti();
+  armRematch(() => { runs = []; if (m.final) { lobby.played = 0; for (const s2 of partySides()) score[s2] = 0; } syncLobby(); hostStart(run.level, partyRunners(), 1); });
+  if (!controls) return;
+  if ($('nextLv')) $('nextLv').onclick = () => { sfx.click(); lobby.level = nextOf(run.level); if (lobby.swapRoles) rotateRoles(); syncLobby(); hostStart(lobby.level, partyRunners(), 1); };
+  $('toLobby').onclick = () => { sfx.click(); if (m.final) { lobby.played = 0; for (const s2 of partySides()) score[s2] = 0; } net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
+}
+// trappers and spectators with two runners can switch who they watch
+function setFocus(side) {
+  const M = run.multi; if (!M || side === M.focus) return;
+  const old = M.focus; M.focus = side; run.runner = side; run.colors = dressed(players[side]); run.snaps = [];
+  const rv = M.rivals[side]; if (rv) { run.world.player.x = rv.tx; run.world.player.y = rv.ty; }
+  M.rivals[old] = M.rivals[old] || { x: run.world.player.x, y: run.world.player.y, tx: run.world.player.x, ty: run.world.player.y, face: 1, f: 0, at: performance.now() };
+  delete M.rivals[side];
+  updateFocusBtn();
+}
+function updateFocusBtn() {
+  const M = run && run.multi, b = $('focusBtn'); if (!M || !b) return;
+  const nxt = M.runners.find(s => s !== M.focus);
+  b.innerHTML = `${PI('eye')} ${esc(players[M.focus].name)}`; b.title = nxt ? `Watching ${players[M.focus].name}. Tap to watch ${players[nxt].name}` : '';
+}
+$('focusBtn').onclick = () => { const M = run && run.multi; if (!M) return; sfx.click(); const nxt = M.runners.find(s => s !== M.focus && !M.results[s]) || M.runners.find(s => s !== M.focus); if (nxt) setFocus(nxt); };
+// the rivals drawn in my view: the other runners, eased toward their latest positions
+function rivalsForDraw(dt) {
+  const M = run.multi; if (!M) return null;
+  const out = [];
+  for (const s in M.rivals) {
+    const rv = M.rivals[s]; if (rv.tx == null || M.results[s] && performance.now() - rv.at > 1500) continue;
+    const k = Math.min(1, dt * 14); rv.x += (rv.tx - rv.x) * k; rv.y += (rv.ty - rv.y) * k;
+    out.push({ x: rv.x, y: rv.y, vx: rv.vx || 0, vy: rv.vy || 0, face: rv.face || 1, onGround: !!(rv.f & 1), dead: !!(rv.f & 2), colors: dressed(players[s]), name: players[s].name });
+  }
+  return out;
+}
+
 function hostStart(level, runner, n) {
   if (mode === 'online') net.send({ t: 'start', level, runner, n });
   startRun(level, runner, n);
@@ -866,7 +1087,7 @@ addEventListener('keydown', e => {
   const n = /^(Digit|Numpad)([0-9])$/.exec(e.code);
   if (n && run.trapperHere) { const d = +n[2]; if (d >= 1 && d <= SLOTS) fireSlot(d - 1, e.code); }
   const tg = run.trapperHere && gadgetForKey('trapper', e.code);
-  if (tg && run.world.loadout.trapper.includes(tg)) useTrapperGadget(tg, GADGETS.trapper[tg].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
+  if (tg && myTrapGadgets().includes(tg)) useTrapperGadget(tg, GADGETS.trapper[tg].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
   const rg0 = gadgetForKey('runner', e.code), rg = rg0 && runnerKeyed().includes(rg0) && rg0;
   if (rg && run.runnerHere) useRunnerGadget(rg);
 });
@@ -976,7 +1197,7 @@ function readPads(dt) {
       if (p.pressed[BTN.A]) useTrapperGadget(run.aim.id, { x: run.aim.x, y: run.aim.y });
       else if (p.pressed[BTN.B]) run.aim = null;
     } else [BTN.B, BTN.X, BTN.Y].forEach((b, k) => { if (p.pressed[b]) fireSlot(k, 'gp' + p.slot + '-' + b); });
-    [BTN.LB, BTN.RB, BTN.LT, BTN.RT].forEach((b, k) => { if (p.pressed[b]) { const id = run.world.loadout.trapper[k]; if (id) useTrapperGadget(id); } });
+    [BTN.LB, BTN.RB, BTN.LT, BTN.RT].forEach((b, k) => { if (p.pressed[b]) { const id = myTrapGadgets()[k]; if (id) useTrapperGadget(id); } });
   }
 }
 // Menus: move a highlight over the buttons of whatever screen is up, A presses it, B finds a way back.
@@ -1049,7 +1270,7 @@ function fireTrap(id, holdKey) {
   const hold = holdKey !== undefined && !!TRAPS[t.kind].hold;
   if (hold) run.held.set(holdKey, id);
   if (run.simOwner) w.trigger(id, 0, hold);
-  else { net.send({ t: 'act', id, lead: net.lag, hold }); run.pending[id] = 0.35; sfx.click(); }
+  else { net.send({ t: 'act', id, lead: net.lag, hold, by: mySide() }); run.pending[id] = 0.35; sfx.click(); }
 }
 function releaseHold(holdKey) {
   if (!run || !run.held.has(holdKey)) return;
@@ -1165,7 +1386,9 @@ const gadgetForKey = (side, code) => { const map = side === 'runner' ? R_KEY : T
 const PAD_T = ['LB', 'RB', 'LT', 'RT'], PAD_R = ['X', 'Y', 'B', 'RB'], PAD_SLOT = ['B', 'X', 'Y'];
 let padOn = false;
 const runnerKeyed = () => run.world.loadout.runner.filter(id => !GADGETS.runner[id].passive);
-const keyOf = (side, id) => padOn ? (side === 'trapper' ? PAD_T[run.world.loadout.trapper.indexOf(id)] : PAD_R[runnerKeyed().indexOf(id)]) : ((side === 'trapper' ? T_KEY : R_KEY)[id] || [])[0];
+// With two trappers, they share the trapper's four gadgets: two each (every other one).
+const myTrapGadgets = () => { const lo = run.world.loadout.trapper, M = run.multi; if (!M || M.trappers.length < 2) return lo; const i = Math.max(0, M.trappers.indexOf(mySide())); return lo.filter((_, k) => k % 2 === i); };
+const keyOf = (side, id) => padOn ? (side === 'trapper' ? PAD_T[myTrapGadgets().indexOf(id)] : PAD_R[runnerKeyed().indexOf(id)]) : ((side === 'trapper' ? T_KEY : R_KEY)[id] || [])[0];
 const slotKey = i => padOn ? PAD_SLOT[i] : touchDevice ? '' : String(i + 1);
 function gadgetButton(id, side, onPress) {
   const b = document.createElement('button');
@@ -1182,7 +1405,7 @@ function buildGadgets() {
   const gb = $('gadbar'), rb = $('rgad');
   gb.innerHTML = ''; rb.innerHTML = '';
   const lo = run.world.loadout;
-  if (run.trapperHere) for (const id of lo.trapper) gb.appendChild(gadgetButton(id, 'trapper', id => useTrapperGadget(id)));
+  if (run.trapperHere) for (const id of myTrapGadgets()) gb.appendChild(gadgetButton(id, 'trapper', id => useTrapperGadget(id)));
   if (run.runnerHere) for (const id of lo.runner) rb.appendChild(gadgetButton(id, 'runner', GADGETS.runner[id].passive ? null : useRunnerGadget));
 }
 function updateGadgets() {
@@ -1218,7 +1441,7 @@ function useTrapperGadget(id, at) {
   run.aim = null;
   const x = at ? Math.round(at.x) : 0, y = at ? Math.round(at.y) : 0;
   if (run.simOwner) { if (!w.useGadget('trapper', id, x, y)) deny(gadEl('gadbar', id)); }
-  else { net.send({ t: 'gad', id, x, y, lead: net.lag }); g.cd = def.cd; if (g.n > 0) g.n--; sfx.click(); }
+  else { net.send({ t: 'gad', id, x, y, lead: net.lag, by: mySide() }); g.cd = def.cd; if (g.n > 0) g.n--; sfx.click(); }
 }
 const gadNames = side => run.world.loadout[side].map(id => GADGETS[side][id].name.toLowerCase()).join(', ');
 function useRunnerGadget(id) {
@@ -1324,15 +1547,20 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   show(null);
   const world = new World(levelOf(level));
   const online = mode === 'online';
+  // A bigger party passes the runners as a list: each runner's device runs its own copy of the world, the trappers'
+  // orders go to all of them, and everyone else watches one runner (the "focus") with the others drawn as rivals.
+  const multi = Array.isArray(runner) && online ? { runners: runner.slice(), trappers: partySides().filter(s => !runner.includes(s)), results: {}, tscores: {}, rivals: {}, focus: null } : null;
+  if (multi) { runner = multi.runners.includes(mySide()) ? mySide() : multi.runners[0]; multi.focus = runner; }
+  else if (Array.isArray(runner)) runner = runner[0];
   const runnerHere = mode === 'tutorial' ? tutRole === 'runner' : !online || runner === mySide();
   run = {
-    level, runner, n, world, phase: 'count', countT: 3.2, previewT: 0, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1,
-    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere) || (mode === 'tutorial' && !runnerHere), simOwner: runnerHere || mode === 'tutorial', held: new Map(),
+    level, runner, n, world, phase: 'count', countT: 3.2, previewT: 0, lastCount: 4, acc: 0, steps: 0, outbox: [], snaps: [], pending: {}, hover: -1, multi,
+    runnerHere, trapperHere: mode === 'local' || (online && !runnerHere && !watching()) || (mode === 'tutorial' && !runnerHere), simOwner: runnerHere || mode === 'tutorial', held: new Map(),
     bot: mode === 'practice' ? new Bot(0.35) : null, colors: dressed(players[runner]), paused: false, endT: 0, hintT: 5, endless,
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
   if (tutRole) { run.tut = new Tutorial(tutRole, touchDevice, kind => { const i = (run.slots || []).findIndex(t => t && t.kind === kind); return i < 0 ? '' : i + 1; }); run.countT = 1.5; }
-  run.score = new TrapScore(); run.closes = 0; rematchVotes = { a: false, b: false }; rematchGo = null;
+  run.score = new TrapScore(); run.closes = 0; rematchVotes = {}; rematchGo = null; run.readyFrom = new Set();
   if (endless && runnerHere) run.nextGen = genAsync(endless.stars);
   const Lv = levelOf(level);
   if (Lv.random && !endless && (mode !== 'online' || isHost)) prefetch(Lv.stars);
@@ -1350,7 +1578,16 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   if (mode === 'local') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = `${players[runner].name}  ·  traps: ${players[other(runner)].name}`; }
   else if (mode === 'practice') { role.textContent = 'RUN'; role.className = 'role'; $('who').textContent = levelOf(level).name; }
   else if (mode === 'tutorial') { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = 'Training Grounds'; }
+  else if (watching()) { role.textContent = 'WATCH'; role.className = 'role watch'; $('who').textContent = multi ? multi.runners.map(s => players[s].name).join(' vs ') + ' run' : `${players[runner].name} runs · ${players[other(runner)].name} traps`; }
+  else if (multi) {
+    const names = ss => ss.filter(s => s !== mySide()).map(s => players[s].name).join(' & ');
+    role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap');
+    $('who').textContent = runnerHere ? (multi.runners.length > 1 ? `Race ${names(multi.runners)} · traps: ${names(multi.trappers)}` : `Traps: ${names(multi.trappers)}`)
+      : `${multi.runners.map(s => players[s].name).join(' & ')} ${multi.runners.length > 1 ? 'run' : 'runs'}` + (multi.trappers.length > 1 ? ` · with ${names(multi.trappers)}` : '');
+  }
   else { role.textContent = runnerHere ? 'RUN' : 'TRAP'; role.className = 'role' + (runnerHere ? '' : ' trap'); $('who').textContent = runnerHere ? `${players[other(runner)].name} has the traps` : `${players[runner].name} is running`; }
+  $('focusBtn').classList.toggle('hidden', !(multi && !runnerHere && multi.runners.length > 1));
+  if (multi) updateFocusBtn();
   if (endless) $('who').textContent = `∞ ${starText(endless.stars)} · Stage ${endless.stage}` + (mode === 'online' ? (runnerHere ? '' : ` · ${players[runner].name} runs`) : mode === 'local' ? ` · ${players[runner].name} runs` : '');
   buildTrapBar();
   buildGadgets();
@@ -1359,7 +1596,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ` (1-3, gadgets ${run.world.loadout.trapper.map(id => keyOf('trapper', id)).join(' ')})`}`
     : runnerHere ? (touchDevice ? `Reach the flag! Your gadgets: ${gadNames('runner')}.` : `Reach the flag! ← → run, Space jump. ${runnerKeyed().map(id => keyOf('runner', id) + ' ' + GADGETS.runner[id].name.toLowerCase()).join(', ')}.`)
       : (touchDevice ? `The three coloured buttons fire the traps outlined in the same colour (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-3 fire the coloured trap buttons. Gadgets: ${run.world.loadout.trapper.map(id => keyOf('trapper', id) + ' ' + GADGETS.trapper[id].name.toLowerCase()).join(', ')} (aimed at your mouse).`);
-  $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + ''; $('hint').classList.remove('hidden');
+  $('hint').textContent = watching() ? `You're watching${multi && multi.runners.length > 1 ? ': tap the eye at the top to follow the other runner' : ''}.` : (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + ''; $('hint').classList.remove('hidden');
   if (run.preview) { run.phase = 'preview'; run.previewT = PREVIEW; showPreview(); $('hint').classList.add('hidden'); }
   input.jumpQueued = false;
   startMusic(endless ? 'endless' : levelOf(level).theme);
@@ -1371,7 +1608,7 @@ function gameEvent(e) {
   R.onEvent(e, run.colors); playEvent(e);
   if (k === 'die') buzz(run.runnerHere ? [60, 40, 90] : 25);
   if ((k === 'stun' || k === 'block') && run.runnerHere) buzz(35);
-  if (k === 'catch') { onCatch(extra); run.tutCaught = true; }
+  if (k === 'catch') { onCatch(extra, e[4]); run.tutCaught = true; }
   if (k === 'block' && run.runnerHere) achieve('shield_save');
 }
 R.onClose = () => { sfx.whoosh(); if (run && run.runnerHere) { buzz(12); if (++run.closes >= 5) achieve('close5'); } };
@@ -1455,27 +1692,30 @@ function openGuide(back, tab = 'traps') {
 $('itemsBtn').onclick = () => { sfx.click(); openGuide(hidePanel); };
 
 // ---------- the trapper's score: a big gold popup for every catch, combos stack up
-function onCatch(credit) {
-  const r = run.score.catch(credit, run.world.time), mine = run.trapperHere;
+function onCatch(credit, by) {
+  // a bigger party keeps a score for each trapper (the trap's 'by' says who fired it)
+  const M = run.multi, sc = M ? (M.tscores[by] = M.tscores[by] || new TrapScore()) : run.score;
+  const r = sc.catch(credit, run.world.time), mine = M ? by === mySide() : run.trapperHere;
   if (mine && run.bot == null && !(mode === 'local' && run.runner === 'a') && mode !== 'tutorial') recordCatch();
   if (mine && run.bot == null) {
     achieve('first_catch');
     if (credit === 'assist') achieve('assist');
     if (r.streak >= 3) achieve('combo');
-    if (run.score.catches >= 5) achieve('catch5');
-    if (run.score.kinds.size >= 4) achieve('variety');
-    if (run.score.pts >= 900) achieve('trap_master');
+    if (sc.catches >= 5) achieve('catch5');
+    if (sc.kinds.size >= 4) achieve('variety');
+    if (sc.pts >= 900) achieve('trap_master');
   }
   const pop = $('catchPop');
   pop.className = 'catchPop' + (mine ? ' mine' : '') + (r.streak > 1 ? ' combo' : '');
-  pop.innerHTML = `<b>+${r.gain}</b>${r.lines.map(t => `<small>${t}</small>`).join('')}`;
+  pop.innerHTML = `<b>+${r.gain}</b>${M && players[by] && !mine ? `<small>${esc(players[by].name)}</small>` : ''}${r.lines.map(t => `<small>${t}</small>`).join('')}`;
   void pop.offsetWidth; pop.classList.add('show');
   clearTimeout(pop.hideT); pop.hideT = setTimeout(() => pop.classList.remove('show'), 1300);
   updateTrapScore(true);
   if (mine) { sfx.kaching(r.streak); buzz(r.streak > 1 ? [30, 30, 30, 30, 60] : [40, 30, 50]); R.flash = 0.08; }
 }
 function updateTrapScore(bump) {
-  const el = $('tscore'), s = run.score;
+  const el = $('tscore'), M = run.multi;
+  const s = M ? (run.trapperHere ? M.tscores[mySide()] || { pts: 0 } : { pts: Object.values(M.tscores).reduce((a, x) => a + x.pts, 0) }) : run.score;
   el.textContent = s.pts;
   el.title = run.trapperHere ? 'Your trap score' : 'Trapper score';
   if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
@@ -1540,7 +1780,8 @@ function showPreview() {
   for (const c of el.querySelectorAll('canvas[data-icon]')) c.getContext('2d').drawImage(SPR.icon[c.dataset.icon], 0, 0);
   for (const c of el.querySelectorAll('canvas[data-knob]')) { drawKnob(c, { r: 6, pal: c.dataset.side, icon: SPR.icon[c.dataset.knob] }); sizeArt(c); }   // the same little arcade caps as the buttons
   el.classList.remove('hidden');
-  run.meReady = false; run.peerReady = !!run.peerReadyEarly;
+  run.meReady = false;
+  if (watching()) { const sk = $('pvT')?.parentElement; if (sk) sk.querySelector('button, .pvHold')?.remove(); }
 }
 function endPreview() {
   if (!run || run.phase !== 'preview') return;
@@ -1549,10 +1790,17 @@ function endPreview() {
 }
 // Tap when you've seen enough. Online the round starts once both players are ready (or the time is up).
 function readyPreview() {
-  if (!run || run.phase !== 'preview' || run.meReady) return;
+  if (!run || run.phase !== 'preview' || run.meReady || watching()) return;
   run.meReady = true; sfx.click();
-  if (mode === 'online') net.send({ t: 'ready' });
-  if (mode !== 'online' || run.peerReady) endPreview();
+  if (mode === 'online') net.send({ t: 'ready', from: mySide() });
+  checkPreviewReady();
+}
+// everyone who plays this round has tapped Skip (spectators don't count)
+function checkPreviewReady() {
+  if (!run || run.phase !== 'preview') return;
+  if (mode !== 'online') { if (run.meReady) endPreview(); return; }
+  const need = partySides().filter(s => s !== mySide()), meOk = run.meReady || watching();
+  if (meOk && need.every(s => run.readyFrom.has(s))) endPreview();
 }
 $('preview').addEventListener('pointerdown', e => { if (e.target.closest('#pvSkipBtn')) { e.preventDefault(); readyPreview(); } });
 const HOLD_SKIP = 0.7;   // seconds a key has to be held to skip on PC
@@ -1566,7 +1814,9 @@ function panPreview(dt) {
   if (run.skipHold >= HOLD_SKIP) readyPreview();
   if (run.phase !== 'preview') return;
   const online = mode === 'online', friend = esc(other ? other.name : 'your friend');
-  const txt = run.meReady ? `Skipping… waiting for ${friend} (${left})` : `Starts in ${left}${online && run.peerReady ? ` · ${friend} wants to skip` : ''}`;
+  const others = partySides().filter(s => s !== mySide()), waitFor = others.filter(s => !run.readyFrom.has(s)).map(s => esc(players[s].name));
+  const wants = others.filter(s => run.readyFrom.has(s)).map(s => esc(players[s].name));
+  const txt = watching() ? `Starts in ${left}` : run.meReady ? `Skipping… waiting for ${waitFor.join(' & ') || friend} (${left})` : `Starts in ${left}${online && wants.length ? ` · ${wants.join(' & ')} ${wants.length > 1 ? 'want' : 'wants'} to skip` : ''}`;
   const pv = $('pvT'); if (pv && pv.textContent !== txt) pv.textContent = txt;
   // hold on the start, fly to the flag, look around there, fly back
   const w = run.world, u = 1 - run.previewT / PREVIEW, ease = v => v * v * (3 - 2 * v);
@@ -1576,7 +1826,15 @@ function panPreview(dt) {
 }
 
 function receiveSnap(m) {
-  const w = run.world;
+  const w = run.world, M = run.multi;
+  if (M && m.from && m.from !== run.runner) {   // another runner in a bigger party: a rival to draw, and their catches to count
+    const rv = M.rivals[m.from] || (M.rivals[m.from] = { x: m.p[0], y: m.p[1] });
+    Object.assign(rv, { tx: m.p[0], ty: m.p[1], vx: m.p[2], vy: m.p[3], face: m.p[4], f: m.p[5], at: performance.now() });
+    for (const e of m.ev) if (e[0] === 'catch') onCatch(e[3], e[4]);
+    if ((run.phase === 'count' || run.phase === 'preview') && m.tm > 0 && !run.simOwner) { if (run.phase === 'preview') endPreview(); run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); }
+    return;
+  }
+  if (run.simOwner) return;
   if ((run.phase === 'count' || run.phase === 'preview') && m.tm > 0) { if (run.phase === 'preview') endPreview(); run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); tipsAtStart(); }
   w.applySnap(m);
   run.snaps.push({ at: performance.now(), x: m.p[0], y: m.p[1], dead: !!(m.p[5] & 2) });
@@ -1589,6 +1847,7 @@ let lastGhost = null;
 const levelKey = ref => typeof ref === 'number' ? 'L' + ref : ref && ref.id;
 function finishRun(res) {
   if (run.phase === 'end') return;
+  if (run.multi && run.simOwner) return multiFinish(res);
   run.phase = 'end';
   if (run.simOwner && run.trail.length && !run.endless) res.trail = run.trail;
   if (run.runnerHere && res.finished) {
@@ -1619,14 +1878,14 @@ function resultOf(world, runner) {
   const p = world.player, span = Math.max(1, world.goal.x - world.start.x), gems = world.gemsGot || 0;
   // each gem takes GEM_BONUS seconds off a finished run's time
   return { runner, gems, raw: Math.round(world.time * 10) / 10, time: Math.round(Math.max(0, world.time - (p.finished ? gems * GEM_BONUS : 0)) * 10) / 10, deaths: p.deaths, finished: p.finished, tp: run.score.pts, tc: run.score.catches, ts: run.score.bestStreak,
-    progress: p.finished ? 100 : Math.max(0, Math.min(99, Math.round((p.best - world.start.x) / span * 100))) };
+    ...(() => { const g = world.progressOf(); return { prog: g.frac, left: g.left, progress: p.finished ? 100 : Math.max(0, Math.min(99, Math.floor(g.frac * 100))) }; })() };
 }
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
 // a finished time with gems: say where the difference to the clock comes from
 const gemNote = r => r.finished && r.gems && r.raw != null ? `<small class="gemNote">${r.raw.toFixed(1)}s − ${(r.gems * GEM_BONUS).toFixed(1)}s ${PI('gem')}</small>` : '';
 function line(r, win) {
   const p = players[r.runner];
-  return `<div class="line${win ? ' win' : ''}" data-portrait="${r.runner}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}${gemNote(r)}</span></div>`;
+  return `<div class="line${win ? ' win' : ''}" data-portrait="${r.runner}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : r.left != null ? `ran out of time, ${r.left} tiles from the flag` : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}${gemNote(r)}</span></div>`;
 }
 // Who trapped best this level: the trapper of each run is the other player.
 function trapKing(r1, r2) {
@@ -1651,7 +1910,7 @@ function podium(r1, r2, win) {
     <div class="podCards">${order.map(r => {
       const o = other(r), p = players[r.runner], tp = o && o.tp != null ? o.tp : null;
       return `<div class="podCard${r === win ? ' win' : ''}"><b>${esc(p.name)}${r === win ? ' ' + PI('crown') : ''}</b>
-        <div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}${r.finished && r.gems ? `<small> (${r.raw.toFixed(1)}s on the clock)</small>` : ''}</i></div>
+        <div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}${!r.finished && r.left != null ? `<small> · ${r.left} tiles to go</small>` : ''}${r.finished && r.gems ? `<small> (${r.raw.toFixed(1)}s on the clock)</small>` : ''}</i></div>
         <div class="pcRow"><span>${PI('warn')} Falls</span><i>${r.deaths}</i></div>
         ${r.gems ? `<div class="pcRow"><span>${PI('gem')} Gems</span><i>${r.gems}<small>${r.finished ? ' · −' + (r.gems * GEM_BONUS).toFixed(1) + 's' : ''}</small></i></div>` : ''}
         ${tp != null ? `<div class="pcRow"><span>${PI('spikes')} Traps</span><i>${tp}<small> pts · ${o.tc || 0} ${o.tc === 1 ? 'catch' : 'catches'}</small></i></div>` : ''}</div>`;
@@ -1669,7 +1928,8 @@ function animatePodium(t) {
     const g = c.getContext('2d'); g.clearRect(0, 0, 16, 18); g.drawImage(charFrame(dressed(p), fr, 1, bob), 2, 1);
   }
 }
-const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.progress > y.progress;
+// unfinished runs compare by how much of the way to the flag is left (in tiles), not by the rounded percentage
+const better = (x, y) => x.finished !== y.finished ? x.finished : x.finished ? x.time < y.time : x.left != null && y.left != null ? x.left < y.left : x.progress > y.progress;
 
 function showRunResult(res) {
   if (!run) return;
@@ -1745,26 +2005,30 @@ function showRunResult(res) {
 
 // ---------- rematch: on the result screens both players tap Rematch, and the same level starts again straight away
 // with the sides swapped, no lobby in between. Online it needs both taps (each sees the other's); on one device one tap.
-let rematchVotes = { a: false, b: false }, rematchGo = null;
+let rematchVotes = {}, rematchGo = null;
 const rematchNote = () => mode === 'online' ? '<p class="status rmState" id="rmState"></p>' : '';
 function armRematch(go) {
   rematchGo = go;
-  $('again').onclick = () => { sfx.click(); if (mode !== 'online') return go(); voteRematch(mySide()); };
+  const b = $('again'); if (!b) return;
+  if (watching()) { b.remove(); return; }
+  b.onclick = () => { sfx.click(); if (mode !== 'online') return go(); voteRematch(mySide()); };
   showRematch();
 }
+// every player in the party has to tap Rematch (spectators just watch)
 function voteRematch(side) {
-  if (rematchVotes[side]) return;
+  if (side === 'w' || rematchVotes[side]) return;
   rematchVotes[side] = true;
-  if (side === mySide()) net.send({ t: 'rematch' }); else sfx.cp();
+  if (side === mySide()) net.send({ t: 'rematch', from: side }); else sfx.cp();
   showRematch();
-  if (isHost && rematchVotes.a && rematchVotes.b && rematchGo) { const go = rematchGo; rematchGo = null; go(); }
+  if (isHost && partySides().every(s => rematchVotes[s]) && rematchGo) { const go = rematchGo; rematchGo = null; go(); }
 }
 function showRematch() {
   const st = $('rmState'), b = $('again');
   if (!st || !b || mode !== 'online') return;
-  const mine = rematchVotes[mySide()], theirs = rematchVotes[other(mySide())], friend = esc((players[other(mySide())] || {}).name || 'Your friend');
-  st.innerHTML = mine && theirs ? 'Rematch!' : mine ? `Waiting for ${friend}… (1/2)` : theirs ? `<b>${friend} wants a rematch!</b> (1/2)` : '';
-  b.classList.toggle('want', theirs && !mine); b.disabled = mine;
+  const all = partySides(), n = all.filter(s => rematchVotes[s]).length, mine = rematchVotes[mySide()];
+  const others = all.filter(s => s !== mySide()), want = others.filter(s => rematchVotes[s]).map(s => esc(players[s].name)), wait = others.filter(s => !rematchVotes[s]).map(s => esc(players[s].name));
+  st.innerHTML = n === all.length ? 'Rematch!' : mine ? `Waiting for ${wait.join(' & ')}… (${n}/${all.length})` : want.length ? `<b>${want.join(' & ')} ${want.length > 1 ? 'want' : 'wants'} a rematch!</b> (${n}/${all.length})` : '';
+  b.classList.toggle('want', want.length > 0 && !mine); b.disabled = mine;
   b.textContent = mine ? 'Rematch ✓' : 'Rematch';
 }
 
@@ -2149,13 +2413,13 @@ function tick(dt, now) {
       for (const e of w.events) { gameEvent(e); if (mode === 'online') run.outbox.push(e); }
       w.events.length = 0;
       run.steps++;
-      if (mode === 'online' && run.steps % 2 === 0) { const s = w.snapshot(); s.ev = run.outbox; run.outbox = []; net.send(s); }
+      if (mode === 'online' && run.steps % (run.multi ? 3 : 2) === 0) { const s = w.snapshot(); s.ev = run.outbox; s.from = mySide(); run.outbox = []; net.send(s); }   // bigger parties: 20 a second, there are more of them
       if (run.phase === 'play') {
         if (w.player.finished) { run.endT += DT; if (run.endT > 1.1) { if (run.endless) nextStage(); else finishRun(resultOf(w, run.runner)); break; } }
         else if (w.time >= TIME_LIMIT && !run.endless) { finishRun(resultOf(w, run.runner)); break; }
       }
     }
-    if (run && run.phase === 'end' && mode === 'online') { const s = w.snapshot(); s.ev = run.outbox; run.outbox = []; net.send(s); }
+    if (run && run.phase === 'end' && mode === 'online') { const s = w.snapshot(); s.ev = run.outbox; s.from = mySide(); run.outbox = []; net.send(s); }
   }
   if (!run || run.world !== w) return;   // ended, or the next endless stage just started
   if (!run.simOwner) {
@@ -2180,7 +2444,7 @@ function tick(dt, now) {
   tickTips(dt);
   if (run.phase === 'end') animatePodium(performance.now() / 1000);
   if (run.trapperHere) updateTrapBar();
-  R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, slots: run.trapperHere ? run.slots : null, slotColors: SLOT_COLORS, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
+  R.draw(w, { dt, rivals: run.multi ? rivalsForDraw(dt) : null, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, slots: run.trapperHere ? run.slots : null, slotColors: SLOT_COLORS, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
   $('timer').textContent = (E ? E.total + w.time : w.time).toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = (E ? E.deaths : 0) + w.player.deaths;
@@ -2252,4 +2516,4 @@ else if (session && Date.now() - session.t < 5 * 60 * 1000) {   // the app was c
 }
 else show('title');
 requestAnimationFrame(frame);
-window.__td = { levels: LEVELS, get ed() { return ed; }, lobbyLevel: () => lobby.level, toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };
+window.__td = { refreshLobby: () => openLobby(), mySide, lobbyRoles: () => lobby.roles, levels: LEVELS, get ed() { return ed; }, lobbyLevel: () => lobby.level, toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };

@@ -97,7 +97,7 @@
     <p class="status" id="joinStatus"></p>
     <div class="buttons">
       <button class="big blue" id="joinGo">Join</button>
-      <button class="mid" data-go="title">Back</button>
+      <div class="row"><button class="mid" id="joinWatch">Just watch</button><button class="mid" data-go="title">Back</button></div>
     </div>
   </div>
 </section>
@@ -116,7 +116,7 @@
     <h3>Level</h3>
     <div class="levels" id="levels"></div>
     <div class="randWrap"><div class="randRow" id="randRow"></div><div class="randRow" id="endRow"></div><div class="randRow hidden" id="myRow"></div></div>
-    <div class="row" id="firstRow"><span>Runs first:</span> <div class="seg" id="firstSeg"></div><span class="matchLab">Match:</span> <div class="seg" id="matchSeg"></div></div>
+    <div class="row" id="firstRow"><span id="firstLab">Runs first:</span> <div class="seg" id="firstSeg"></div><span class="matchLab">Match:</span> <div class="seg" id="matchSeg"></div></div>
     <div class="buttons">
       <button class="big pink" id="startBtn">Start!</button>
       <button class="mid" id="leaveBtn">Leave</button>
@@ -128,7 +128,7 @@
 <div class="hud hidden" id="hud">
   <div class="hudLeft"><div class="hplank"><span class="role" id="role">RUN</span><span class="who" id="who"></span></div></div>
   <div class="tplaque"><div class="timer" id="timer">0.0</div><span class="gemBonus hidden" id="gemBonus" title="Gems: taken off your time at the flag"></span></div>
-  <div class="hudRight"><span class="sig hidden" id="sigHud" title="Connection"><i></i><i></i><i></i><i></i></span><div class="hplank medals"><span class="gems hidden" id="gemsHud" title="Gems: each takes 0.5 s off your time">0/0</span><span class="tscore" id="tscore">0</span><span class="deaths" id="deaths">0</span></div><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
+  <div class="hudRight"><button class="chip hidden" id="focusBtn" aria-label="Watch the other runner"></button><span class="sig hidden" id="sigHud" title="Connection"><i></i><i></i><i></i><i></i></span><div class="hplank medals"><span class="gems hidden" id="gemsHud" title="Gems: each takes 0.5 s off your time">0/0</span><span class="tscore" id="tscore">0</span><span class="deaths" id="deaths">0</span></div><button class="chip" id="pauseBtn" aria-label="Menu">II</button></div>
 </div>
 <div class="hint hidden" id="hint"></div>
 <div class="count hidden" id="count">3</div>

@@ -82,7 +82,7 @@ export class World {
     // A rope hangs from its anchor block down to the floor, at most ROPE.maxLen tiles.
     for (const r of this.ropes) { let n = 0; while (n < ROPE.maxLen && !this.solidAt(r.tx, r.ty + 1 + n)) n++; r.len = n * TILE - 4; }
     this.player = { x: this.start.x, y: this.start.y, vx: 0, vy: 0, face: 1, onGround: false, coyote: 0, buffer: 0,
-      dead: false, deadT: 0, finished: false, deaths: 0, cp: { ...this.start }, best: this.start.x, airT: 0, wasJump: false,
+      dead: false, deadT: 0, finished: false, deaths: 0, cp: { ...this.start }, best: this.start.x, bestD: 1e9, airT: 0, wasJump: false,
       gustDir: 0, slow: false, lifted: false, icy: false, carry: 0, dash: 0, rope: -1, ang: 0, angV: 0, ropeLen: 0, ropeCd: 0, ride: -1 };
     for (const k of STATUS) this.player[k] = 0;
     // Gadgets: the level decides which four each side gets.
@@ -143,14 +143,15 @@ export class World {
 
   // lead: seconds the order spent on the network; the trap skips that much of its warning (at most 60%).
   // hold: for traps that act while held (the flame), keep going until release(); otherwise a short burst.
-  trigger(id, lead = 0, hold = false) {
+  // by: which trapper fired it (bigger parties), so the catch is credited to them
+  trigger(id, lead = 0, hold = false, by) {
     const t = this.traps[id];
     if (!t || t.state !== 'idle' || t.cd > 0 || (this.lock > 0 && !this.chained(t)) || this.jam > 0 || this.player.finished) return false;
     const C = TRAPS[t.kind], chained = this.chained(t);
     t.state = 'warn'; t.t = Math.min(lead, C.warn * 0.6); t.cd = C.hold ? 99 : C.cd; this.lock = TRAP_LOCK;
     if (chained) t.t = Math.max(t.t, C.warn - C.chainWarn);
     if (C.chain) { this.chainKind = t.kind; this.chainT = C.chain; }
-    this.pressT = this.time;
+    this.pressT = this.time; this.pressBy = by; t.by = by; t.firedAt = this.time;
     if (C.hold) t.holding = hold;
     this.emit('warn', (t.x0 + t.x1 + 1) * TILE / 2, t.y * TILE, t.kind);
     return true;
@@ -230,7 +231,7 @@ export class World {
   }
 
   // ---------- gadgets
-  useGadget(side, id, x, y, lead = 0) {
+  useGadget(side, id, x, y, lead = 0, by) {
     const def = GADGETS[side] && GADGETS[side][id], g = this.gad[side] && this.gad[side][id], p = this.player;
     if (!def || !g || def.passive || g.n === 0 || g.cd > 0 || p.finished || p.dead) return false;
     if (side === 'trapper' && this.jam > 0) return false;
@@ -286,7 +287,7 @@ export class World {
       default: return false;
     }
     if (g.n > 0) g.n--;
-    if (side === 'trapper') this.pressT = this.time;
+    if (side === 'trapper') { this.pressT = this.time; this.pressBy = by; }
     g.cd = def.cd;
     this.emit('gadget', def.aim ? x : px, def.aim ? y : py, id);
     return true;
@@ -552,6 +553,7 @@ export class World {
     this.stepCrumbles(dt);
     p.airT = p.onGround ? 0 : p.airT + dt;
     p.best = Math.max(p.best, p.x);
+    if (!p.dead) { const d = this.distAt(p.x + PHYS.w / 2, p.y + PHYS.h / 2); if (d < p.bestD) p.bestD = d; }
 
     // Springs, checkpoints, goal, death.
     const cx = p.x + PHYS.w / 2, feet = p.y + PHYS.h;
@@ -591,7 +593,12 @@ export class World {
     // Who gets the credit: a trap kill is the trapper's; a fall or static spikes count as an assist
     // if the trapper did something in the last 3 seconds, otherwise it was the runner's own slip.
     const credit = TRAPS[why] ? why : this.time - (this.pressT ?? -9) < 3 ? 'assist' : null;
-    if (credit) this.emit('catch', p.x + 5, p.y - 8, credit);
+    if (!credit) return;
+    // the trapper who fired the most recent trap of that kind (or did the last trick) gets it
+    let by = this.pressBy;
+    if (TRAPS[why]) { let best = null; for (const t of this.traps) if (t.kind === why && t.by && (!best || t.firedAt > best.firedAt)) best = t; if (best) by = best.by; }
+    if (by) this.events.push(['catch', Math.round(p.x + 5), Math.round(p.y - 8), credit, by]);
+    else this.emit('catch', p.x + 5, p.y - 8, credit);
   }
 
   movePlayer(dt) {
@@ -619,6 +626,34 @@ export class World {
       const ty = Math.floor(p.y / TILE);
       for (let tx = x0; tx <= x1; tx++) if (this.solidAt(tx, ty)) { p.y = (ty + 1) * TILE; p.vy = 0; this.emit('bonk', p.x + 5, p.y); break; }
     }
+  }
+
+  // ---- How far along a runner got: the length of the way to the flag through open tiles (a flood fill from the
+  // flag), so "how far" means the same on a level that climbs up as on one that runs right.
+  goalDistances() {
+    const W = this.w, H = this.h, d = new Int32Array(W * H).fill(-1), q = [];
+    const gx = Math.floor((this.goal.x + 8) / TILE), gy = Math.floor(this.goal.y / TILE);
+    const open = (x, y) => x >= 0 && y >= 0 && x < W && y < H && !this.solidAt(x, y);
+    if (open(gx, gy)) { d[gy * W + gx] = 0; q.push(gx, gy); }
+    for (let i = 0; i < q.length; i += 2) {
+      const x = q[i], y = q[i + 1], v = d[y * W + x];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const nx = x + dx, ny = y + dy; if (open(nx, ny) && d[ny * W + nx] < 0) { d[ny * W + nx] = v + 1; q.push(nx, ny); } }
+    }
+    return d;
+  }
+  distAt(px, py) {
+    if (!this.gdist) this.gdist = this.goalDistances();
+    const tx = Math.floor(px / TILE), ty = Math.floor(py / TILE);
+    let best = 1e9;   // the runner's own tile, or the nearest open one around it
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = tx + dx, y = ty + dy; if (x < 0 || y < 0 || x >= this.w || y >= this.h) continue; const v = this.gdist[y * this.w + x]; if (v >= 0) best = Math.min(best, v + Math.abs(dx) + Math.abs(dy)); }
+    return best;
+  }
+  // 0..1 along the way to the flag, and the tiles still to go
+  progressOf() {
+    const p = this.player;
+    if (this.startD == null) this.startD = Math.max(1, this.distAt(this.start.x + PHYS.w / 2, this.start.y + PHYS.h / 2));
+    const left = Math.min(p.bestD, this.startD);
+    return { frac: p.finished ? 1 : Math.max(0, 1 - left / this.startD), left: p.finished ? 0 : left };
   }
 
   // ---- Gems: optional pickups on the risky line over a trap (above spikes and flames, over a trapdoor, under a
