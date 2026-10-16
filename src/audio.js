@@ -1,19 +1,34 @@
 // Little synthesized sound effects and a bouncy background tune, all WebAudio, no files.
-let ac = null, master = null, musicGain = null, musicTimer = null;
-export const audio = { muted: false, music: true };
-try { const s = JSON.parse(localStorage.getItem('trapdash-audio') || '{}'); Object.assign(audio, s); } catch { /* storage blocked */ }
-const save = () => { try { localStorage.setItem('trapdash-audio', JSON.stringify({ muted: audio.muted, music: audio.music })); } catch { /* ignore */ } };
+// Two volumes, 0..1: sound effects and music (0 = off). Older saves had on / off switches; they map onto these.
+let ac = null, master = null, musicGain = null, sfxGain = null, musicTimer = null;
+export const audio = { muted: false, music: true, sfxVol: 0.8, musicVol: 0.6 };
+try {
+  const s = JSON.parse(localStorage.getItem('trapdash-audio') || '{}'); Object.assign(audio, s);
+  if (s.sfxVol == null && s.muted) audio.sfxVol = 0;
+  if (s.musicVol == null && (s.muted || s.music === false)) audio.musicVol = 0;
+  audio.muted = false; audio.music = audio.musicVol > 0;
+} catch { /* storage blocked */ }
+const save = () => { try { localStorage.setItem('trapdash-audio', JSON.stringify({ sfxVol: audio.sfxVol, musicVol: audio.musicVol })); } catch { /* ignore */ } };
+const MUSIC_MAX = 0.37;   // music sits under the effects: 0.6 gives the old level
 
 export function unlockAudio() {
   if (!ac) {
     const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-    ac = new AC(); master = ac.createGain(); master.gain.value = audio.muted ? 0 : 0.5; master.connect(ac.destination);
-    musicGain = ac.createGain(); musicGain.gain.value = 0.22; musicGain.connect(master);
+    ac = new AC(); master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
+    musicGain = ac.createGain(); musicGain.gain.value = audio.musicVol * MUSIC_MAX; musicGain.connect(master);
+    sfxGain = ac.createGain(); sfxGain.gain.value = audio.sfxVol; sfxGain.connect(master);
   }
   if (ac.state === 'suspended') ac.resume();
 }
-export function setMuted(m) { audio.muted = m; if (master) master.gain.value = m ? 0 : 0.5; save(); }
-export function setMusic(m) { audio.music = m; save(); if (!m) stopMusic(); }
+export function setSfxVolume(v) { audio.sfxVol = Math.max(0, Math.min(1, v)); if (sfxGain) sfxGain.gain.value = audio.sfxVol; save(); }
+// returns true when the music has just been switched on (the caller starts the right song)
+export function setMusicVolume(v) {
+  const was = audio.music;
+  audio.musicVol = Math.max(0, Math.min(1, v)); audio.music = audio.musicVol > 0;
+  if (musicGain) musicGain.gain.value = audio.musicVol * MUSIC_MAX;
+  save(); if (!audio.music) stopMusic();
+  return audio.music && !was;
+}
 
 function tone(f, dur, { type = 'square', vol = 0.3, slide = 0, delay = 0, out } = {}) {
   if (!ac) return;
@@ -21,7 +36,7 @@ function tone(f, dur, { type = 'square', vol = 0.3, slide = 0, delay = 0, out } 
   o.type = type; o.frequency.setValueAtTime(f, t);
   if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, f + slide), t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g); g.connect(out || master); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g); g.connect(out || sfxGain); o.start(t); o.stop(t + dur + 0.02);
 }
 function noise(dur, { vol = 0.3, freq = 1200, delay = 0, q = 1 } = {}) {
   if (!ac) return;
@@ -29,7 +44,7 @@ function noise(dur, { vol = 0.3, freq = 1200, delay = 0, q = 1 } = {}) {
   for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
   const src = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
   src.buffer = buf; f.type = 'lowpass'; f.frequency.value = freq; f.Q.value = q; g.gain.value = vol;
-  src.connect(f); f.connect(g); g.connect(master); src.start(t);
+  src.connect(f); f.connect(g); g.connect(sfxGain); src.start(t);
 }
 
 export const sfx = {

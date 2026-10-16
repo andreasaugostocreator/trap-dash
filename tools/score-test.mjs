@@ -6,7 +6,7 @@ const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.on('pageerror', e => errs.push(e.message)); p.on('console', m => m.type() === 'error' && errs.push(m.text()));
 await p.goto('http://localhost:8080/'); await p.waitForTimeout(500);
 await p.click('#setBtn'); await p.waitForTimeout(200); await p.screenshot({ path: 'shots/98-settings.png' });
-await p.click('.tog >> nth=5'); const shake = await p.evaluate(() => window.__td.R.shakeOn); await p.click('.tog >> nth=5'); await p.click('#setDone');
+await p.click('.tog >> nth=2'); const shake = await p.evaluate(() => window.__td.R.shakeOn); await p.click('.tog >> nth=2'); await p.click('#setDone');
 console.log('shake toggled off then on:', shake === false);
 await p.click('text=Same screen'); await p.click('#startBtn'); await p.waitForTimeout(3600);
 const kill = kind => p.evaluate(k => { const w = window.__td.run.world, t = w.traps.find(t => t.kind === k); w.lock = 0; t.cd = 0; t.state = 'idle';

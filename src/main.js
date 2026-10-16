@@ -16,7 +16,7 @@ const levelOf = ref => (typeof ref === 'number' ? LEVELS[ref] : ref);   // a lev
 const STARS = new Map();   // level id -> 1..3
 const starsOf = L => { if (L.stars) return L.stars; if (!STARS.has(L.id)) STARS.set(L.id, rateLevel(L).stars); return STARS.get(L.id); };
 const starText = n => '★'.repeat(n) + '☆'.repeat(3 - n);
-import { sfx, playEvent, unlockAudio, audio, setMuted, setMusic, startMusic, stopMusic } from './audio.js';
+import { sfx, playEvent, unlockAudio, audio, setSfxVolume, setMusicVolume, startMusic, stopMusic } from './audio.js';
 import { settings, saveSettings, buzz, canVibrate } from './settings.js';
 import { pollPads, BTN } from './gamepad.js';
 import { drawKnob, drawStick, KICON, TICON, PLANK, pixURL, woodFrame } from './knobs.js';
@@ -133,7 +133,7 @@ function logoLetter(word, k) {
   }
   document.documentElement.style.setProperty('--starImg', `url(${PLANK.star.toDataURL()})`);
   $('profileBtn').onclick = () => { sfx.click(); show('profile'); };
-  $('profileDone').onclick = () => { sfx.click(); show('title'); buildTitle(); };
+  $('profileDone').onclick = () => { sfx.click(); if (welcoming) return welcomeStep2(); show('title'); buildTitle(); };
   // the small buttons get pixel icons too (no emoji: they'd break the pixel look)
   for (const [id, icon, text] of [['howBtn', 'help', 'How to play'], ['setBtn', 'gear', 'Settings'], ['itemsBtn', 'book', 'Items'], ['troBtn', 'trophy', 'Trophies']]) {
     const b = $(id), c = document.createElement('canvas'), art = PLANK[icon];
@@ -151,7 +151,30 @@ function animateTitle(dt) {
   if (on) { const y = on.getContext('2d'); y.clearRect(0, 0, 16, 18); y.drawImage(charFrame(charOf(me.char), f, 1, 0), 2, 1); }
 }
 try { document.fonts.load('bold 8px Silkscreen'); } catch { /* old browser */ }
-if (!store.get('seenTip', false)) { store.set('seenTip', true); setTimeout(() => toast('New here? Try the training in “How to play”.'), 900); }
+// First launch: two quick steps, your name and runner, then an offer to try the training (or just play).
+const firstLaunch = store.get('me2', null) === null && (!navigator.webdriver || new URLSearchParams(location.search).has('firstrun'));
+let welcoming = false;
+function welcome() {
+  if ($('title').classList.contains('hidden')) return;   // came in through a party link: no interruptions
+  welcoming = true; saveMe();
+  $('profile').querySelector('h2').textContent = 'Welcome! Who\'s running?';
+  $('profileDone').textContent = 'Next';
+  $('profileStep').classList.remove('hidden');
+  buildTitle(); show('profile');
+}
+function welcomeStep2() {
+  welcoming = false;
+  $('profile').querySelector('h2').textContent = 'Your runner'; $('profileDone').textContent = 'Done'; $('profileStep').classList.add('hidden');
+  show('title'); buildTitle();
+  panel(`<h2>Nice to meet you, ${esc(me.name)}!</h2><p class="wStep">Step 2 of 2</p>
+    <p>One player runs to the flag, the other springs the traps. Then you swap. Want a quick training first?</p>
+    <div class="buttons"><div class="row"><button class="mid pink" id="wRun">${PIW('dash')} Runner training</button><button class="mid blue" id="wTrap">${PIW('spikes')} Trapper training</button></div>
+    <button class="mid" id="wSkip">Skip, let's play!</button></div>`);
+  $('wRun').onclick = () => { sfx.click(); startTutorial('runner'); };
+  $('wTrap').onclick = () => { sfx.click(); startTutorial('trapper'); };
+  $('wSkip').onclick = () => { sfx.click(); hidePanel(); toast('The training is always in “How to play”.'); };
+}
+if (firstLaunch) setTimeout(welcome, 3400);
 // On iPhone Safari the browser keeps a strip at the bottom; the home-screen app is true full screen.
 if (/iP(hone|od)/.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches)
   setTimeout(() => toast('Tip: Share → Add to Home Screen plays in full screen'), 1500);
@@ -173,24 +196,43 @@ function buildTitle() {
 }
 $('setBtn').onclick = () => { sfx.click(); openSettings(hidePanel); };
 
-// ---------- settings
+// ---------- settings: sound (two volume sliders, vibration strength), play, controls, graphics
 function openSettings(back) {
   const rows = [
-    ['Sound', () => !audio.muted, v => setMuted(!v)],
-    ['Music', () => audio.music, v => { setMusic(v); if (v && run) startMusic(run.endless ? 'endless' : run.world.level.theme); }],
-    ['Vibration' + (canVibrate ? '' : ' <small>(not on this device)</small>'), () => settings.vibrate, v => { settings.vibrate = v; buzz(40); }],
     ['Ghost of the last run', () => settings.ghost, v => { settings.ghost = v; }],
     ['Level preview', () => settings.preview, v => { settings.preview = v; }],
     ['Screen shake', () => settings.shake, v => { settings.shake = v; R.shakeOn = v; }],
+    ['Left-handed <small>(jump on the left)</small>', () => settings.lefty, v => { settings.lefty = v; applyControlPrefs(); }],
   ];
   const GFX = { auto: 'Auto', high: 'High', low: 'Low' }, nextGfx = { auto: 'high', high: 'low', low: 'auto' };
-  panel(`<h2>Settings</h2><div class="settings">${rows.map(([label, get], i) => `<div class="setRow"><span>${label}</span><button class="chip tog${get() ? ' on' : ''}" data-i="${i}">${get() ? 'On' : 'Off'}</button></div>`).join('')}</div>
-    <div class="setRow"><span>Graphics <small>(Low = lighter, for slow phones)</small></span><button class="chip tog on" id="gfxBtn">${GFX[settings.graphics] || 'Auto'}</button></div>
+  const slider = (id, v, min = 0, max = 100) => `<input type="range" class="pxRange" id="${id}" min="${min}" max="${max}" step="5" value="${Math.round(v)}" style="--v:${((v - min) / (max - min) * 100).toFixed(0)}%">`;
+  panel(`<h2>Settings</h2><div class="settings">
+    <h3>Sound</h3>
+    <div class="setRow"><span>Music</span>${slider('volMusic', audio.musicVol * 100)}</div>
+    <div class="setRow"><span>Sound effects</span>${slider('volSfx', audio.sfxVol * 100)}</div>
+    <div class="setRow"><span>Vibration${canVibrate ? '' : ' <small>(not on this device)</small>'}</span><div class="seg" id="vibSeg">${['Off', 'Light', 'Strong'].map((l, i) => `<button data-v="${i}" class="${settings.vib === i ? 'on' : ''}">${l}</button>`).join('')}</div></div>
+    <h3>Play</h3>
+    ${rows.map(([label, get], i) => `<div class="setRow"><span>${label}</span><button class="chip tog${get() ? ' on' : ''}" data-i="${i}">${get() ? 'On' : 'Off'}</button></div>`).join('')}
+    <div class="setRow"><span>Button size <small id="btnSizeLab">${Math.round(settings.btnSize * 100)}%</small></span>${slider('btnSize', settings.btnSize * 100, 80, 130)}</div>
+    <div class="setRow"><span>Graphics <small>(Low = lighter, for slow phones)</small></span><button class="chip tog on" id="gfxBtn">${GFX[settings.graphics] || 'Auto'}</button></div></div>
     <div class="buttons"><button class="big pink" id="setDone">Done</button></div>
     <p class="ver">Version <span id="appVersion">${bootVersion ? bootVersion.replace('trap-dash-', '') : '…'}</span></p>`);
+  const fill = el => el.style.setProperty('--v', ((el.value - el.min) / (el.max - el.min) * 100).toFixed(0) + '%');
+  $('volMusic').oninput = e => { fill(e.target); if (setMusicVolume(e.target.value / 100) && run) { unlockAudio(); startMusic(run.endless ? 'endless' : run.world.level.theme); } };
+  $('volSfx').oninput = e => { fill(e.target); unlockAudio(); setSfxVolume(e.target.value / 100); };
+  $('volSfx').onchange = () => sfx.click();
+  $('btnSize').oninput = e => { fill(e.target); settings.btnSize = e.target.value / 100; $('btnSizeLab').textContent = e.target.value + '%'; applyControlPrefs(); };
+  $('btnSize').onchange = () => saveSettings();
+  for (const b of $('vibSeg').children) b.onclick = () => { settings.vib = +b.dataset.v; saveSettings(); buzz([40]); sfx.click(); for (const x of $('vibSeg').children) x.classList.toggle('on', x === b); };
   $('gfxBtn').onclick = () => { settings.graphics = nextGfx[settings.graphics] || 'auto'; applyGraphics(); saveSettings(); sfx.click(); openSettings(back); };
   for (const b of $('panelCard').querySelectorAll('.tog')) b.onclick = () => { const r = rows[+b.dataset.i]; r[2](!r[1]()); saveSettings(); sfx.click(); openSettings(back); };
-  $('setDone').onclick = () => { sfx.click(); back(); };
+  $('setDone').onclick = () => { sfx.click(); saveSettings(); back(); };
+}
+// Left-handed (the bottom panel mirrored: JUMP and the gadget ring on the left) and the size of the in-game buttons.
+function applyControlPrefs() {
+  document.body.classList.toggle('lefty', !!settings.lefty);
+  document.documentElement.style.setProperty('--bs', settings.btnSize || 1);
+  if (run) { lookSig = ''; updateInsets(); }
 }
 R.shakeOn = settings.shake;
 // Graphics: High keeps every effect, Low drops the purely decorative ones, Auto switches to Low by itself when frames
@@ -234,12 +276,12 @@ function nav(where) {
   if (where === 'local') {
     mode = 'local'; isHost = true;
     players = { a: { name: me.name, char: me.char }, b: { name: 'Player 2', char: otherChar(me.char) } };
-    score = { a: 0, b: 0 }; openLobby(); return;
+    score = { a: 0, b: 0 }; loadLobbyPrefs(); openLobby(); return;
   }
   if (where === 'practice') {
     mode = 'practice'; isHost = true;
     players = { a: { name: me.name, char: me.char }, b: { name: 'Trap Bot', char: otherChar(me.char) } };
-    score = { a: 0, b: 0 }; openLobby(); return;
+    score = { a: 0, b: 0 }; loadLobbyPrefs(); openLobby(); return;
   }
 }
 
@@ -247,7 +289,7 @@ function nav(where) {
 async function hostParty() {
   mode = 'online'; isHost = true; score = { a: 0, b: 0 };
   players = { a: { name: me.name, char: me.char }, b: null };
-  roomCode = '';
+  roomCode = ''; loadLobbyPrefs();
   openLobby();
   $('lobbyStatus').textContent = 'Opening a room…';
   try {
@@ -337,6 +379,8 @@ net.onMessage = m => {
     run.world.release(m.id);
   } else if (m.t === 'done' && run && !run.simOwner) {
     finishRun(m.res);
+  } else if (m.t === 'rematch' && run && run.phase === 'end') {
+    voteRematch(other(mySide()));
   } else if (m.t === 'toLobby' && !isHost) {
     endRunView(); openLobby();
   } else if (m.t === 'bye') {
@@ -514,8 +558,18 @@ function leaveParty() {
 function syncLobby() { if (mode === 'online' && isHost) { net.send({ t: 'lobby', players, lobby, score }); saveSession(); } }
 
 // ---------- lobby
+// Each mode remembers its last choices (level, match length, who runs first), so "one more" is one tap away.
+function loadLobbyPrefs() {
+  const p = store.get('lobby-' + mode, null) || {};
+  lobby = { level: Number.isInteger(p.level) && p.level >= 0 && p.level < LEVELS.length ? p.level : 0, first: p.first === 'b' ? 'b' : 'a', bo3: !!p.bo3 };
+}
+function saveLobbyPrefs() {
+  if (!mode || matchmade || (mode === 'online' && !isHost) || mode === 'tutorial') return;
+  const prev = store.get('lobby-' + mode, null) || {};
+  store.set('lobby-' + mode, { level: typeof lobby.level === 'number' ? lobby.level : prev.level || 0, first: lobby.first, bo3: !!lobby.bo3 });
+}
 function openLobby() {
-  forgetTyping();
+  forgetTyping(); saveLobbyPrefs();
   show('lobby');
   stopMusic();
   const online = mode === 'online', practice = mode === 'practice';
@@ -1051,21 +1105,22 @@ function placeRing() {
   const pr = $('padR'); if (!pr.classList.contains('ring')) return;
   const btns = [...$('rgad').children], jc = $('tJump').querySelector('canvas.knob');
   if (!btns.length || !jc) return;
-  $('tJump').style.marginRight = '';
+  const lefty = !!settings.lefty, side = lefty ? 'marginLeft' : 'marginRight';   // left-handed: the arc mirrors to JUMP's upper right
+  $('tJump').style.marginRight = $('tJump').style.marginLeft = '';
   for (let pass = 0; pass < 2; pass++) {
     const P = uiRect(pr), J = uiRect(jc), g = uiRect(btns[0].querySelector('canvas.knob'));
     const cx = J.left + J.width / 2 - P.left, cy = J.top + J.width / 2 - P.top, gr = g.width / 2, Rr = J.width / 2 + gr - 2;
     const step = 2 * Math.asin(Math.min(1, (gr + 2) / Rr)), mid = 112 * Math.PI / 180;
     const start = Math.min(190 * Math.PI / 180, mid + (btns.length - 1) * step / 2);
-    let right = 0;
+    let right = 0, left = 1e9;
     btns.forEach((b, i) => {
-      const a = start - i * step, x = cx + Math.cos(a) * Rr, y = cy - Math.sin(a) * Rr;
+      const a = start - i * step, x = cx + (lefty ? -1 : 1) * Math.cos(a) * Rr, y = cy - Math.sin(a) * Rr;
       b.style.left = Math.round(x - gr) + 'px'; b.style.top = Math.round(y - gr) + 'px';
-      right = Math.max(right, x + gr);
+      right = Math.max(right, x + gr); left = Math.min(left, x - gr);
     });
-    const over = right - (UI.w - P.left - 6);
+    const over = lefty ? 6 - (P.left + left) : right - (UI.w - P.left - 6);
     if (over <= 0) break;
-    $('tJump').style.marginRight = Math.ceil(over) + 'px';
+    $('tJump').style[side] = Math.ceil(over) + 'px';
   }
 }
 function updateInsets() {
@@ -1122,7 +1177,7 @@ function updateTutorial() {
 
 function startRun(level, runner, n, endless = null, tutRole = null) {
   forgetTyping();
-  hidePanel();
+  hidePanel(); clearTips();
   show(null);
   const world = new World(levelOf(level));
   const online = mode === 'online';
@@ -1134,7 +1189,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   };
   if (endless && endless.stage > 1) { run.countT = 1; run.hintT = 0; }
   if (tutRole) { run.tut = new Tutorial(tutRole, touchDevice, kind => { const i = (run.slots || []).findIndex(t => t && t.kind === kind); return i < 0 ? '' : i + 1; }); run.countT = 1.5; }
-  run.score = new TrapScore(); run.closes = 0;
+  run.score = new TrapScore(); run.closes = 0; rematchVotes = { a: false, b: false }; rematchGo = null;
   if (endless && runnerHere) run.nextGen = genAsync(endless.stars);
   const Lv = levelOf(level);
   if (Lv.random && !endless && (mode !== 'online' || isHost)) prefetch(Lv.stars);
@@ -1279,6 +1334,40 @@ function updateTrapScore(bump) {
   if (bump) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 }
 
+// ---------- first-time tips: the first time you meet a trap or get a gadget, a little card explains it (once ever).
+// Gadgets are introduced as the round starts, traps as the runner comes up to them. One card at a time.
+const TIPS_ON = !navigator.webdriver || new URLSearchParams(location.search).has('tips');
+const seenTips = store.get('seenTips', {});
+const tipQ = []; let tipT = 0, tipScan = 0;
+function queueTip(key, icon, kind, name, desc) {
+  if (!TIPS_ON || seenTips[key] || tipQ.some(t => t.key === key)) return;
+  tipQ.push({ key, icon, kind, name, desc });
+}
+function tipsAtStart() {
+  if (!run || run.tut) return;
+  for (const side of ['runner', 'trapper']) if ((side === 'runner' ? run.runnerHere : run.trapperHere))
+    for (const id of run.world.loadout[side]) queueTip('g:' + id, id, side === 'runner' ? 'Your gadget' : 'Your trap gadget', GADGETS[side][id].name, GAD_LONG[id]);
+}
+function tickTips(dt) {
+  if (!run || run.tut) return;
+  if ((tipScan -= dt) <= 0 && run.phase === 'play') {
+    tipScan = 0.3;
+    const w = run.world, p = w.player, dir = Math.sign(w.goal.x - p.x) || 1;
+    for (const t of w.traps) {
+      const ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - p.x) * dir;
+      if (ahead > -TILE && ahead < 11 * TILE && Math.abs(t.y * TILE - p.y) < 8 * TILE) queueTip('t:' + t.kind, t.kind, run.trapperHere && !run.runnerHere ? 'New trap' : 'Look out', TRAPS[t.kind].name, TRAP_DESC[t.kind]);
+    }
+  }
+  const el = $('tip');
+  if (tipT > 0) { tipT -= dt; if (tipT <= 0) el.classList.remove('show'); return; }
+  if (!tipQ.length || run.phase === 'preview' || run.paused) return;
+  const t = tipQ.shift(); seenTips[t.key] = 1; store.set('seenTips', seenTips);
+  el.innerHTML = `<canvas class="pix" width="7" height="7"></canvas><div><small>${esc(t.kind)}</small><b>${esc(t.name)}</b><span>${esc(t.desc || '')}</span></div>`;
+  el.querySelector('canvas').getContext('2d').drawImage(SPR.icon[t.icon], 0, 0);
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show'); tipT = 5.5;
+}
+function clearTips() { tipQ.length = 0; tipT = 0; $('tip').classList.remove('show'); }
+
 // ---------- level preview: the camera flies to the flag and back while a banner shows the level and the gadgets
 const PREVIEW = 16;   // seconds; skipping needs both players online (hold Space on PC, the Skip button on phones)
 // One line per gadget, for the preview banner.
@@ -1340,7 +1429,7 @@ function panPreview(dt) {
 
 function receiveSnap(m) {
   const w = run.world;
-  if ((run.phase === 'count' || run.phase === 'preview') && m.tm > 0) { if (run.phase === 'preview') endPreview(); run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); }
+  if ((run.phase === 'count' || run.phase === 'preview') && m.tm > 0) { if (run.phase === 'preview') endPreview(); run.phase = 'play'; run.countT = 0; $('count').classList.add('hidden'); tipsAtStart(); }
   w.applySnap(m);
   run.snaps.push({ at: performance.now(), x: m.p[0], y: m.p[1], dead: !!(m.p[5] & 2) });
   if (run.snaps.length > 12) run.snaps.shift();
@@ -1440,17 +1529,43 @@ function showRunResult(res) {
   if (!run.counted) { run.counted = true; if (bump('levels') >= 10) achieve('rivals'); }
   if (lobby.bo3 && win && score[win.runner] >= 2) return trophyScreen(win.runner, r1, r2);
   const nextLevel = controls ? nextOf(run.level) : null;
+  const firstNext = other(r1.runner);   // whoever ran second this time runs first next time
   panel(`<div class="big-emoji">${PI(tie ? 'flag' : 'trophy', 'bigpi')}</div><h2>${tie ? "It's a tie!" : esc(players[win.runner].name) + ' wins ' + esc(L.name) + '!'}</h2>
     <div class="result">${[r1, r2].map(r => line(r, r === win)).join('')}</div>
     ${trapKing(r1, r2)}
     <p>Score: ${esc(players.a.name)} <b>${score.a}</b> – <b>${score.b}</b> ${esc(players.b.name)}</p>
-    <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(nextLevel.name || levelOf(nextLevel).name)}</button>
-      <div class="row"><button class="mid" id="again">Rematch</button><button class="mid" id="toLobby">Lobby</button></div>` : `<p class="status">Waiting for the host…</p>`}</div>`);
+    <div class="buttons">${controls ? `<button class="big pink" id="nextLv">Next: ${esc(nextLevel.name || levelOf(nextLevel).name)}</button>` : ''}
+      <div class="row"><button class="mid gold" id="again">Rematch</button>${controls ? `<button class="mid" id="toLobby">Lobby</button>` : ''}</div>
+      ${rematchNote()}</div>`);
+  armRematch(() => { lobby.first = firstNext; runs = []; syncLobby(); hostStart(run.level, firstNext, 1); });
   if (!controls) return;
-  const firstNext = other(r1.runner);   // whoever ran second this time runs first next time
   $('nextLv').onclick = () => { sfx.click(); lobby.level = nextLevel; lobby.first = firstNext; runs = []; syncLobby(); hostStart(nextLevel, firstNext, 1); };
-  $('again').onclick = () => { sfx.click(); lobby.first = firstNext; runs = []; syncLobby(); hostStart(run.level, firstNext, 1); };
   $('toLobby').onclick = () => { sfx.click(); if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
+}
+
+// ---------- rematch: on the result screens both players tap Rematch, and the same level starts again straight away
+// with the sides swapped, no lobby in between. Online it needs both taps (each sees the other's); on one device one tap.
+let rematchVotes = { a: false, b: false }, rematchGo = null;
+const rematchNote = () => mode === 'online' ? '<p class="status rmState" id="rmState"></p>' : '';
+function armRematch(go) {
+  rematchGo = go;
+  $('again').onclick = () => { sfx.click(); if (mode !== 'online') return go(); voteRematch(mySide()); };
+  showRematch();
+}
+function voteRematch(side) {
+  if (rematchVotes[side]) return;
+  rematchVotes[side] = true;
+  if (side === mySide()) net.send({ t: 'rematch' }); else sfx.cp();
+  showRematch();
+  if (isHost && rematchVotes.a && rematchVotes.b && rematchGo) { const go = rematchGo; rematchGo = null; go(); }
+}
+function showRematch() {
+  const st = $('rmState'), b = $('again');
+  if (!st || !b || mode !== 'online') return;
+  const mine = rematchVotes[mySide()], theirs = rematchVotes[other(mySide())], friend = esc((players[other(mySide())] || {}).name || 'Your friend');
+  st.innerHTML = mine && theirs ? 'Rematch!' : mine ? `Waiting for ${friend}… (1/2)` : theirs ? `<b>${friend} wants a rematch!</b> (1/2)` : '';
+  b.classList.toggle('want', theirs && !mine); b.disabled = mine;
+  b.textContent = mine ? 'Rematch ✓' : 'Rematch';
 }
 
 // ---------- best of 3: the first to win two levels takes the trophy
@@ -1462,10 +1577,10 @@ function trophyScreen(winner, r1, r2) {
     <div class="champ" data-portrait="${players[winner].char}"></div>
     <p class="matchScore"><b>${score[winner]}</b> – <b>${score[loser]}</b></p>
     ${trapKing(r1, r2)}
-    <div class="buttons">${controls ? `<button class="big pink" id="newMatch">New match</button><button class="mid" id="toLobby">Lobby</button>` : `<p class="status">Waiting for the host…</p>`}</div>`);
+    <div class="buttons"><button class="big gold" id="again">Rematch</button>${controls ? `<button class="mid" id="toLobby">Lobby</button>` : ''}${rematchNote()}</div>`);
   confetti();
+  armRematch(() => { score = { a: 0, b: 0 }; runs = []; lobby.level = nextOf(run.level); lobby.first = other(lobby.first); syncLobby(); hostStart(lobby.level, lobby.first, 1); });
   if (!controls) return;
-  $('newMatch').onclick = () => { sfx.click(); score = { a: 0, b: 0 }; runs = []; lobby.level = nextOf(run.level); lobby.first = other(lobby.first); syncLobby(); hostStart(lobby.level, lobby.first, 1); };
   $('toLobby').onclick = () => { sfx.click(); score = { a: 0, b: 0 }; if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
 }
 function confetti() {
@@ -1480,7 +1595,7 @@ function confetti() {
 }
 
 function endRunView() {
-  run = null; hidePanel(); R.setInsets(0, 0);
+  run = null; hidePanel(); R.setInsets(0, 0); clearTips();
   for (const id of ['hud', 'hint', 'count', 'rotate', 'pad', 'padTop', 'preview']) $(id).classList.add('hidden');
   document.body.classList.remove('playing', 'dualpad');
 }
@@ -1491,24 +1606,53 @@ function panel(html) {
 }
 function hidePanel() { $('panel').classList.add('hidden'); }
 
+// The pause menu: where you are (level, clock, falls, score), your controls, then a 3-2-1 back into the round so
+// nobody gets caught out by a resume (online the world never stops, so there it's just a menu).
+function controlsHelp() {
+  const lines = [];
+  if (run.runnerHere) lines.push(padOn ? ['RUN', 'Stick / d-pad run · A jump · X Y B RB gadgets'] : touchDevice ? ['RUN', `Joystick runs · JUMP (hold = higher) · gadgets around JUMP${settings.lefty ? ' (left-handed)' : ''}`] : ['RUN', `← → or A D run · Space jump (hold = higher) · ${runnerKeyed().map((id, i) => R_KEYS[i]).join(' ') || 'no'} gadgets`]);
+  if (run.trapperHere) lines.push(padOn ? ['TRAP', 'B X Y fire the slots · LB RB LT RT gadgets'] : touchDevice ? ['TRAP', 'Coloured buttons (or tap the trap) fire · gadgets beside them'] : ['TRAP', '1 2 3 fire the coloured slots · 7 8 9 0 gadgets, aimed at the mouse']);
+  return lines.map(([k, t]) => `<div class="pCtl"><b class="pvSide ${k === 'RUN' ? 'run' : 'trap'}">${k}</b><span>${esc(t)}</span></div>`).join('');
+}
 function togglePause() {
   if (!run || run.phase === 'end') return;
-  if (!$('panel').classList.contains('hidden')) { hidePanel(); run.paused = false; return; }
+  if (run.resumeT > 0) { run.resumeT = 0; $('count').classList.add('hidden'); }
+  if (!$('panel').classList.contains('hidden')) { resumeRun(); return; }
   const online = mode === 'online';
   run.paused = !online;
-  const E = run.endless, canLobby = E && online && isHost;
-  panel(`<h2>${online ? 'Menu' : 'Paused'}</h2>${E ? `<p>∞ ${starText(E.stars)} · stage ${E.stage} · ${(E.total + run.world.time).toFixed(0)}s · ${E.deaths + run.world.player.deaths === 1 ? '1 fall' : (E.deaths + run.world.player.deaths) + ' falls'}</p>` : ''}<div class="buttons">
+  const E = run.endless, canLobby = E && online && isHost, w = run.world, L = levelOf(run.level);
+  const falls = (E ? E.deaths : 0) + w.player.deaths, secs = (E ? E.total : 0) + w.time;
+  const vs = mode === 'online' || mode === 'local' ? `<span>${esc(players.a.name)} <b>${score.a}</b>–<b>${score.b}</b> ${esc(players.b.name)}</span>` : '';
+  panel(`<h2>${online ? 'Menu' : 'Paused'}</h2>
+    <div class="pInfo"><b>${esc(E ? '∞ ' + L.name : L.name)}</b> <span class="stars">${starText(E ? E.stars : L.stars || starsOf(L))}</span>
+      <div class="pStats"><span>${PI('clock')} ${secs.toFixed(1)}s</span><span>✖ ${falls} ${falls === 1 ? 'fall' : 'falls'}</span><span>${PI('spikes')} ${run.score.pts}</span>${vs}</div></div>
+    <div class="pCtls">${controlsHelp()}</div>
+    <div class="buttons">
     <button class="big pink" id="resume">${online ? 'Back to the game' : 'Resume'}</button>
     ${E && mode !== 'practice' ? `<button class="big blue" id="swapBtn">Swap sides (new level)</button>` : ''}
     ${canLobby ? `<button class="mid" id="endBtn">End run · lobby</button>` : ''}
-    <button class="mid" id="quitRun">${online ? 'Leave the party' : 'Quit to lobby'}</button>
+    <div class="row">${mode === 'practice' && !E ? `<button class="mid" id="restartRun">Restart</button>` : ''}<button class="mid" id="quitRun">${online ? 'Leave the party' : 'Quit to lobby'}</button></div>
     <div class="row"><button class="chip" id="pItems">${PIW('book')} Items</button><button class="chip" id="pSet">${PIW('gear')} Settings</button></div></div>`);
-  $('resume').onclick = () => { sfx.click(); hidePanel(); if (run) run.paused = false; };
+  $('resume').onclick = () => { sfx.click(); resumeRun(); };
   if ($('swapBtn')) $('swapBtn').onclick = () => { sfx.click(); swapSides(); };
   if ($('endBtn')) $('endBtn').onclick = () => { sfx.click(); if (online) net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
+  if ($('restartRun')) $('restartRun').onclick = () => { sfx.click(); startRun(run.level, 'a', 1); };
   $('quitRun').onclick = () => { sfx.click(); if (online || mode === 'tutorial') nav('title'); else { endRunView(); openLobby(); } };
   $('pSet').onclick = () => { sfx.click(); openSettings(() => { hidePanel(); togglePause(); }); };
   $('pItems').onclick = () => { sfx.click(); openGuide(() => { hidePanel(); togglePause(); }); };
+}
+const RESUME_COUNT = 3;
+function resumeRun() {
+  hidePanel();
+  if (!run) return;
+  if (mode === 'online' || !run.paused || run.phase !== 'play') { run.paused = false; return; }
+  run.resumeT = RESUME_COUNT; run.resumeShown = 0;   // still paused until the count runs out (see tick)
+}
+function tickResume(dt) {
+  run.resumeT -= dt;
+  const n = Math.ceil(run.resumeT), c = $('count');
+  if (run.resumeT <= 0) { run.resumeT = 0; run.paused = false; input.jumpQueued = false; c.classList.add('hidden'); sfx.go(); return; }
+  if (n !== run.resumeShown) { run.resumeShown = n; c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; c.textContent = n; c.dataset.n = n; sfx.count(); }
 }
 $('pauseBtn').onclick = () => { sfx.click(); togglePause(); };
 // Landscape only: the app frame turns itself on a phone held upright (see layoutApp in render.js). Where the browser
@@ -1534,6 +1678,7 @@ function tick(dt, now) {
   if (!run) { drawMenuScene(dt); animateTitle(dt); animateMatchmaking(dt); return; }
   const w = run.world;
   readInput();
+  if (run.resumeT > 0) tickResume(dt);
   if (run.phase === 'preview' && !run.paused) panPreview(dt);
   // countdown (both devices count on their own; the trapper also switches to 'play' when the first moving snapshot lands)
   if (run.phase === 'count' && !run.paused) {
@@ -1543,7 +1688,7 @@ function tick(dt, now) {
       run.lastCount = n; const c = $('count'); c.classList.remove('hidden'); c.style.animation = 'none'; void c.offsetWidth; c.style.animation = '';
       c.textContent = n > 0 ? n : 'GO!'; c.dataset.n = n > 0 ? n : 'go'; (n > 0 ? sfx.count : sfx.go)();
     }
-    if (run.countT <= 0) { run.phase = 'play'; input.jumpQueued = false; setTimeout(() => $('count').classList.add('hidden'), 450); }
+    if (run.countT <= 0) { run.phase = 'play'; input.jumpQueued = false; setTimeout(() => $('count').classList.add('hidden'), 450); tipsAtStart(); }
   }
   if (run.tut) { if (run.phase === 'play') updateTutorial(); run.hintT = 99; }
   $('hint').classList.toggle('tut', !!run.tut);
@@ -1591,6 +1736,7 @@ function tick(dt, now) {
   run.ambT = (run.ambT ?? 3) - dt;
   if (run.ambT <= 0) { run.ambT = 3 + Math.random() * 6; const th = w.level.theme; (th === 'night' || th === 'dusk' || th === 'haunted' ? sfx.cricket : th === 'lava' || th === 'ice' ? sfx.drip : sfx.chirp)(); }
   updateGadgets();
+  tickTips(dt);
   if (run.trapperHere) updateTrapBar();
   R.draw(w, { dt, colors: run.colors, trapper: run.trapperHere, hover: run.hover, pending: run.pending, aim: run.aim, slots: run.trapperHere ? run.slots : null, slotColors: SLOT_COLORS, runnerView: run.runnerHere, ghost: run.ghost && run.phase !== 'preview' ? run.ghost : null, debug: DEBUG });
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
@@ -1636,6 +1782,7 @@ setInterval(() => { if (wantReload && (!run || run.phase === 'end')) location.re
 setTimeout(() => $('title').classList.remove('intro'), 3300);
 
 // ---------- boot
+applyControlPrefs();
 R.resize(); addEventListener('resize', () => updateInsets());
 buildTitle();
 const q = new URLSearchParams(location.search);

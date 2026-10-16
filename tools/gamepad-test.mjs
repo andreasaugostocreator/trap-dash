@@ -18,6 +18,7 @@ console.log('focused:', await p.evaluate(() => document.querySelector('.padfocus
 await tap(0, 0); await p.waitForTimeout(500);
 console.log('screen after A:', await p.evaluate(() => [...document.querySelectorAll('.screen')].find(s => !s.classList.contains('hidden'))?.id));
 await p.click('#startBtn'); await p.waitForTimeout(4200);
+await p.evaluate(() => { window.__td.run.bot = null; });   // no trap bot: a catch would make the gadget press fail
 const st = () => p.evaluate(() => { const w = window.__td.run.world; return { x: Math.round(w.player.x), y: Math.round(w.player.y), gad: JSON.stringify(Object.fromEntries(Object.entries(w.gad.runner).map(([k, g]) => [k, g.n]))), label: document.querySelector('#rgad small')?.textContent }; });
 const a = await st();
 await p.evaluate(() => { window.__pads[0].axes[0] = 1; }); await p.waitForTimeout(600);
@@ -29,7 +30,7 @@ const c = await st();
 console.log('runner start', JSON.stringify(a)); console.log('after stick+A', JSON.stringify(bAfterJump)); console.log('after X', JSON.stringify(c));
 const moved = bAfterJump.x > a.x + 30, gadUsed = a.gad !== c.gad;
 // pause with Start, resume with Start
-await tap(0, 9); const paused = await p.evaluate(() => window.__td.run.paused); await tap(0, 9); const resumed = !(await p.evaluate(() => window.__td.run.paused));
+await tap(0, 9); const paused = await p.evaluate(() => window.__td.run.paused); await tap(0, 9); await p.waitForTimeout(3300); const resumed = !(await p.evaluate(() => window.__td.run.paused));   // after the 3-2-1
 console.log('Start pauses:', paused, '| Start resumes:', resumed);
 // same screen: pad 2 traps
 await p.evaluate(() => window.__td.nav('title')); await p.waitForTimeout(400);

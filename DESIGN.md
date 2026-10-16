@@ -398,3 +398,24 @@ pairing at a time ("busy" turns other offers down), and an offer nobody takes up
 search again. Once both are in, the host side picks a random level and starts a best-of-3 after a 3-second countdown,
 so nobody waits on a stranger. The search screen shows your runner jogging, how many others are searching, and Cancel.
 `tools/matchmaking-test.mjs` pairs two players end to end and checks that a lone searcher can cancel.
+
+## 19. Comfort and flow (UX pass)
+
+- **Rematch without the lobby.** Every level result and the trophy screen have a gold Rematch button. On one device
+  it starts the same level again at once, the sides swapped. Online both players have to tap it: each sees "Bob
+  wants a rematch! (1/2)" and the button glows, then the host starts the round. The host keeps Next level and Lobby.
+- **Pause menu.** It shows where you are (level, stars, clock, falls, trap points, match score) and your controls
+  for the device you are on (touch, keyboard or gamepad). Offline, Resume counts 3-2-1 before the world moves again.
+  Practice adds Restart. Online the world never stops, so the menu is just a menu.
+- **First-time tips.** The first time you get a gadget (at the start of a round) or come up to a kind of trap, a
+  small wooden card under the top bar explains it, once ever, one card at a time (`trapdash-seenTips`).
+- **Settings.** Music and sound-effect volume sliders (0 means off; older on/off saves carry over), vibration Off,
+  Light or Strong (patterns scaled ×0.6 / ×1.5), a left-handed layout (the bottom panel is mirrored: JUMP and its
+  gadget ring on the left, the arc opening to the upper right) and a button size slider (80–130%, `--bs`, which also
+  scales the panel heights so the play band stays clear).
+- **The lobby remembers** the last level, match length and who runs first, separately for Same screen, Practice and
+  hosting (`trapdash-lobby-<mode>`).
+- **First launch** is two steps: pick a name and a runner (the profile card, "Step 1 of 2"), then an offer of runner
+  or trapper training, or "Skip, let's play!".
+
+`tools/batchA-test.mjs` checks all of these, including a two-browser online rematch.
