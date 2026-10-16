@@ -6,6 +6,7 @@ import { chooseLoadout } from './loadout.js';
 export const EMPTY = 0, SOLID = 1, ONEWAY = 2, SPIKE = 3, SPRING = 4, DOOR = 5, CANNON = 6, NOZZLE = 7, TURRET = 8, FAN = 9, WALL = 10, CEILSPIKE = 11,
   RAIL = 12, LASER = 13, DROPPER = 14, BELT = 15, ICE = 16, CRUMBLE = 17, ANCHOR = 18, ICEFLOOR = 19;
 const STATES = ['idle', 'warn', 'active', 'recover'];
+const GORDER = { runner: Object.keys(GADGETS.runner), trapper: Object.keys(GADGETS.trapper) };
 const GROUPED = { P: 'spikes', T: 'trapdoor', X: 'crusher', F: 'flame', W: 'fan', Z: 'saw', Q: 'conveyor', I: 'ice' };
 const TILE_OF = { '#': SOLID, '=': ONEWAY, '^': SPIKE, B: SPRING, T: DOOR, '<': CANNON, '>': CANNON, F: NOZZLE, '{': TURRET, '}': TURRET, W: FAN, U: WALL,
   v: CEILSPIKE, Z: RAIL, K: LASER, k: LASER, D: DROPPER, Q: BELT, I: ICE, L: CRUMBLE, R: ANCHOR, j: ICEFLOOR };
@@ -86,6 +87,8 @@ export class World {
     for (const k of STATUS) this.player[k] = 0;
     // Gadgets: the level decides which four each side gets.
     this.loadout = level.loadout || chooseLoadout(level, this);
+    // always in the same order (the order of GADGETS), so a gadget sits in the same place on every map
+    this.loadout = { runner: [...this.loadout.runner].sort((a, b) => GORDER.runner.indexOf(a) - GORDER.runner.indexOf(b)), trapper: [...this.loadout.trapper].sort((a, b) => GORDER.trapper.indexOf(a) - GORDER.trapper.indexOf(b)) };
     this.gad = {};
     for (const side of ['trapper', 'runner']) {
       this.gad[side] = {};
@@ -631,9 +634,10 @@ export class World {
       let ty = null;
       if (t.kind === 'spikes' || t.kind === 'flame' || t.kind === 'saw') ty = t.y - 2;
       else if (t.kind === 'trapdoor') ty = t.y - 1;
-      else if (t.kind === 'crusher') ty = t.y + Math.round((t.drop || 0) / TILE);
+      else if (t.kind === 'crusher') { ty = t.y + Math.round((t.drop || 0) / TILE); if (!this.solidAt(tx, ty + 1)) continue; }   // only over a real floor
       if (ty == null || tx - lastX < 7 || !free(tx, ty)) continue;
       if (t.kind !== 'crusher' && !free(tx, ty + 1) && t.kind !== 'trapdoor') continue;
+      if (t.kind === 'trapdoor' && !this.solidAt(tx - (t.x1 - t.x0) / 2 - 1, t.y) && !this.solidAt(t.x0 - 1, t.y)) continue;   // a trapdoor gem needs ground leading up to it
       this.gems.push({ x: tx * TILE + 8, y: ty * TILE + 8, got: false });
       lastX = tx;
       if (this.gems.length >= 8) break;

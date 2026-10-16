@@ -336,6 +336,7 @@ $('howBtn').onclick = () => { panel(`
     <li><b>Gadgets</b> never kill on their own. There are 12 for each side (lightning, glue, mines, bats, fog, frost, an anvil, rewind… and dash, shield, blink, glider, slow-mo, decoy, phase…), but <b>each map deals 4 to each player</b>, picked to suit its traps and layout. Small numbers show how many uses are left this run.</li>
     <li>Then you <b>swap</b>. Whoever reaches the flag faster wins the level. Dying sends you back to the last flag, so it costs time.</li>
     <li>Levels have ★ to ★★★ difficulty. ${PI('dice')} builds a random level of the difficulty you pick.</li>
+    <li><b>Keyboard</b>: every gadget keeps its own key on every map, shown on its button and in Items. Runner (left hand): Shift dash, Q blink, E shield, R haste, T boots, F flag, G glider, X jammer, C decoy… Trapper (right hand): L lightning, U glue, M mine, I frost, J hex, O gust…</li>
     <li><b>Gamepad</b>: plug one in and play. Runner: stick or d-pad to move, <b>A</b> jumps, <b>X Y B RB</b> gadgets. Trapper: <b>B X Y</b> fire the red, blue and yellow trap slots, <b>LB RB LT RT</b> gadgets (aimed ones: steer with a stick, <b>A</b> drops it). On one screen the first pad runs and the second traps. <b>Start</b> pauses; in menus use the d-pad and <b>A</b>.</li>
     <li><b>∞ Endless</b>: stage after stage of new levels, no clock. Swap sides whenever you like from the <b>II</b> menu.</li>
   </ul>
@@ -863,14 +864,10 @@ addEventListener('keydown', e => {
   if (e.code === 'Escape' && run) togglePause();
   if (!run || e.repeat) return;
   const n = /^(Digit|Numpad)([0-9])$/.exec(e.code);
-  if (n && run.trapperHere) {
-    const d = +n[2];
-    if (d >= 1 && d <= SLOTS) fireSlot(d - 1, e.code);
-    const gid = run.world.loadout.trapper[{ 7: 0, 8: 1, 9: 2, 0: 3 }[d]];
-    if (gid) useTrapperGadget(gid, GADGETS.trapper[gid].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
-  }
-  const slot = { ShiftLeft: 0, ShiftRight: 0, KeyQ: 1, KeyE: 2, KeyR: 3 }[e.code];
-  const rg = slot != null && runnerKeyed()[slot];
+  if (n && run.trapperHere) { const d = +n[2]; if (d >= 1 && d <= SLOTS) fireSlot(d - 1, e.code); }
+  const tg = run.trapperHere && gadgetForKey('trapper', e.code);
+  if (tg && run.world.loadout.trapper.includes(tg)) useTrapperGadget(tg, GADGETS.trapper[tg].aim && pointer ? R.toWorld(pointer.x, pointer.y) : null);
+  const rg0 = gadgetForKey('runner', e.code), rg = rg0 && runnerKeyed().includes(rg0) && rg0;
   if (rg && run.runnerHere) useRunnerGadget(rg);
 });
 addEventListener('keyup', e => { keys.delete(e.code); releaseHold(e.code); });
@@ -1066,8 +1063,11 @@ for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => relea
 // colour on the map with the same number. A trap keeps its slot while it stays in range, so buttons don't jump around.
 const SLOT_COLORS = ['#d9663f', '#4aa3b2', '#f0be4a'];   // brick, dusty teal, honey (the knobs' PAL red / blue / yellow)
 const SLOTS = 3, AHEAD = 18 * TILE, BEHIND = 2 * TILE;
+// While the runner's decoy is out, the trapper's bar (like their camera) follows the decoy, so the traps ahead of it
+// get buttons as usual and nothing gives the trick away.
+const trapFocus = w => (run && run.trapperHere && w.decoy ? w.decoy : w.player);
 function slotCandidates(w) {
-  const p = w.player, px = p.x + 5, py = p.y + 6, dir = Math.sign(w.goal.x - px) || 1, out = [];
+  const p = trapFocus(w), px = p.x + 5, py = p.y + 6, dir = Math.sign(w.goal.x - px) || 1, out = [];
   for (const t of w.traps) {
     const tx = (t.x0 + t.x1 + 1) * TILE / 2, ahead = (tx - px) * dir;
     // how far up or down: to the part of the trap that hurts (a crusher's landing spot, a bomb's whole fall)
@@ -1147,19 +1147,25 @@ function slotArt(b, i, t, state = 'empty', cd = 0) {
   sizeArt(c);
 }
 function etaOfTrap(w, t) {
-  const p = w.player, px = p.x + 5, dir = Math.sign(w.goal.x - px) || 1, ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - px) * dir;
+  const p = trapFocus(w), px = p.x + 5, dir = Math.sign(w.goal.x - px) || 1, ahead = ((t.x0 + t.x1 + 1) * TILE / 2 - px) * dir;
   return ahead < -TILE * 2 ? null : Math.max(0, ahead) / PHYS.maxRun;
 }
 
 // ---------- gadgets: the trapper's (left column) and the runner's (above the jump button / bottom left on PC)
-// Each map hands out its own small set (see loadout.js). Keys go by slot: trapper 7 8 9 0, runner Shift Q E R.
-// With a gamepad plugged in, the labels show its buttons instead: trap slots on B X Y (red, blue, yellow, like the
-// slot colours), trapper gadgets on the shoulders, runner gadgets on X Y B RB (A jumps).
-const T_KEYS = ['7', '8', '9', '0'], R_KEYS = ['Shift', 'Q', 'E', 'R'];
+// Each map hands out its own small set (see loadout.js), but every gadget keeps its own key on every map: Dash is
+// always Shift, Shield always E… The runner's keys sit on the left of the keyboard, the trapper's on the right, so on
+// one keyboard they never clash. With a gamepad the labels show its buttons instead: trap slots on B X Y (red, blue,
+// yellow, like the slot colours), trapper gadgets on the shoulders, runner gadgets on X Y B RB (A jumps), in a fixed
+// order, so a gadget lands on the same button whenever it can.
+const R_KEY = { dash: ['Shift', 'ShiftLeft', 'ShiftRight'], blink: ['Q', 'KeyQ'], shield: ['E', 'KeyE'], haste: ['R', 'KeyR'], boots: ['T', 'KeyT'], phase: ['Y', 'KeyY'],
+  flag: ['F', 'KeyF'], glider: ['G', 'KeyG'], peek: ['H', 'KeyH'], decoy: ['C', 'KeyC'], slowmo: ['V', 'KeyV'], magnet: ['B', 'KeyB'], jam: ['X', 'KeyX'] };
+const T_KEY = { bolt: ['L', 'KeyL'], glue: ['U', 'KeyU'], mine: ['M', 'KeyM'], bat: ['N', 'KeyN'], gust: ['O', 'KeyO'], frost: ['I', 'KeyI'], fog: ['P', 'KeyP'], hex: ['J', 'KeyJ'],
+  anvil: ['7', 'Digit7', 'Numpad7'], moon: ['8', 'Digit8', 'Numpad8'], rewind: ['9', 'Digit9', 'Numpad9'], squash: ['0', 'Digit0', 'Numpad0'] };
+const gadgetForKey = (side, code) => { const map = side === 'runner' ? R_KEY : T_KEY; return Object.keys(map).find(id => map[id].slice(1).includes(code)); };
 const PAD_T = ['LB', 'RB', 'LT', 'RT'], PAD_R = ['X', 'Y', 'B', 'RB'], PAD_SLOT = ['B', 'X', 'Y'];
 let padOn = false;
 const runnerKeyed = () => run.world.loadout.runner.filter(id => !GADGETS.runner[id].passive);
-const keyOf = (side, id) => side === 'trapper' ? (padOn ? PAD_T : T_KEYS)[run.world.loadout.trapper.indexOf(id)] : (padOn ? PAD_R : R_KEYS)[runnerKeyed().indexOf(id)];
+const keyOf = (side, id) => padOn ? (side === 'trapper' ? PAD_T[run.world.loadout.trapper.indexOf(id)] : PAD_R[runnerKeyed().indexOf(id)]) : ((side === 'trapper' ? T_KEY : R_KEY)[id] || [])[0];
 const slotKey = i => padOn ? PAD_SLOT[i] : touchDevice ? '' : String(i + 1);
 function gadgetButton(id, side, onPress) {
   const b = document.createElement('button');
@@ -1350,9 +1356,9 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   buildGadgets();
   layoutControls();
   updateTrapScore(false);
-  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ' (1-3, gadgets 7-0)'}`
-    : runnerHere ? (touchDevice ? `Reach the flag! Your gadgets: ${gadNames('runner')}.` : `Reach the flag! ← → run, Space jump. ${runnerKeyed().map((id, i) => R_KEYS[i] + ' ' + GADGETS.runner[id].name.toLowerCase()).join(', ')}.`)
-      : (touchDevice ? `The three coloured buttons fire the traps outlined in the same colour (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-3 fire the coloured trap buttons, 7-0 gadgets (${gadNames('trapper')}), aimed at your mouse.`);
+  const hint = mode === 'local' ? `${players[runner].name} runs (${touchDevice ? 'buttons' : 'arrows + Space'}), ${players[other(runner)].name} uses the trap bar${touchDevice ? '' : ` (1-3, gadgets ${run.world.loadout.trapper.map(id => keyOf('trapper', id)).join(' ')})`}`
+    : runnerHere ? (touchDevice ? `Reach the flag! Your gadgets: ${gadNames('runner')}.` : `Reach the flag! ← → run, Space jump. ${runnerKeyed().map(id => keyOf('runner', id) + ' ' + GADGETS.runner[id].name.toLowerCase()).join(', ')}.`)
+      : (touchDevice ? `The three coloured buttons fire the traps outlined in the same colour (hold for the flame). Your gadgets: ${gadNames('trapper')}.` : `Keys 1-3 fire the coloured trap buttons. Gadgets: ${run.world.loadout.trapper.map(id => keyOf('trapper', id) + ' ' + GADGETS.trapper[id].name.toLowerCase()).join(', ')} (aimed at your mouse).`);
   $('hint').textContent = (endless ? 'Endless: no clock, new stage at every flag. Swap sides from the II menu. ' : '') + hint + ''; $('hint').classList.remove('hidden');
   if (run.preview) { run.phase = 'preview'; run.previewT = PREVIEW; showPreview(); $('hint').classList.add('hidden'); }
   input.jumpQueued = false;
@@ -1425,8 +1431,9 @@ const GAD_LONG = {
   anvil: 'Makes the runner heavy for 3 s: low jumps, fast falls.', moon: 'Floaty low gravity for 3 s: hard to land precisely.',
   rewind: 'Sends the runner back to where they were 2 s ago.', squash: 'Shrinks the runner for 3 s: slower and lower jumps.',
 };
-function gadStats(g) {
+function gadStats(g, id) {
   const bits = [g.passive ? 'automatic' : g.charges < 0 ? 'unlimited' : `${g.charges} per run`];
+  const key = !g.passive && (R_KEY[id] || T_KEY[id]); if (key) bits.push(`key ${key[0]}`);
   if (g.cd) bits.push(`${g.cd} s cooldown`);
   return bits.join(' · ');
 }
@@ -1434,7 +1441,7 @@ function openGuide(back, tab = 'traps') {
   const tabs = [['traps', 'Traps'], ['runner', 'Runner gadgets'], ['trapper', 'Trapper gadgets']];
   const rows = tab === 'traps'
     ? Object.keys(TRAPS).map(k => [k, TRAPS[k].name, TRAP_DESC[k], TRAPS[k].hold ? 'hold the button' : `${TRAPS[k].cd} s cooldown`])
-    : Object.keys(GADGETS[tab]).map(id => [id, GADGETS[tab][id].name, GAD_LONG[id], gadStats(GADGETS[tab][id])]);
+    : Object.keys(GADGETS[tab]).map(id => [id, GADGETS[tab][id].name, GAD_LONG[id], gadStats(GADGETS[tab][id], id)]);
   panel(`<h2>Items</h2>
     <p class="status">${tab === 'traps' ? 'The trapper fires these from the coloured buttons.' : tab === 'runner' ? 'Each map gives the runner four of these.' : 'Each map gives the trapper four of these.'}</p>
     <div class="seg guideTabs">${tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === tab ? 'on' : ''}">${l}</button>`).join('')}</div>
@@ -1522,7 +1529,7 @@ const GAD_DESC = {
 function showPreview() {
   const L = levelOf(run.level), lo = run.world.loadout, el = $('preview');
   const mine = side => (side === 'runner') === run.runnerHere || mode === 'local';
-  const icons = side => lo[side].map(id => `<span class="pvGad"><canvas class="pix" width="7" height="7" data-icon="${id}"></canvas><span><b>${esc(GADGETS[side][id].name)}</b><i>${GAD_DESC[id] || ''}</i></span></span>`).join('');
+  const icons = side => lo[side].map(id => `<span class="pvGad"><canvas class="pix pvKnob" data-knob="${id}" data-side="${side}"></canvas><span><b>${esc(GADGETS[side][id].name)}</b><i>${GAD_DESC[id] || ''}</i></span></span>`).join('');
   const stars = L.stars || starsOf(L);
   const kinds = [...new Set(run.world.traps.map(t => t.kind))];
   el.innerHTML = `<div class="pvName">${esc(run.endless ? '∞ ' + L.name : L.name)} <span class="stars">${starText(stars)}</span>${R.weather ? `<small class="pvWx">· ${WEATHER_NAME[R.weather.kind]}</small>` : ''}</div>
@@ -1531,6 +1538,7 @@ function showPreview() {
     <div class="pvRow${mine('trapper') ? ' mine' : ''}"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
     <div class="pvSkip"><small id="pvT"></small>${touchDevice ? '<button class="chip" id="pvSkipBtn">⏭ Skip</button>' : '<div class="pvHold"><span id="pvHoldBar"></span><b>Hold SPACE to skip</b></div>'}</div>`;
   for (const c of el.querySelectorAll('canvas[data-icon]')) c.getContext('2d').drawImage(SPR.icon[c.dataset.icon], 0, 0);
+  for (const c of el.querySelectorAll('canvas[data-knob]')) { drawKnob(c, { r: 6, pal: c.dataset.side, icon: SPR.icon[c.dataset.knob] }); sizeArt(c); }   // the same little arcade caps as the buttons
   el.classList.remove('hidden');
   run.meReady = false; run.peerReady = !!run.peerReadyEarly;
 }
@@ -1614,9 +1622,11 @@ function resultOf(world, runner) {
     progress: p.finished ? 100 : Math.max(0, Math.min(99, Math.round((p.best - world.start.x) / span * 100))) };
 }
 const fmt = r => r.finished ? `${r.time.toFixed(1)}s` : `${r.progress}%`;
+// a finished time with gems: say where the difference to the clock comes from
+const gemNote = r => r.finished && r.gems && r.raw != null ? `<small class="gemNote">${r.raw.toFixed(1)}s − ${(r.gems * GEM_BONUS).toFixed(1)}s ${PI('gem')}</small>` : '';
 function line(r, win) {
   const p = players[r.runner];
-  return `<div class="line${win ? ' win' : ''}" data-portrait="${r.runner}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}</span></div>`;
+  return `<div class="line${win ? ' win' : ''}" data-portrait="${r.runner}"><div><b>${esc(p.name)}${win ? ' ' + PI('crown') : ''}</b><small>${r.finished ? 'reached the flag' : 'ran out of time'} · ${r.deaths} ${r.deaths === 1 ? 'fall' : 'falls'}</small></div><span class="t">${fmt(r)}${gemNote(r)}</span></div>`;
 }
 // Who trapped best this level: the trapper of each run is the other player.
 function trapKing(r1, r2) {
@@ -1641,7 +1651,7 @@ function podium(r1, r2, win) {
     <div class="podCards">${order.map(r => {
       const o = other(r), p = players[r.runner], tp = o && o.tp != null ? o.tp : null;
       return `<div class="podCard${r === win ? ' win' : ''}"><b>${esc(p.name)}${r === win ? ' ' + PI('crown') : ''}</b>
-        <div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}</i></div>
+        <div class="pcRow"><span>${PI(r.finished ? 'flag' : 'clock')} ${r.finished ? 'Time' : 'Reached'}</span><i>${fmt(r)}${r.finished && r.gems ? `<small> (${r.raw.toFixed(1)}s on the clock)</small>` : ''}</i></div>
         <div class="pcRow"><span>${PI('warn')} Falls</span><i>${r.deaths}</i></div>
         ${r.gems ? `<div class="pcRow"><span>${PI('gem')} Gems</span><i>${r.gems}<small>${r.finished ? ' · −' + (r.gems * GEM_BONUS).toFixed(1) + 's' : ''}</small></i></div>` : ''}
         ${tp != null ? `<div class="pcRow"><span>${PI('spikes')} Traps</span><i>${tp}<small> pts · ${o.tc || 0} ${o.tc === 1 ? 'catch' : 'catches'}</small></i></div>` : ''}</div>`;
@@ -1804,8 +1814,8 @@ function hidePanel() { $('panel').classList.add('hidden'); }
 // nobody gets caught out by a resume (online the world never stops, so there it's just a menu).
 function controlsHelp() {
   const lines = [];
-  if (run.runnerHere) lines.push(padOn ? ['RUN', 'Stick / d-pad run · A jump · X Y B RB gadgets'] : touchDevice ? ['RUN', `Joystick runs · JUMP (hold = higher) · gadgets around JUMP${settings.lefty ? ' (left-handed)' : ''}`] : ['RUN', `← → or A D run · Space jump (hold = higher) · ${runnerKeyed().map((id, i) => R_KEYS[i]).join(' ') || 'no'} gadgets`]);
-  if (run.trapperHere) lines.push(padOn ? ['TRAP', 'B X Y fire the slots · LB RB LT RT gadgets'] : touchDevice ? ['TRAP', 'Coloured buttons (or tap the trap) fire · gadgets beside them'] : ['TRAP', '1 2 3 fire the coloured slots · 7 8 9 0 gadgets, aimed at the mouse']);
+  if (run.runnerHere) lines.push(padOn ? ['RUN', 'Stick / d-pad run · A jump · X Y B RB gadgets'] : touchDevice ? ['RUN', `Joystick runs · JUMP (hold = higher) · gadgets around JUMP${settings.lefty ? ' (left-handed)' : ''}`] : ['RUN', `← → or A D run · Space jump (hold = higher) · ${runnerKeyed().map(id => keyOf('runner', id) + ' ' + GADGETS.runner[id].name).join(' · ') || 'no gadgets'}`]);
+  if (run.trapperHere) lines.push(padOn ? ['TRAP', 'B X Y fire the slots · LB RB LT RT gadgets'] : touchDevice ? ['TRAP', 'Coloured buttons (or tap the trap) fire · gadgets beside them'] : ['TRAP', `1 2 3 fire the coloured slots · ${run.world.loadout.trapper.map(id => keyOf('trapper', id) + ' ' + GADGETS.trapper[id].name).join(' · ')} (aimed at the mouse)`]);
   return lines.map(([k, t]) => `<div class="pCtl"><b class="pvSide ${k === 'RUN' ? 'run' : 'trap'}">${k}</b><span>${esc(t)}</span></div>`).join('');
 }
 function togglePause() {
@@ -2174,6 +2184,8 @@ function tick(dt, now) {
   const left = run.endless ? 1e9 : TIME_LIMIT - w.time, E = run.endless;
   $('timer').textContent = (E ? E.total + w.time : w.time).toFixed(1); $('timer').classList.toggle('low', left < 15);
   $('deaths').textContent = (E ? E.deaths : 0) + w.player.deaths;
+  const gb = $('gemBonus'), bonus = (w.gemsGot || 0) * GEM_BONUS, bt = bonus ? `−${bonus.toFixed(1)}s` : '';
+  if (gb.textContent !== bt) { gb.textContent = bt; gb.classList.toggle('hidden', !bonus); if (bonus) { gb.classList.remove('bump'); void gb.offsetWidth; gb.classList.add('bump'); } }
   const gh = $('gemsHud'), gt = w.gems ? w.gems.length : 0;
   gh.classList.toggle('hidden', !gt); if (gt) { const txt = `${w.gemsGot}/${gt}`; if (gh.textContent !== txt) gh.textContent = txt; }
 }
@@ -2228,6 +2240,7 @@ setInterval(() => { if (wantReload && (!run || run.phase === 'end')) location.re
 setTimeout(() => $('title').classList.remove('intro'), 3300);
 
 // ---------- boot
+$('app').addEventListener('scroll', () => { const a = $('app'); if (a.scrollLeft || a.scrollTop) { a.scrollLeft = 0; a.scrollTop = 0; } });   // never slide the frame
 applyControlPrefs();
 R.resize(); addEventListener('resize', () => updateInsets());
 buildTitle();
@@ -2239,4 +2252,4 @@ else if (session && Date.now() - session.t < 5 * 60 * 1000) {   // the app was c
 }
 else show('title');
 requestAnimationFrame(frame);
-window.__td = { get ed() { return ed; }, lobbyLevel: () => lobby.level, toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };
+window.__td = { levels: LEVELS, get ed() { return ed; }, lobbyLevel: () => lobby.level, toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };

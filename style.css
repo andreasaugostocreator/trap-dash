@@ -1020,3 +1020,18 @@ textarea.edCodeOut { width: 100%; height: 70px; font: 12px monospace; word-break
 #myRow .chip { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
 #myRow .chip.on { background: #f0be4a; }
 @container app (max-height: 500px) { button.edTool { width: 50px; height: 44px; } button.edTool canvas { width: 18px; height: 18px; } .edTop { padding-top: max(4px, var(--sa-top)); padding-bottom: 4px; } .edTop input { font-size: 14px; } }
+/* preview: the gadget chips line up under their RUNNER / TRAPPER tags and carry the same little caps as the buttons */
+.pvRow { justify-content: flex-start; }
+.pvGad canvas.pvKnob { width: calc(var(--aw, 18) * 1.4px); height: calc(var(--ah, 18) * 1.4px); background: none; }
+/* button labels: a slimmer outline so small letters (the G of Glue and Gust) stay open */
+.pad small { font-family: 'Jersey 15', 'Pixelify Sans', sans-serif; font-size-adjust: 0.52; font-size: 13px; letter-spacing: .02em;
+  text-shadow: 1px 0 var(--ink), -1px 0 var(--ink), 0 1px var(--ink), 0 -1px var(--ink), 1px 1px var(--ink), -1px 1px var(--ink), 1px -1px var(--ink), -1px -1px var(--ink), 0 2px var(--ink); }
+/* the app frame never scrolls: the gadget ring may poke past the edge, and focusing a button there used to slide
+   the whole frame sideways (an overflow: hidden box can still be scrolled), leaving the joystick 19 px off screen */
+#app { overflow: clip; }
+/* the gem bonus hangs under the clock, so the clock and the final time agree */
+.tplaque .gemBonus { position: absolute; left: 50%; top: calc(100% - 4px); transform: translateX(-50%); z-index: 2; white-space: nowrap; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6;
+  font-size: 12px; color: #1c3a44; background: #bff4ff; padding: 1px 5px 2px; box-shadow: 0 0 0 2px var(--ink); }
+.tplaque .gemBonus.bump { animation: tsBump .5s cubic-bezier(.2, 1.8, .4, 1); }
+.result .line .t .gemNote { display: flex; align-items: center; justify-content: flex-end; gap: 2px; font-family: 'Jersey 15', sans-serif; font-size: 12px; color: var(--muted); }
+.result .line .t .gemNote img.pi { width: 12px; height: 12px; }

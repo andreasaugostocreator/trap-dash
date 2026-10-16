@@ -9,27 +9,27 @@ const st = p => p.evaluate(() => { const w = window.__td.run.world, q = w.player
 // 1. Same screen on PC: trapper keys + mouse aim, runner keys.
 const l = await page({ viewport: { width: 1280, height: 720 } });
 await l.goto('http://localhost:8080/'); await l.waitForTimeout(400);
-// Each map deals its own gadgets; this part forces the classic set so the keys are known (7 bolt, 8 glue, 9 gust, 0 hex; Shift dash, Q shield, E jammer).
+// Each map deals its own gadgets; this part forces the classic set so the keys are known (each gadget has its own key: L bolt, U glue, O gust, J hex; Shift dash, E shield, X jammer).
 await l.click('text=Same screen');
 await l.evaluate(lv => window.__td.startRun({ ...lv, loadout: { runner: ['dash', 'shield', 'jam', 'feather'], trapper: ['bolt', 'glue', 'gust', 'hex'] } }, 'a', 1), LEVELS.find(v => v.id === 'windy'));
 await l.waitForTimeout(3700);
 const scr = await l.evaluate(() => { const R = window.__td.R, p = window.__td.run.world.player; return { x: (p.x + 5 - R.camX) * R.k / R.dpr + R.ox, y: (p.y - R.camY) * R.k / R.dpr + R.oy }; });
-await l.mouse.move(scr.x, scr.y); await l.keyboard.press('Digit7'); await l.waitForTimeout(200);
+await l.mouse.move(scr.x, scr.y); await l.keyboard.press('KeyL'); await l.waitForTimeout(200);
 await l.screenshot({ path: 'shots/50-bolt-warning.png' });
 await l.waitForTimeout(600);
 console.log('after lightning on the runner:', JSON.stringify(await st(l)));
 await l.screenshot({ path: 'shots/51-stunned.png' });
 await l.waitForTimeout(1200);
-await l.waitForTimeout(3200); await l.keyboard.press('KeyQ'); await l.waitForTimeout(100);
-await l.mouse.move(scr.x + 30, scr.y); await l.keyboard.press('Digit7'); await l.waitForTimeout(900);
+await l.waitForTimeout(3200); await l.keyboard.press('KeyE'); await l.waitForTimeout(100);
+await l.mouse.move(scr.x + 30, scr.y); await l.keyboard.press('KeyL'); await l.waitForTimeout(900);
 console.log('shield then lightning (should be blocked):', JSON.stringify(await st(l)));
-await l.keyboard.press('Digit0'); await l.waitForTimeout(100);
+await l.keyboard.press('KeyJ'); await l.waitForTimeout(100);
 await l.keyboard.down('ArrowRight'); await l.waitForTimeout(500); await l.keyboard.up('ArrowRight');
 console.log('hex then holding right (should walk left):', JSON.stringify(await st(l)));
-await l.keyboard.press('KeyE'); await l.waitForTimeout(100); await l.keyboard.press('Digit1'); await l.waitForTimeout(100);
+await l.keyboard.press('KeyX'); await l.waitForTimeout(100); await l.keyboard.press('Digit1'); await l.waitForTimeout(100);
 console.log('jammer then trap key (traps should not fire):', JSON.stringify(await st(l)), await l.evaluate(() => window.__td.run.world.traps.map(t => t.state[0]).join('')));
-await l.mouse.move(scr.x + 120, scr.y); await l.keyboard.press('Digit8'); await l.waitForTimeout(3200);
-await l.keyboard.press('Digit8');
+await l.mouse.move(scr.x + 120, scr.y); await l.keyboard.press('KeyU'); await l.waitForTimeout(3200);
+await l.keyboard.press('KeyU');
 await l.keyboard.down('ArrowRight'); await l.keyboard.press('ShiftLeft'); await l.waitForTimeout(150);
 await l.screenshot({ path: 'shots/52-pc-gadgets.png' }); await l.keyboard.up('ArrowRight');
 console.log('dash + glue:', JSON.stringify(await st(l)));

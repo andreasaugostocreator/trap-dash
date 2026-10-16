@@ -518,3 +518,20 @@ screen, in practice, or online (the host shares the level itself, as with random
 
 `tools/editor-test.mjs` paints, erases, undoes, widens, changes the world, test-plays, shares, opens the link in a
 second browser and plays the level from its lobby.
+
+## 25. Fixes from play
+
+- **Every gadget keeps its own key on every map.** Runner, left hand: Shift dash, Q blink, E shield, R haste,
+  T boots, Y phase, F flag, G glider, H peek, C decoy, V slow-mo, B magnet, X jammer. Trapper, right hand: L
+  lightning, U glue, M mine, N bat, O gust, I frost, P fog, J hex, 7 anvil, 8 moon, 9 rewind, 0 squash (trap slots
+  stay 1-3). The two sets never overlap, so a shared keyboard works. Loadouts are sorted in one fixed order, so on
+  touch and gamepad a gadget lands in the same place whenever it can. Keys show on the buttons, in the pause menu, in
+  the hints and in Items.
+- **The decoy no longer gives itself away.** While it is out, the trapper's three trap buttons come from the traps
+  ahead of the decoy (as the camera already followed it), so the trapper can fire them as usual.
+- **Clock vs. result.** The gem bonus hangs under the clock as it grows (−1.5s), and a finished time with gems
+  reads "41.8s − 1.5s" in the results, so the numbers always add up.
+- **Readable button labels** (a slimmer outline kept the G of Glue and Gust from closing into a B), the level
+  preview's gadgets drawn as the same little caps as the buttons and lined up under RUNNER / TRAPPER, no gems in
+  mid-air (a crusher's gem needs floor under it), and the app frame can no longer be scrolled sideways by focusing a
+  button near the edge (it used to push the joystick 19 px off screen now and then).
