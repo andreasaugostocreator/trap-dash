@@ -41,6 +41,7 @@
     <button class="plank" id="setBtn">Settings</button>
     <button class="plank" id="itemsBtn">Items</button>
     <button class="plank" id="troBtn">Trophies</button>
+    <button class="plank" id="edBtn">Editor</button>
   </div>
   <button class="profile" id="profileBtn" aria-label="Your name and runner"><canvas class="pix" id="profileArt" width="12" height="16"></canvas><span><small>Your runner</small><b id="profileName"></b></span></button>
 </section>
@@ -72,6 +73,21 @@
   </div>
 </section>
 
+<!-- Level editor: a toolbar on top, the palette at the bottom, the level itself in between (drawn on the game canvas) -->
+<section class="screen hidden editor" id="editor">
+  <div class="edTop">
+    <button class="chip" id="edBack" aria-label="Back">◀</button>
+    <input id="edName" maxlength="24" autocomplete="off" spellcheck="false" aria-label="Level name">
+    <button class="chip" id="edTheme" title="World">World</button>
+    <button class="chip" id="edNarrow" title="Narrower">−</button><span class="edW" id="edW">80</span><button class="chip" id="edWider" title="Wider">+</button>
+    <button class="chip" id="edUndo">Undo</button>
+    <button class="chip" id="edShare">Share</button>
+    <button class="chip pink" id="edTest">▶ Test</button>
+  </div>
+  <div class="edPal" id="edPal"></div>
+  <div class="edHint" id="edHint"></div>
+</section>
+
 <!-- Join -->
 <section class="screen hidden" id="join">
   <div class="card">
@@ -99,7 +115,7 @@
     <div class="players" id="players"></div>
     <h3>Level</h3>
     <div class="levels" id="levels"></div>
-    <div class="randWrap"><div class="randRow" id="randRow"></div><div class="randRow" id="endRow"></div></div>
+    <div class="randWrap"><div class="randRow" id="randRow"></div><div class="randRow" id="endRow"></div><div class="randRow hidden" id="myRow"></div></div>
     <div class="row" id="firstRow"><span>Runs first:</span> <div class="seg" id="firstSeg"></div><span class="matchLab">Match:</span> <div class="seg" id="matchSeg"></div></div>
     <div class="buttons">
       <button class="big pink" id="startBtn">Start!</button>

@@ -993,3 +993,30 @@ canvas.wmapArt { position: absolute; inset: 0; width: 100%; height: 100%; image-
   #lobby .levels.wmap button.pin.on .pinNum { display: none; }
   #lobby .levels.wmap { margin-top: 2px; }
 }
+/* ---------- the level editor: a wooden toolbar on top, the palette along the bottom, the level in between */
+#editor.screen { display: block; padding: 0; pointer-events: none; background: none; }
+#editor > * { pointer-events: auto; }
+.edTop { position: absolute; left: 0; right: 0; top: 0; display: flex; align-items: center; gap: 6px; padding: max(6px, var(--sa-top)) max(10px, var(--sa-right)) 6px max(10px, var(--sa-left));
+  background: linear-gradient(#5a3a24, #4a2f1e); box-shadow: 0 3px 0 var(--ink); }
+.edTop input { width: 150px; font-size: 16px; padding: 4px 8px; flex: 0 1 150px; min-width: 80px; }
+.edTop .chip { margin: 2px; }
+.edTop #edTest { margin-left: auto; }
+.edW { color: #f6e7c8; font-family: 'Jersey 10', 'Pixelify Sans', sans-serif; font-size-adjust: 0.6; font-size: 14px; min-width: 28px; text-align: center; }
+.edPal { position: absolute; left: 0; right: 0; bottom: 0; display: flex; gap: 4px; align-items: center; overflow-x: auto; touch-action: pan-x; scrollbar-width: none;
+  padding: 6px max(10px, var(--sa-right)) max(6px, var(--sa-bottom)) max(10px, var(--sa-left)); background: linear-gradient(#4a2f1e, #3a2417); box-shadow: 0 -3px 0 var(--ink); }
+.edPal::-webkit-scrollbar { display: none; }
+.edGroup { flex: none; writing-mode: vertical-rl; transform: rotate(180deg); color: #c9a77a; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; padding: 0 2px; }
+button.edTool { flex: none; width: 58px; height: 52px; margin: 2px; padding: 3px 2px 2px; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 2px; background: #f6e7c8; }
+button.edTool canvas { width: 24px; height: 24px; }
+button.edTool small { font-size: 10px; line-height: 1; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+button.edTool.on { background: #f0be4a; box-shadow: var(--frame), 0 0 0 5px #f0be4a; }
+.edHint { position: absolute; left: 50%; top: 60px; transform: translateX(-50%); background: var(--paper); box-shadow: var(--frame); padding: 4px 10px; font-size: 15px; pointer-events: none; text-align: center; max-width: 90cqw; }
+.edList { display: flex; flex-direction: column; gap: 4px; max-height: 40cqh; overflow-y: auto; margin: 6px 0; }
+.edRow { display: flex; align-items: center; gap: 8px; background: #fdf6e6; box-shadow: var(--frame); margin: 0 3px; padding: 3px 8px; text-align: left; }
+.edRow b { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .edRow small { color: var(--muted); white-space: nowrap; }
+.edImport { display: flex; gap: 6px; justify-content: center; align-items: center; margin: 4px 0; }
+.edImport input { width: min(280px, 60%); font-size: 15px; }
+textarea.edCodeOut { width: 100%; height: 70px; font: 12px monospace; word-break: break-all; resize: none; background: #fdf6e6; border: 0; box-shadow: var(--frame); padding: 6px; -webkit-user-select: text; user-select: text; }
+#myRow .chip { max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
+#myRow .chip.on { background: #f0be4a; }
+@container app (max-height: 500px) { button.edTool { width: 50px; height: 44px; } button.edTool canvas { width: 18px; height: 18px; } .edTop { padding-top: max(4px, var(--sa-top)); padding-bottom: 4px; } .edTop input { font-size: 14px; } }

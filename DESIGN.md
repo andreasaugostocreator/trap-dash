@@ -497,3 +497,24 @@ the top bar.
   cosmetics (60, 120, 200). Snapshots mirror which gems are gone.
 
 `tools/batchE-test.mjs` checks the gems (also mirrored online), the real two-player ready check and the bars.
+
+## 24. The level editor
+
+"Editor" on the title (`src/editor.js`). Its front page lists your levels (edit, delete), makes a new one, or
+imports a code from a friend. The editor paints straight onto the real game view: a wooden toolbar on top (name,
+world, width − / +, Undo, Share, ▶ Test) and the palette along the bottom in groups (Land: ground, ledge, spring,
+crumble, mover, lift, rope, ice; Marks: start, flag, checkpoint; Hazards: fixed spikes; every trap; the eraser) plus
+a Move hand. Paint with a finger or the mouse (drag paints a line; tiles of the same trap side by side make one
+trap, exactly as in the built-in levels); two fingers, the right mouse button, the wheel or the arrow keys move the
+view; Ctrl+Z undoes. A faint grid, a hover square and a badge on every trap tile (pop-up traps hide while idle) help
+you see what you have. Levels are 18 rows, 40 to 240 columns, with walls at both ends and exactly one start and one
+flag. Gems appear where the game will place them.
+
+▶ Test plays the level at once (no trap bot) and comes back to the editor. Share saves it and shows a code
+(`TD1.` + the deflated map, name and world in base64url; `TD0.` uncompressed where the browser can't deflate) and a
+link (`?level=…`); a worker runs the solver to say whether the flag can be reached. Opening a link or pasting a code
+stores the level on that device. Your levels appear in the lobby under "My levels": pick one and play it on one
+screen, in practice, or online (the host shares the level itself, as with random levels).
+
+`tools/editor-test.mjs` paints, erases, undoes, widens, changes the world, test-plays, shares, opens the link in a
+second browser and plays the level from its lobby.

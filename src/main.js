@@ -58,6 +58,7 @@ const store = {
 const NICK = ['Ace', 'Pixel', 'Dash', 'Zip', 'Jinx', 'Moxie', 'Turbo', 'Scout'];
 import { HATS, SCARVES, TINTS, SLOTS as COS_SLOTS, dressed, cleanCos, unlocked, setGemCounter } from './cosmetics.js';
 import { mapSize, pinX, pinY, paintMap, paintTrail } from './worldmap.js';
+import { PALETTE, ED_THEMES, ED_MIN_W, ED_MAX_W, blankLevel, tidy, problems, encodeLevel, decodeLevel, EditSession } from './editor.js';
 let mapArt = null;
 import { stats, recordRun, recordCatch, recordTrapPoints, recordResult, recordGems } from './stats.js';
 const me = store.get('me2', { name: NICK[Math.floor(Math.random() * NICK.length)] + Math.floor(Math.random() * 90 + 10), char: CHARS[Math.floor(Math.random() * CHARS.length)].id });
@@ -154,6 +155,7 @@ function logoLetter(word, k) {
     c.width = art.width; c.height = art.height; c.className = 'pix picon'; c.getContext('2d').drawImage(art, 0, 0);
     b.textContent = text; b.prepend(c);
   }
+  $('edBtn').innerHTML = `${PI('hammer', 'pi picon')} Editor`;
 })();
 let titleAnimT = 0, pickT = -9;
 // The runners are alive: they breathe, now and then one waves, and the one you pick hops for joy.
@@ -651,7 +653,7 @@ function saveLobbyPrefs() {
   store.set('lobby-' + mode, { level: typeof lobby.level === 'number' ? lobby.level : prev.level || 0, first: lobby.first, bo3: !!lobby.bo3 });
 }
 function openLobby() {
-  forgetTyping(); saveLobbyPrefs();
+  forgetTyping(); saveLobbyPrefs(); edTesting = false;
   show('lobby');
   startMusic('title');   // the menus share the title's tune
   const online = mode === 'online', practice = mode === 'practice';
@@ -717,6 +719,17 @@ function openLobby() {
       genAsync(n).then(L => { lobby.level = L; unready(); syncLobby(); if (!run && !$('lobby').classList.contains('hidden')) openLobby(); });
     };
     rr.appendChild(b);
+  }
+
+  // Levels made in the editor (or imported from a code)
+  const myLevels = customs(), mr = $('myRow');
+  mr.classList.toggle('hidden', !myLevels.length); mr.innerHTML = myLevels.length ? `<span>${PI('hammer')} My levels:</span>` : '';
+  for (const L of myLevels.slice(0, 8)) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (cur && cur.id === L.id ? ' on' : ''); b.textContent = L.name;
+    b.disabled = online && !isHost;
+    b.onclick = () => { sfx.click(); lobby.level = playable(L); unready(); syncLobby(); openLobby(); };
+    mr.appendChild(b);
   }
 
   // Endless: stage after stage on one difficulty, no clock. Swap sides any time from the menu.
@@ -1010,6 +1023,7 @@ let pointer = null;   // last mouse position over the game, for aiming gadgets w
 canvas.addEventListener('pointerleave', () => { pointer = null; });
 canvas.addEventListener('pointerdown', e => {
   unlockAudio();
+  if (edOn()) { edPointer(e, 'down'); return; }
   if (run && !run.trapperHere && e.pointerType !== 'mouse') { pressNearest(e, [$('pad')]); return; }   // the runner never taps the map: a near miss above the panel still counts
   if (!run || !run.trapperHere || run.phase !== 'play') return;
   if (run.aim) { useTrapperGadget(run.aim.id, R.toWorld(e.clientX, e.clientY)); return; }
@@ -1018,6 +1032,7 @@ canvas.addEventListener('pointerdown', e => {
   fireTrap(id, 'p' + e.pointerId);
 });
 canvas.addEventListener('pointermove', e => {
+  if (edOn()) { edPointer(e, 'move'); return; }
   if (e.pointerType === 'mouse') pointer = { x: e.clientX, y: e.clientY };
   if (!run || !run.trapperHere) return;
   if (e.pointerType === 'mouse') run.hover = trapAt(e.clientX, e.clientY);
@@ -1662,6 +1677,14 @@ function showRunResult(res) {
     $('tutDone').onclick = () => { sfx.click(); nav('title'); };
     return;
   }
+  if (mode === 'practice' && edTesting) {
+    panel(`<div class="big-emoji">${PI(res.finished ? 'flag' : 'clock', 'bigpi')}</div><h2>${res.finished ? 'It can be done!' : 'Out of time'}</h2>
+      <div class="result">${line(res, false)}</div>
+      <div class="buttons"><button class="big pink" id="edBackRun">${PI('hammer')} Back to the editor</button><button class="mid" id="again">Test again</button></div>`);
+    $('edBackRun').onclick = () => { sfx.click(); backToEditor(); };
+    $('again').onclick = () => { sfx.click(); startRun(run.level, 'a', 1); run.bot = null; };
+    return;
+  }
   if (mode === 'practice') {
     const best = store.get('best', {}), prev = L.random ? null : best[L.id];
     const record = res.finished && (!prev || res.time < prev);
@@ -1808,7 +1831,7 @@ function togglePause() {
   if ($('swapBtn')) $('swapBtn').onclick = () => { sfx.click(); swapSides(); };
   if ($('endBtn')) $('endBtn').onclick = () => { sfx.click(); if (online) net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); };
   if ($('restartRun')) $('restartRun').onclick = () => { sfx.click(); startRun(run.level, 'a', 1); };
-  $('quitRun').onclick = () => { sfx.click(); if (online || mode === 'tutorial') nav('title'); else { endRunView(); openLobby(); } };
+  $('quitRun').onclick = () => { sfx.click(); if (edTesting) backToEditor(); else if (online || mode === 'tutorial') nav('title'); else { endRunView(); openLobby(); } };
   $('pSet').onclick = () => { sfx.click(); openSettings(() => { hidePanel(); togglePause(); }); };
   $('pItems').onclick = () => { sfx.click(); openGuide(() => { hidePanel(); togglePause(); }); };
 }
@@ -1920,6 +1943,154 @@ function updateSignal(dt) {
   }
 }
 
+// ---------- the level editor (src/editor.js holds the level model, share codes and the palette)
+let ed = null, edTesting = false, edPaint = null, edPan = null, edRebuildT = 0, edHover = null;
+const edPointers = new Map();
+const customs = () => store.get('customs', []);
+function saveCustom(L) { const list = customs().filter(x => x.id !== L.id); list.unshift({ id: L.id, name: L.name, theme: L.theme, map: L.map, at: Date.now() }); store.set('customs', list.slice(0, 40)); }
+const playable = L => { const lv = tidy(L); lv.stars = rateLevel(lv).stars; return lv; };
+const edOn = () => ed && !run && !$('editor').classList.contains('hidden');
+// the editor's front page: your levels, a new one, or a code from a friend
+function openEditorHome() {
+  const list = customs();
+  panel(`<h2>Level editor</h2><p class="status">Paint a level on the real game view, test it, then share it as a code or play it from the lobby.</p>
+    <div class="edList">${list.length ? list.map((L, i) => `<div class="edRow"><b>${esc(L.name)}</b><small>${esc(THEMES[L.theme] ? L.theme : 'day')} · ${L.map[0].length} wide</small><button class="chip" data-edit="${i}">Edit</button><button class="chip" data-del="${i}">✕</button></div>`).join('') : '<p class="status">No levels yet.</p>'}</div>
+    <div class="edImport"><input id="edCode" placeholder="Paste a level code" autocomplete="off" spellcheck="false"><button class="chip" id="edImport">Import</button></div>
+    <div class="buttons"><button class="big pink" id="edNew">${PI('hammer')} New level</button><button class="mid" data-close>Back</button></div>`);
+  $('panelCard').classList.add('wide');
+  for (const b of $('panelCard').querySelectorAll('[data-edit]')) b.onclick = () => { sfx.click(); openEditor(list[+b.dataset.edit]); };
+  for (const b of $('panelCard').querySelectorAll('[data-del]')) b.onclick = () => { sfx.click(); const L = list[+b.dataset.del]; if (b.dataset.sure) { store.set('customs', customs().filter(x => x.id !== L.id)); openEditorHome(); } else { b.dataset.sure = 1; b.textContent = 'Delete?'; } };
+  $('edNew').onclick = () => { sfx.click(); openEditor(blankLevel()); };
+  $('edImport').onclick = async () => {
+    try { const L = await decodeLevel($('edCode').value); saveCustom(L); sfx.cp(); toast(`Imported “${L.name}”`); openEditorHome(); }
+    catch (err) { sfx.denied(); toast(err.message || 'That code did not work.'); }
+  };
+}
+$('edBtn').onclick = () => { sfx.click(); openEditorHome(); };
+function openEditor(L) {
+  hidePanel(); forgetTyping();
+  ed = new EditSession(L); edTesting = false;
+  $('edName').value = ed.level.name; $('edName').oninput = () => { ed.level.name = $('edName').value.trim().slice(0, 24) || 'My level'; };
+  buildPalette(); edLabels();
+  show('editor'); stopMusic();
+  const hint = touchDevice ? 'Pick a tile below and paint with a finger. Two fingers (or the hand) move the view.' : 'Pick a tile below and paint with the mouse. Drag with the right button, the hand or the wheel to move the view.';
+  $('edHint').textContent = hint; $('edHint').classList.remove('hidden'); setTimeout(() => $('edHint').classList.add('hidden'), 6000);
+}
+function edLabels() { $('edTheme').textContent = '◐ ' + ed.level.theme; $('edW').textContent = ed.w; }
+function buildPalette() {
+  const pal = $('edPal'); pal.innerHTML = '';
+  const tools = [['pan', 'Move', null], ...PALETTE];
+  let group = '';
+  for (const [c, label, icon, g] of tools) {
+    if (g && g !== group) { group = g; const s = document.createElement('span'); s.className = 'edGroup'; s.textContent = g; pal.appendChild(s); }
+    const b = document.createElement('button'); b.className = 'edTool' + (ed.tool === c ? ' on' : ''); b.title = label; b.dataset.tool = c;
+    const cv = document.createElement('canvas'); cv.width = 7; cv.height = 7; cv.className = 'pix';
+    const g2 = cv.getContext('2d');
+    if (c === 'pan') { g2.fillStyle = '#3a2417'; for (const [x, y] of [[3, 0], [3, 1], [3, 2], [3, 3], [3, 4], [3, 5], [3, 6], [0, 3], [1, 3], [2, 3], [4, 3], [5, 3], [6, 3], [2, 1], [4, 1], [2, 5], [4, 5], [1, 2], [1, 4], [5, 2], [5, 4]]) g2.fillRect(x, y, 1, 1); }
+    else if (icon && icon[0] === '#') { g2.fillStyle = '#3a2417'; g2.fillRect(0, 0, 7, 7); g2.fillStyle = icon; g2.fillRect(1, 1, 5, 5); if (c === '.') { g2.fillStyle = '#d9663f'; for (let k = 1; k < 6; k++) { g2.fillRect(k, k, 1, 1); g2.fillRect(6 - k, k, 1, 1); } } if (c === 'S' || c === 'G' || c === 'C') { g2.fillStyle = '#fdf6e6'; g2.font = '6px monospace'; g2.fillRect(3, 2, 1, 3); } }
+    else if (SPR.icon[icon]) g2.drawImage(SPR.icon[icon], 0, 0);
+    b.append(cv); const s = document.createElement('small'); s.textContent = label; b.append(s);
+    b.onclick = () => { sfx.click(); ed.tool = c; for (const x of pal.querySelectorAll('.edTool')) x.classList.toggle('on', x === b); };
+    pal.appendChild(b);
+  }
+}
+$('edBack').onclick = () => { sfx.click(); if (ed) saveCustom(ed.level); ed = null; show('title'); buildTitle(); openEditorHome(); };
+$('edTheme').onclick = () => { sfx.click(); ed.level.theme = ED_THEMES[(ED_THEMES.indexOf(ed.level.theme) + 1) % ED_THEMES.length]; ed.rebuild(); R.bgCache = {}; edLabels(); };
+$('edNarrow').onclick = () => { sfx.click(); ed.resize(ed.w - 20); edLabels(); };
+$('edWider').onclick = () => { sfx.click(); ed.resize(ed.w + 20); edLabels(); };
+$('edUndo').onclick = () => { if (ed.back()) sfx.click(); else sfx.denied(); };
+$('edTest').onclick = () => {
+  const bad = problems(ed.level);
+  if (bad.length) { sfx.denied(); toast('Almost: ' + bad.join(', ') + '.'); return; }
+  sfx.click(); saveCustom(ed.level);
+  mode = 'practice'; isHost = true; edTesting = true; score = { a: 0, b: 0 };
+  players = { a: { name: me.name, char: me.char, cos: me.cos }, b: { name: 'Nobody', char: otherChar(me.char) } };
+  wipeThen(() => { startRun(playable(ed.level), 'a', 1); run.bot = null; });
+};
+$('edShare').onclick = async () => {
+  const bad = problems(ed.level);
+  if (bad.length) { sfx.denied(); toast('Almost: ' + bad.join(', ') + '.'); return; }
+  sfx.click(); saveCustom(ed.level);
+  const code = await encodeLevel(ed.level), url = `${location.origin}${location.pathname}?level=${code}`;
+  panel(`<h2>Share “${esc(ed.level.name)}”</h2><p class="status">Send this code (or the link). Your friend pastes it in the editor, or opens the link.</p>
+    <textarea class="edCodeOut" id="edCodeOut" readonly>${esc(code)}</textarea>
+    <p class="status" id="edSolve">Checking that the flag can be reached…</p>
+    <div class="buttons"><div class="row"><button class="mid pink" id="edCopy">Copy code</button><button class="mid" id="edLink">Share link</button></div><button class="mid" data-close>Back to the editor</button></div>`);
+  $('edCopy').onclick = async () => { try { await navigator.clipboard.writeText(code); toast('Code copied!'); } catch { $('edCodeOut').select(); } };
+  $('edLink').onclick = async () => { try { if (navigator.share) await navigator.share({ title: 'Trap Dash level', text: `Try my Trap Dash level “${ed.level.name}”!`, url }); else { await navigator.clipboard.writeText(url); toast('Link copied!'); } } catch { /* cancelled */ } };
+  checkSolvable(ed.level).then(okay => { const el = $('edSolve'); if (el) { el.textContent = okay === null ? '' : okay ? '✓ There is a way to the flag.' : '⚠ No way to the flag was found without gadgets. Is it finishable?'; el.className = 'status' + (okay === false ? ' err' : ''); } });
+};
+// the solver runs in a worker so the page never freezes on a big level
+function checkSolvable(L) {
+  return new Promise(res => {
+    let w; try { w = new Worker('src/solveworker.js', { type: 'module' }); } catch { res(null); return; }
+    const t = setTimeout(() => { w.terminate(); res(null); }, 8000);
+    w.onmessage = e => { clearTimeout(t); w.terminate(); res(!!e.data.ok); };
+    w.onerror = () => { clearTimeout(t); w.terminate(); res(null); };
+    w.postMessage({ level: { id: L.id, name: L.name, theme: L.theme, map: L.map } });
+  });
+}
+function backToEditor() { const L = ed ? ed.level : null; endRunView(); mode = null; edTesting = false; if (L) openEditor(L); else nav('title'); }
+// painting and moving the view
+function edPointer(e, kind) {
+  e.preventDefault?.();
+  if (kind === 'down') { edPointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); try { canvas.setPointerCapture(e.pointerId); } catch { /* fine */ } }
+  const at = R.toWorld(e.clientX, e.clientY), t = ed.tileAt(at.x, at.y);
+  if (e.pointerType === 'mouse') edHover = t;
+  if (kind === 'move' && edPointers.has(e.pointerId)) edPointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  const panning = ed.tool === 'pan' || edPointers.size >= 2 || e.button === 2 || (e.buttons & 2);
+  if (kind === 'down') {
+    if (panning) { edPaint = null; edPan = { x: e.clientX, y: e.clientY, cx: ed.cam.x, cy: ed.cam.y, n: edPointers.size }; return; }
+    ed.snapshot(); edPaint = { last: null };
+  }
+  if (edPan && kind === 'move' && edPointers.has(e.pointerId)) {
+    const p = [...edPointers.values()], mx = p.reduce((a, q) => a + q.x, 0) / p.length, my = p.reduce((a, q) => a + q.y, 0) / p.length;
+    if (edPan.n !== p.length) { edPan = { x: mx, y: my, cx: ed.cam.x, cy: ed.cam.y, n: p.length }; return; }
+    const k = R.dpr / R.k; ed.cam.x = edPan.cx - (mx - edPan.x) * k; ed.cam.y = edPan.cy - (my - edPan.y) * k;
+    return;
+  }
+  if (edPaint && (kind === 'down' || edPointers.has(e.pointerId))) {
+    const key = t.x + ',' + t.y; if (edPaint.last === key) return; edPaint.last = key;
+    if (ed.set(t.x, t.y, ed.tool)) { if (ed.tool !== '.' && kind === 'down') sfx.click(); }
+  }
+}
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, e => {
+  if (!edPointers.has(e.pointerId)) return;
+  edPointers.delete(e.pointerId);
+  if (!edPointers.size) { edPan = null; if (edPaint) { edPaint = null; if (ed && ed.dirty) ed.rebuild(); } }
+});
+canvas.addEventListener('wheel', e => { if (!edOn()) return; e.preventDefault(); ed.cam.x += (e.deltaX || e.deltaY) * 0.5; }, { passive: false });
+canvas.addEventListener('contextmenu', e => { if (edOn()) e.preventDefault(); });
+addEventListener('keydown', e => { if (!edOn() || e.target.tagName === 'INPUT') return; if ((e.ctrlKey || e.metaKey) && e.code === 'KeyZ') { $('edUndo').click(); e.preventDefault(); } if (e.code === 'ArrowLeft') ed.cam.x -= 48; if (e.code === 'ArrowRight') ed.cam.x += 48; });
+function drawEditor(dt) {
+  if (ed.dirty && (edRebuildT -= dt) <= 0) { edRebuildT = 0.12; ed.rebuild(); }   // while painting, refresh the real look a few times a second
+  const top = uiRect($('editor').querySelector('.edTop')).bottom, bottom = viewH() - uiRect($('edPal')).top;
+  if (R.insets.top !== top || R.insets.bottom !== bottom) R.setInsets(top, bottom);
+  R.setZoom(true);
+  const w = ed.world, vw = R.lo.width, vh = R.lo.height, W = w.w * TILE, H = w.h * TILE;
+  ed.cam.x = vw >= W ? (W - vw) / 2 : Math.max(-16, Math.min(W - vw + 16, ed.cam.x));
+  ed.cam.y = R.clampY(H - vh + R.bandBottom, H, vh, R.bandTop, R.bandBottom);
+  R.cam.x = ed.cam.x; R.cam.y = ed.cam.y;
+  R.draw(w, { dt, colors: dressed(me), trapper: true, hover: -1, pending: {}, slots: null, slotColors: SLOT_COLORS, runnerView: false });
+  // a faint grid, the level's edges and the tile under the mouse
+  const l = R.l, cx = R.camX, cy = R.camY;
+  l.save(); l.translate(-cx, -cy);
+  l.fillStyle = 'rgba(253,246,230,.14)';
+  for (let x = Math.max(0, Math.floor(cx / TILE)); x <= Math.min(w.w, Math.ceil((cx + vw) / TILE)); x++) l.fillRect(x * TILE, 0, 1, H);
+  for (let y = 0; y <= w.h; y++) l.fillRect(Math.max(0, cx), y * TILE, Math.min(W, vw), 1);
+  // traps that hide while idle (pop-up spikes, trapdoors, walls…) get a little badge with their icon, so you see them
+  const TRAP_ICON = { P: 'spikes', T: 'trapdoor', X: 'crusher', F: 'flame', W: 'fan', Z: 'saw', Q: 'conveyor', I: 'ice', U: 'wall', '<': 'cannon', '>': 'cannon', '{': 'arrows', '}': 'arrows', K: 'laser', k: 'laser', D: 'dropper' };
+  for (let y = 0; y < w.h; y++) for (let x = Math.max(0, Math.floor(cx / TILE)); x <= Math.min(w.w - 1, Math.ceil((cx + vw) / TILE)); x++) {
+    const ic = TRAP_ICON[ed.level.map[y][x]]; if (!ic || !SPR.icon[ic]) continue;
+    l.fillStyle = 'rgba(58,36,23,.55)'; l.fillRect(x * TILE + 3, y * TILE + 3, 10, 10);
+    l.drawImage(SPR.icon[ic], x * TILE + 4, y * TILE + 4);
+  }
+  if (edHover && edHover.x > 0 && edHover.x < w.w - 1 && edHover.y >= 0 && edHover.y < w.h) { l.strokeStyle = '#f0be4a'; l.lineWidth = 1; l.strokeRect(edHover.x * TILE + 0.5, edHover.y * TILE + 0.5, TILE - 1, TILE - 1); }
+  l.restore();
+}
+// a level code in the address (?level=TD1....): import it and open the editor's page
+if (new URLSearchParams(location.search).get('level')) decodeLevel(new URLSearchParams(location.search).get('level')).then(L => { saveCustom(L); toast(`Got the level “${L.name}”! Find it in the editor or the lobby.`); openEditorHome(); }).catch(() => toast('That level link is damaged.'));
+
 // ---------- main loop
 let last = performance.now();
 function frame(now) {
@@ -1935,7 +2106,7 @@ function tick(dt, now) {
   if (innerWidth !== UI.iw || innerHeight !== UI.ih || dpr !== R.dpr) updateInsets();
   paintEdges();
   readPads(dt);
-  if (!run) { drawMenuScene(dt); animateTitle(dt); animateMatchmaking(dt); return; }
+  if (!run) { if (ed && !$('editor').classList.contains('hidden')) drawEditor(dt); else drawMenuScene(dt); animateTitle(dt); animateMatchmaking(dt); return; }
   const w = run.world;
   readInput();
   if (run.resumeT > 0) tickResume(dt);
@@ -2068,4 +2239,4 @@ else if (session && Date.now() - session.t < 5 * 60 * 1000) {   // the app was c
 }
 else show('title');
 requestAnimationFrame(frame);
-window.__td = { toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };
+window.__td = { get ed() { return ed; }, lobbyLevel: () => lobby.level, toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };
