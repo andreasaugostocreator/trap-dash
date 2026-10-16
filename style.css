@@ -950,3 +950,29 @@ button.ward { flex: none; }
   .podCard { padding: 2px 6px; } .podCard > b { font-size: 14px; margin: 0; }
   #profile .profTabs { margin-bottom: 4px; } .wardHead { margin-bottom: 2px; } .wardRow { margin: 2px 0; }
 }
+/* ---------- the level select: a world map strip that scrolls sideways */
+#lobby .levels.wmap { display: block; overflow-x: auto; overflow-y: hidden; touch-action: pan-x; margin: 0 -4px; box-shadow: 0 0 0 3px var(--ink), inset 0 0 0 2px rgba(255, 255, 255, .25); scrollbar-width: thin; scrollbar-color: #a0703c transparent; }
+.wmapIn { position: relative; }
+canvas.wmapArt { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+#lobby .levels.wmap button.pin { position: absolute; transform: translate(-50%, -50%); margin: 0; padding: 0 4px 1px; display: flex; flex-direction: column; align-items: center; gap: 0; width: auto; min-width: 74px; max-width: 98px;
+  border: 8px solid transparent; border-image: var(--woodImg) 5 fill / 8px round; background: none; box-shadow: 0 3px 0 -1px rgba(58, 36, 23, .45); text-align: center; z-index: 1; }
+#lobby .levels.wmap button.pin::before, #lobby .levels.wmap button.pin::after { content: none; }
+#lobby .levels.wmap button.pin span { font-size: 13px; line-height: 1.05; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 84px; }
+#lobby .levels.wmap button.pin small { font-size: 10px; line-height: 1; }
+#lobby .levels.wmap button.pin .pinNum { position: absolute; left: -22px; top: 50%; margin-top: -9px; font-style: normal; width: 17px; height: 17px; line-height: 15px; font-size: 11px; color: #fdf6e6; background: #8a5a2b; box-shadow: 0 0 0 2px var(--ink); }
+#lobby .levels.wmap button.pin.on { z-index: 2; filter: drop-shadow(0 0 6px rgba(240, 190, 74, .9)); }
+#lobby .levels.wmap button.pin.on .pinNum { background: #f0be4a; color: var(--ink); }
+#lobby .levels.wmap button.pin:disabled { opacity: 1; }
+#lobby .levels.wmap button.pin canvas.pinRunner { position: absolute; inset: auto; left: 50%; bottom: calc(100% + 2px); transform: translateX(-50%); width: 32px; height: 36px; animation: pinHop 1.2s ease-in-out infinite; }
+@keyframes pinHop { 50% { transform: translate(-50%, -3px); } }
+@container app (max-height: 500px) {
+  #lobby .levels.wmap button.pin { min-width: 64px; border-width: 6px; border-image-width: 6px; padding: 0 2px; }
+  #lobby .levels.wmap button.pin span { font-size: 11px; max-width: 72px; } #lobby .levels.wmap button.pin small { font-size: 9px; }
+  #lobby .levels.wmap button.pin canvas.pinRunner { width: 22px; height: 25px; }
+}
+@container app (max-height: 500px) {
+  /* small maps: your runner stands beside the chosen sign instead of on top of it */
+  #lobby .levels.wmap button.pin canvas.pinRunner { bottom: auto; left: auto; right: calc(100% + 1px); top: 50%; margin-top: -13px; animation: none; transform: none; }
+  #lobby .levels.wmap button.pin.on .pinNum { display: none; }
+  #lobby .levels.wmap { margin-top: 2px; }
+}

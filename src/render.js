@@ -7,6 +7,9 @@ import { SPR, initSprites, charFrame, mirror, drawDigits } from './sprites.js';
 
 const TAU = Math.PI * 2;
 const hash = (x, y) => { let h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967295; };
+// the middle-distance layer for each world (see makeMid)
+const MID_LAYER = { day: 'farm', sunset: 'farm', night: 'village', dusk: 'village', ice: 'icehills', lava: 'lavafall', haunted: 'graves' };
+const MID_NAMES = new Set(Object.values(MID_LAYER));
 const canvasOf = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, w); c.height = Math.max(1, h); return c; };
 const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
 const FIRE = ['#c22b3b', '#ff5a2a', '#ff9a3c', '#ffd84a', '#fff6c8'];
@@ -253,6 +256,7 @@ export class Renderer {
     this.drawTrapButtons(world, o, true);
     if (o.debug) { l.strokeStyle = 'red'; l.lineWidth = 1; for (const d of world.dangers()) l.strokeRect(Math.round(d.x) + 0.5, Math.round(d.y) + 0.5, d.w - 1, d.h - 1); }
     l.restore();
+    this.dtLast = dt; this.weatherFront(this.lo.width, this.lo.height, dt);
     if (this.flash > 0) { this.flash -= dt; l.fillStyle = '#ffffff55'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (world.slowmo > 0) { l.fillStyle = '#5ab4ff22'; l.fillRect(0, 0, this.lo.width, this.lo.height); }
     if (o.runnerView && world.player.fog > 0) this.drawFog(world, cx, cy);
@@ -321,16 +325,103 @@ export class Renderer {
       const x = Math.round((((hash(i, 7) * span - cx * 0.12 + this.t * (3 + hash(i, 9) * 4)) % span) + span) % span - cl.width - 20);
       l.drawImage(cl, x, Math.round(hash(i, 8) * H * 0.35 + 6 - cy * 0.04));
     }
-    const bottom = world.h * TILE;
-    const layer = (name, par, lift) => {
-      const img = this.bg(name + theme, () => this.makeLayer(th, name));
-      const y = Math.round((bottom - lift - img.height - cy) * par + (H - img.height) * (1 - par));
+    // The layers stand on the horizon: at the start of the round each one's foot sits just below the ground the
+    // runner starts on (so the hills, farms and trees rise above the level's skyline), and from there they follow
+    // the camera up and down at their own parallax.
+    if (!this.bgRef || this.bgRef.world !== world) this.bgRef = { world, cy0: cy };
+    const ground = world.start.y + 16 - this.bgRef.cy0;
+    const layer = (name, par, sink) => {
+      const img = this.bg(name + theme, () => MID_NAMES.has(name) ? this.makeMid(th, name) : this.makeLayer(th, name));
+      const y = Math.round(ground + sink - img.height - (cy - this.bgRef.cy0) * par);
       const off = Math.round(((cx * par) % img.width + img.width) % img.width);
       for (let x = -off; x < W; x += img.width) l.drawImage(img, x, y);
       if (y + img.height < H) { l.fillStyle = img.bottomColor; l.fillRect(0, y + img.height, W, H - y - img.height); }
     };
-    layer(th.far, 0.2, 30);
-    layer(th.near, 0.45, 10);
+    layer(th.far, 0.2, 34);
+    const mid = MID_LAYER[theme]; if (mid && !this.lite) layer(mid, 0.32, 26);   // a middle distance: farms, a village, graves…
+    layer(th.near, 0.45, 14);
+    this.weatherBack(W, H);
+  }
+
+  // ---------- the middle distance, between the far range and the near trees: something lived-in for every world
+  makeMid(th, name) {
+    const W = 480, H = 96, c = canvasOf(W, H), x = c.getContext('2d');
+    const mix = (a, b, k) => { const A = parseInt(a.slice(1), 16), B = parseInt(b.slice(1), 16), ch = sh => Math.round(((A >> sh) & 255) * (1 - k) + ((B >> sh) & 255) * k); return `rgb(${ch(16)},${ch(8)},${ch(0)})`; };
+    const base = mix(th.farCol[0], th.nearCol[0], 0.5), light = mix(th.farCol[1], th.nearCol[1], 0.5), dark = mix(th.farCol[0], th.nearCol[2], 0.6);
+    const haze = col => mix(col, th.farCol[0], 0.45);   // props fade into the distance
+    const R = (i, j, w, h, col) => { x.fillStyle = col; x.fillRect(i, j, w, h); };
+    const ground = i => Math.round(H - 30 + Math.sin(i / W * TAU * 2) * 8 + Math.sin(i / W * TAU * 5 + 1) * 3);
+    if (name !== 'lavafall') for (let i = 0; i < W; i++) { const g0 = ground(i); R(i, g0, 1, H - g0, base); R(i, g0, 1, 1, light); if (hash(i, 3) < 0.3) R(i, g0 + 1, 1, 1, light); }
+    const at = f => { const i = Math.round(f * W); return [i, ground(i)]; };
+    if (name === 'farm' || name === 'village') {
+      const night = name === 'village', win = night ? '#ffd84a' : haze('#3a2417');
+      const barn = (bx, by) => { R(bx, by - 12, 16, 12, haze('#b9503a')); for (let j = 0; j < 6; j++) R(bx - 1 + j, by - 13 - j, 18 - 2 * j, 1, haze('#7a3a2a')); R(bx + 6, by - 8, 4, 8, haze('#5a2a1e')); R(bx + 2, by - 10, 3, 3, win); };
+      const cottage = (bx, by) => { R(bx, by - 8, 11, 8, haze('#e6d6b8')); for (let j = 0; j < 5; j++) R(bx - 1 + j, by - 9 - j, 13 - 2 * j, 1, haze('#8a5a2b')); R(bx + 2, by - 6, 2, 2, win); R(bx + 7, by - 6, 2, 2, win); R(bx + 8, by - 15, 2, 4, haze('#6b4226')); };
+      const mill = (bx, by) => { for (let j = 0; j < 18; j++) R(bx - Math.round(j / 6), by - j, 4 + Math.round(j / 3) % 2, 1, haze('#e6d6b8')); const hx = bx + 1, hy = by - 18; for (let d = -9; d <= 9; d++) { R(hx + d, hy + d, 1, 1, haze('#8a5a2b')); R(hx + d, hy - d, 1, 1, haze('#8a5a2b')); } R(hx - 1, hy - 1, 3, 3, haze('#6b4226')); };
+      const hay = (bx, by) => { R(bx, by - 3, 5, 3, haze('#e0be62')); R(bx + 1, by - 4, 3, 1, haze('#e0be62')); };
+      const fence = (bx, by, n) => { for (let k = 0; k < n; k++) { R(bx + k * 4, by - 4, 1, 4, haze('#8a5a2b')); } R(bx, by - 3, n * 4 - 3, 1, haze('#a0703c')); };
+      { const [i, g] = at(0.12); night ? cottage(i, g) : barn(i, g); }
+      { const [i, g] = at(0.3); mill(i, g); }
+      { const [i, g] = at(0.47); cottage(i, g); }
+      { const [i, g] = at(0.58); fence(i, g, 7); }
+      { const [i, g] = at(0.72); night ? cottage(i, g) : barn(i, g); }
+      for (const f of [0.2, 0.22, 0.85, 0.88, 0.9]) { const [i, g] = at(f); night ? R(i, g - 2, 1, 1, '#d8ff7a') : hay(i, g); }
+    } else if (name === 'icehills') {
+      for (let k = 0; k < 22; k++) { const [i, g] = at(hash(k, 81)); const hh = 8 + Math.floor(hash(k, 82) * 8); for (let j = 0; j < hh; j++) { const half = Math.round(j / hh * 4); R(i - half, g - hh + j, half * 2 + 1, 1, j % 4 === 0 ? light : dark); } }
+      { const [i, g] = at(0.6); R(i, g - 7, 10, 7, haze('#8a5a2b')); for (let j = 0; j < 4; j++) R(i - 1 + j, g - 8 - j, 12 - 2 * j, 1, '#ffffff'); R(i + 3, g - 5, 2, 2, '#ffd84a'); }
+    } else if (name === 'lavafall') {   // a cave wall with glowing falls and pools
+      for (let i = 0; i < W; i++) { const g0 = Math.round(10 + Math.sin(i / 31) * 6 + Math.sin(i / 11) * 2); R(i, g0, 1, H - g0, base); }
+      for (const f of [0.18, 0.46, 0.79]) { const i = Math.round(f * W); for (let j = 14; j < H - 10; j++) { R(i + Math.round(Math.sin(j / 7)), j, 3, 1, j % 3 ? '#ff7a1a' : '#ffd84a'); } R(i - 8, H - 12, 19, 3, '#ff7a1a'); R(i - 5, H - 12, 12, 1, '#ffd84a'); }
+    } else if (name === 'graves') {
+      for (let k = 0; k < 16; k++) { const [i, g] = at(hash(k, 91)); if (hash(k, 92) < 0.6) { R(i, g - 6, 5, 6, light); R(i + 1, g - 7, 3, 1, light); } else { R(i + 2, g - 9, 1, 9, light); R(i, g - 7, 5, 1, light); } }
+      { const [i, g] = at(0.5); for (let k = 0; k < 9; k++) R(i + k * 4, g - 5 - (k % 2), 1, 5 + (k % 2), dark); R(i, g - 4, 33, 1, dark); }
+    }
+    const d = x.getImageData(0, H - 1, 1, 1).data; c.bottomColor = `rgb(${d[0]},${d[1]},${d[2]})`;
+    return c;
+  }
+
+  // ---------- cosmetic weather for a round (set by main.js from the level and the round, so both players see the
+  // same): rain, golden hour, falling leaves, fireflies, fog, a blizzard, ash. The tints touch only the background;
+  // the particles are light and thin, so the level always reads clearly.
+  weatherBack(W, H) {
+    const w = this.weather; if (!w || this.lite) return;
+    const l = this.l, tint = { rain: ['#2a3a5a', 0.28], golden: ['#ffa43a', 0.18], fog: ['#c8c0d8', 0.22], blizzard: ['#dfe9f5', 0.25], ash: ['#3a2a2a', 0.2] }[w.kind];
+    if (tint) { l.globalAlpha = tint[1]; l.fillStyle = tint[0]; l.fillRect(0, 0, W, H); l.globalAlpha = 1; }
+    if (w.kind === 'rain') {   // now and then the far sky lights up
+      w.flashT = (w.flashT ?? 6 + hash(w.seed, 1) * 8) - (this.dtLast || 0);
+      if (w.flashT < 0) { l.globalAlpha = Math.max(0, 0.35 + w.flashT * 2.5); l.fillStyle = '#e8f0ff'; l.fillRect(0, 0, W, H); l.globalAlpha = 1; if (w.flashT < -0.15) w.flashT = 7 + Math.random() * 9; }
+    }
+    if (w.kind === 'fog') for (let k = 0; k < 4; k++) {
+      const y = Math.round(H * (0.45 + k * 0.12)), off = (this.t * (6 + k * 3) + k * 97) % (W + 200) - 100;
+      l.globalAlpha = 0.18; l.fillStyle = '#e8e0f0';
+      for (let i = -1; i < 3; i++) l.fillRect(Math.round(off + i * (W / 2) - W / 2), y, Math.round(W * 0.35), 6 + k * 2);
+      l.globalAlpha = 1;
+    }
+  }
+  weatherFront(W, H, dt) {
+    const w = this.weather; if (!w || this.lite) return;
+    const l = this.l, t = this.t;
+    if (w.kind === 'rain' || w.kind === 'blizzard' || w.kind === 'ash' || w.kind === 'leaves' || w.kind === 'petals') {
+      const n = { rain: 70, blizzard: 90, ash: 40, leaves: 16, petals: 18 }[w.kind];
+      for (let i = 0; i < n; i++) {
+        const sp = { rain: 260, blizzard: 70, ash: 18, leaves: 22, petals: 20 }[w.kind] * (0.7 + hash(i, 5) * 0.6);
+        const drift = { rain: -0.35, blizzard: -1.1, ash: 0.2, leaves: -0.6, petals: -0.5 }[w.kind];
+        const y = ((hash(i, 6) * (H + 20) + t * sp) % (H + 20)) - 10;
+        let x = ((hash(i, 7) * (W + 40) + (t * sp) * drift + (this.camX || 0) * -0.3) % (W + 40) + (W + 40)) % (W + 40) - 20;
+        if (w.kind === 'leaves' || w.kind === 'petals' || w.kind === 'ash') x += Math.sin(t * 1.3 + i) * 6;
+        if (w.kind === 'rain') { l.fillStyle = '#c8dcff66'; l.fillRect(Math.round(x), Math.round(y), 1, 5); l.fillRect(Math.round(x) - 1, Math.round(y) + 5, 1, 2); }
+        else if (w.kind === 'blizzard') { l.fillStyle = i % 3 ? '#ffffffcc' : '#ffffff77'; l.fillRect(Math.round(x), Math.round(y), i % 4 ? 1 : 2, 1); }
+        else if (w.kind === 'ash') { l.fillStyle = i % 2 ? '#8a7a7a99' : '#ff9a3c88'; l.fillRect(Math.round(x), Math.round(y), 1, 1); }
+        else { const flip = Math.floor(t * 4 + i) % 2; l.fillStyle = w.kind === 'leaves' ? ['#d9782a', '#f0be4a', '#b9503a'][i % 3] : ['#ffd1dc', '#ffa9bf', '#ffffff'][i % 3]; l.fillRect(Math.round(x), Math.round(y), flip ? 2 : 1, flip ? 1 : 2); }
+      }
+    } else if (w.kind === 'fireflies') {
+      for (let i = 0; i < 18; i++) {
+        const x = ((hash(i, 11) * W + Math.sin(t * 0.4 + i) * 30 - (this.camX || 0) * 0.15) % W + W) % W, y = H * (0.35 + hash(i, 12) * 0.55) + Math.sin(t * 0.9 + i * 2) * 10;
+        const on = Math.sin(t * (1.2 + hash(i, 13)) + i * 3) > 0.3;
+        if (!on) continue;
+        l.fillStyle = '#d8ff7a33'; l.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3); l.fillStyle = '#efffb0'; l.fillRect(Math.round(x), Math.round(y), 1, 1);
+      }
+    }
   }
 
   cloudSprite(th, v) {

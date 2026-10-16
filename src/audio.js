@@ -119,7 +119,11 @@ export const sfx = {
   crumble: () => { noise(0.35, { vol: 0.3, freq: 500 }); tone(140, 0.25, { slide: -60, vol: 0.12, type: 'triangle' }); },
   grab: () => tone(500, 0.08, { slide: 200, vol: 0.08, type: 'triangle' }),
   fooled: () => [880, 660, 990].forEach((f, i) => tone(f, 0.1, { vol: 0.07, delay: i * 0.06, type: 'triangle' })),
-  click: () => tone(880, 0.05, { vol: 0.07, type: 'triangle' }),
+  click: () => { noise(0.035, { vol: 0.2, freq: 2600, q: 5 }); tone(560, 0.05, { slide: -220, vol: 0.07, type: 'triangle' }); tone(1180, 0.02, { vol: 0.025, type: 'square' }); },   // a wooden clack
+  // the title world's ambience
+  wind: () => noise(2.2, { vol: 0.05, freq: 500, q: 0.4 }),
+  wave: () => { noise(2.6, { vol: 0.07, freq: 700, q: 0.3 }); noise(1.2, { vol: 0.04, freq: 2400, q: 0.3, delay: 1.2 }); },
+  owl: () => [0, 0.32].forEach(d => tone(420, 0.22, { slide: -60, vol: 0.03, delay: d, type: 'sine' })),
   count: () => tone(660, 0.12, { vol: 0.12, type: 'square' }),
   go: () => tone(990, 0.3, { vol: 0.14, type: 'square' }),
   denied: () => tone(140, 0.1, { vol: 0.1, type: 'square' }),
@@ -137,6 +141,7 @@ export function playEvent([k, , , extra]) {
 // from the motif over each chord, so every world has its own tune and mood. Scheduled a bar ahead.
 const MAJ = [0, 2, 4, 5, 7, 9, 11], MIN = [0, 2, 3, 5, 7, 8, 10], DOR = [0, 2, 3, 5, 7, 9, 10], PHR = [0, 1, 3, 5, 7, 8, 10];
 const SONGS = {
+  title:   { bpm: 84, root: 65, scale: MAJ, prog: [0, 3, 4, 0, 5, 3, 1, 4], motif: [[0, -1, 2, -1, 4, -1, 2, -1], [4, -1, 5, 4, 2, -1, -1, -1]], lead: 'triangle', bass: 'sine', bell: true, soft: true, pad: true },
   day:     { bpm: 132, root: 60, scale: MAJ, prog: [0, 0, 4, 4, 3, 3, 1, 4], motif: [[0, -1, 2, -1, 4, -1, 2, 1], [0, -1, 1, 2, 1, -1, 0, -1]], lead: 'square', bass: 'triangle' },
   sunset:  { bpm: 112, root: 65, scale: MAJ, prog: [0, 5, 3, 4, 0, 5, 1, 4], motif: [[4, -1, -1, 2, 1, -1, 0, -1], [2, -1, 4, -1, 5, 4, 2, -1]], lead: 'triangle', bass: 'triangle', swing: 0.12 },
   night:   { bpm: 100, root: 57, scale: MIN, prog: [0, 0, 5, 5, 3, 3, 4, 4], motif: [[0, 2, 4, 7, 4, 2, 0, -1], [-1, 4, -1, 2, 1, -1, 0, -1]], lead: 'triangle', bass: 'sine', soft: true },
@@ -159,6 +164,7 @@ export function startMusic(song = 'day') {
   const sched = () => {
     while (next < ac.currentTime + 0.6) {
       const b = bar % 8, chord = S.prog[b], motif = S.motif[b % 2];
+      if (S.pad !== false) for (const k of [0, 2, 4]) tone(mtof(note(S, chord + k) - 12), beat * 7.6, { type: 'triangle', vol: S.soft ? 0.03 : 0.022, delay: next - ac.currentTime, out: musicGain });   // a soft chord under each bar
       for (let i = 0; i < 8; i++) {
         const d = next + i * beat + (i % 2 ? (S.swing || 0) * beat : 0) - ac.currentTime;
         if (i % 2 === 0) tone(mtof(note(S, chord) - 24 + (i === 4 ? 7 : 0)), beat * 1.6, { type: S.bass, vol: S.bass === 'sawtooth' ? 0.18 : 0.45, delay: d, out: musicGain });

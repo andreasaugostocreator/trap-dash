@@ -57,6 +57,8 @@ const store = {
 };
 const NICK = ['Ace', 'Pixel', 'Dash', 'Zip', 'Jinx', 'Moxie', 'Turbo', 'Scout'];
 import { HATS, SCARVES, TINTS, SLOTS as COS_SLOTS, dressed, cleanCos, unlocked, setGemCounter } from './cosmetics.js';
+import { mapSize, pinX, pinY, paintMap, paintTrail } from './worldmap.js';
+let mapArt = null;
 import { stats, recordRun, recordCatch, recordTrapPoints, recordResult } from './stats.js';
 const me = store.get('me2', { name: NICK[Math.floor(Math.random() * NICK.length)] + Math.floor(Math.random() * 90 + 10), char: CHARS[Math.floor(Math.random() * CHARS.length)].id });
 me.cos = cleanCos(me.cos);
@@ -278,6 +280,7 @@ function openSettings(back) {
     ['Ghost of the last run', () => settings.ghost, v => { settings.ghost = v; }],
     ['Level preview', () => settings.preview, v => { settings.preview = v; }],
     ['Screen shake', () => settings.shake, v => { settings.shake = v; R.shakeOn = v; }],
+    ['Weather in levels <small>(rain, fog, fireflies…)</small>', () => settings.weather !== false, v => { settings.weather = v; if (!v) R.weather = null; }],
     ['Left-handed <small>(jump on the left)</small>', () => settings.lefty, v => { settings.lefty = v; applyControlPrefs(); }],
   ];
   const GFX = { auto: 'Auto', high: 'High', low: 'Low' }, nextGfx = { auto: 'high', high: 'low', low: 'auto' };
@@ -294,7 +297,7 @@ function openSettings(back) {
     <div class="buttons"><button class="big pink" id="setDone">Done</button></div>
     <p class="ver">Version <span id="appVersion">${bootVersion ? bootVersion.replace('trap-dash-', '') : '…'}</span></p>`);
   const fill = el => el.style.setProperty('--v', ((el.value - el.min) / (el.max - el.min) * 100).toFixed(0) + '%');
-  $('volMusic').oninput = e => { fill(e.target); if (setMusicVolume(e.target.value / 100) && run) { unlockAudio(); startMusic(run.endless ? 'endless' : run.world.level.theme); } };
+  $('volMusic').oninput = e => { fill(e.target); if (setMusicVolume(e.target.value / 100)) { unlockAudio(); startMusic(!run ? 'title' : run.endless ? 'endless' : run.world.level.theme); } };
   $('volSfx').oninput = e => { fill(e.target); unlockAudio(); setSfxVolume(e.target.value / 100); };
   $('volSfx').onchange = () => sfx.click();
   $('btnSize').oninput = e => { fill(e.target); settings.btnSize = e.target.value / 100; $('btnSizeLab').textContent = e.target.value + '%'; applyControlPrefs(); };
@@ -340,12 +343,13 @@ $('howBtn').onclick = () => { panel(`
 };
 
 document.addEventListener('click', e => {
+  if (!run) { unlockAudio(); startMusic('title'); }   // the first tap lets the browser play sound: the menu tune starts
   const go = e.target.closest('[data-go]'); if (go) { unlockAudio(); sfx.click(); nav(go.dataset.go); }
   if (e.target.closest('[data-close]')) { sfx.click(); hidePanel(); }
 });
 
 function nav(where) {
-  if (where === 'title') { leaveParty(); show('title'); buildTitle(); return; }
+  if (where === 'title') { leaveParty(); show('title'); buildTitle(); startMusic('title'); return; }
   if (where === 'join') { show('join'); $('joinStatus').textContent = ''; $('joinStatus').className = 'status'; setTimeout(() => $('code').focus(), 50); return; }
   if (where === 'host') return hostParty();
   if (where === 'match') return openMatchmaking();
@@ -647,7 +651,7 @@ function saveLobbyPrefs() {
 function openLobby() {
   forgetTyping(); saveLobbyPrefs();
   show('lobby');
-  stopMusic();
+  startMusic('title');   // the menus share the title's tune
   const online = mode === 'online', practice = mode === 'practice';
   $('lobbyTitle').textContent = online ? (isHost ? 'Your party' : 'Party') : practice ? 'Practice' : 'Same screen';
   $('roomBox').classList.toggle('hidden', !online || !roomCode);
@@ -676,17 +680,24 @@ function openLobby() {
   }
 
   const ready = !online || (players.a && players.b);
-  const best = store.get('best', {});
-  const lv = $('levels'); lv.innerHTML = '';
+  const best = Object.fromEntries(Object.entries(stats().best).map(([k, v]) => [k, v.t]));   // best times in any mode
+  // the level select is a little world map (src/worldmap.js): pins along a trail, your runner on the chosen one
+  const lv = $('levels'); lv.innerHTML = ''; lv.classList.add('wmap');
+  const MH = UI.h < 380 ? 64 : UI.h < 440 ? 76 : UI.h < 500 ? 90 : 150, inner = document.createElement('div');
+  inner.className = 'wmapIn'; inner.style.width = mapSize(LEVELS.length).w + 'px'; inner.style.height = MH + 'px';
+  if (!mapArt || mapArt.h !== MH) { const c = document.createElement('canvas'); c.className = 'pix wmapArt'; paintMap(c, LEVELS.map(L => L.theme), MH); paintTrail(c, LEVELS.length, MH); mapArt = { h: MH, c }; }
+  inner.appendChild(mapArt.c);
   LEVELS.forEach((L, i) => {
     const b = document.createElement('button');
-    b.className = i === lobby.level ? 'on' : '';
-    b.style.setProperty('--theme', (THEMES[L.theme] || THEMES.day).sky[1]);
-    b.innerHTML = `<span>${i + 1}. ${esc(L.name)}</span><small class="stars">${starText(starsOf(L))}${practice && best[L.id] ? ' · ' + best[L.id].toFixed(1) + 's' : ''}</small>`;
+    b.className = 'pin' + (i === lobby.level ? ' on' : '');
+    b.style.left = pinX(i) + 'px'; b.style.top = pinY(i, MH) + 'px';
+    b.innerHTML = `<i class="pinNum">${i + 1}</i><span>${esc(L.name)}</span><small class="stars">${starText(starsOf(L))}${best[L.id] ? ' · ' + best[L.id].toFixed(1) + 's' : ''}</small>`;
     b.disabled = online && !isHost;
     b.onclick = () => { lobby.level = i; sfx.click(); syncLobby(); openLobby(); };
-    lv.appendChild(b);
+    if (i === lobby.level) { const who = players[mySideOrA()] || players.a || { char: me.char }; const art = portrait(who, 'idle'); art.classList.add('pinRunner'); b.prepend(art); }
+    inner.appendChild(b);
   });
+  lv.appendChild(inner);
   const on = lv.querySelector('.on'); if (on) lv.scrollLeft = Math.max(0, on.offsetLeft - lv.clientWidth / 2 + on.offsetWidth / 2);
   // Random levels: pick a difficulty, the host's device builds one and shares it.
   const rr = $('randRow'); rr.innerHTML = '';
@@ -1252,6 +1263,19 @@ function updateTutorial() {
   if (t.text !== before && run.phase !== 'preview') { const h = $('hint'); h.textContent = t.text; h.classList.remove('hidden'); h.style.animation = 'none'; void h.offsetWidth; h.style.animation = ''; }
 }
 
+// Cosmetic weather for a round: picked from the level and the round number, so both players see the same sky.
+const WEATHER = { day: [['clear', 45], ['rain', 20], ['golden', 20], ['petals', 15]], sunset: [['clear', 50], ['rain', 15], ['leaves', 35]],
+  night: [['clear', 50], ['fireflies', 30], ['rain', 20]], dusk: [['clear', 50], ['fireflies', 50]], sky: [['clear', 70], ['golden', 30]],
+  ice: [['clear', 65], ['blizzard', 35]], pirate: [['clear', 55], ['rain', 25], ['golden', 20]], haunted: [['fog', 55], ['rain', 30], ['clear', 15]], lava: [['clear', 60], ['ash', 40]] };
+const WEATHER_NAME = { rain: 'rain', golden: 'golden hour', petals: 'blossom on the wind', leaves: 'falling leaves', fireflies: 'fireflies', fog: 'fog', blizzard: 'blizzard', ash: 'ash fall' };
+function weatherFor(L, n, endless) {
+  const key = String(L.id || L.name) + ':' + (endless ? endless.stage : (score.a + score.b) + ':' + Math.floor(runs.length / 2));   // the same for both runs of a level
+  let h = 0; for (const ch of key) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const opts = WEATHER[L.theme] || WEATHER.day, tot = opts.reduce((a, o) => a + o[1], 0);
+  let r = (h % 1000) / 1000 * tot;
+  for (const [k, wgt] of opts) { if ((r -= wgt) < 0) return k === 'clear' ? null : { kind: k, seed: h % 97 }; }
+  return null;
+}
 function startRun(level, runner, n, endless = null, tutRole = null) {
   forgetTyping();
   hidePanel(); clearTips();
@@ -1277,6 +1301,7 @@ function startRun(level, runner, n, endless = null, tutRole = null) {
   run.preview = settings.preview && !(endless && endless.stage > 1) && !tutRole;
   if (endless && endless.score) Object.assign(run.score, endless.score, { kinds: new Set(), lastT: -99, streak: 0 });
   R.parts = []; R.follow(world, 0, run.trapperHere && !runnerHere, true);
+  R.weather = tutRole || settings.weather === false ? null : weatherFor(levelOf(level), n, endless);
   if (!(endless && endless.stage > 1)) requestAnimationFrame(() => { if (run && run.world === world) { const at = R.toUIPoint(world.player.x + 5, world.player.y + 6); wipeOpen(at.x, at.y); } });   // the iris opens on your runner
   $('hud').classList.remove('hidden');
   const role = $('role');
@@ -1464,7 +1489,7 @@ function showPreview() {
   const icons = side => lo[side].map(id => `<span class="pvGad"><canvas class="pix" width="7" height="7" data-icon="${id}"></canvas><span><b>${esc(GADGETS[side][id].name)}</b><i>${GAD_DESC[id] || ''}</i></span></span>`).join('');
   const stars = L.stars || starsOf(L);
   const kinds = [...new Set(run.world.traps.map(t => t.kind))];
-  el.innerHTML = `<div class="pvName">${esc(run.endless ? '∞ ' + L.name : L.name)} <span class="stars">${starText(stars)}</span></div>
+  el.innerHTML = `<div class="pvName">${esc(run.endless ? '∞ ' + L.name : L.name)} <span class="stars">${starText(stars)}</span>${R.weather ? `<small class="pvWx">· ${WEATHER_NAME[R.weather.kind]}</small>` : ''}</div>
     <div class="pvTraps">${kinds.map(k => `<span class="pvTrap"><canvas class="pix" width="7" height="7" data-icon="${k}"></canvas>${esc(TRAPS[k].name)}</span>`).join('')}</div>
     <div class="pvRow${mine('runner') ? ' mine' : ''}"><b class="pvSide run">RUNNER</b>${icons('runner')}</div>
     <div class="pvRow${mine('trapper') ? ' mine' : ''}"><b class="pvSide trap">TRAPPER</b>${icons('trapper')}</div>
@@ -1950,7 +1975,19 @@ function paintEdges() {
 
 // Behind the title and every menu: the menu world (src/scene.js), a living landscape, not a level.
 const scene = new Scene();
+// The title world's sounds: birds by day, crickets and an owl at night, wind in the winter peaks, waves at the sea.
+let ambT = 2;
+function menuAmbience(dt) {
+  if ((ambT -= dt) > 0) return;
+  ambT = 2.5 + Math.random() * 4;
+  const place = ['spring', 'autumn', 'winter', 'seaside'][scene.place] || 'spring', night = scene.day > 0.7 && scene.day < 0.96;
+  if (place === 'seaside' && Math.random() < 0.6) return sfx.wave();
+  if (place === 'winter' && Math.random() < 0.5) return sfx.wind();
+  if (night) return Math.random() < 0.25 ? sfx.owl() : sfx.cricket();
+  sfx.chirp();
+}
 function drawMenuScene(dt) {
+  menuAmbience(dt);
   const kk = Math.max(1, Math.round(R.devH / 190)), W = Math.ceil(R.devW / kk), H = Math.ceil(R.devH / kk);
   if (R.lo.width !== W || R.lo.height !== H) { R.lo.width = W; R.lo.height = H; R.l.imageSmoothingEnabled = false; }
   R.wide = 'scene';   // the game sets its own zoom again when a round starts
@@ -1989,4 +2026,4 @@ else if (session && Date.now() - session.t < 5 * 60 * 1000) {   // the app was c
 }
 else show('title');
 requestAnimationFrame(frame);
-window.__td = { scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };
+window.__td = { toLobby() { if (mode === 'online') net.send({ t: 'toLobby' }); endRunView(); syncLobby(); openLobby(); }, scene, get run() { return run; }, get mode() { return mode; }, get players() { return players; }, get score() { return score; }, nav, startRun, fireTrap, R };

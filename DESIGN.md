@@ -455,3 +455,27 @@ the top bar.
   scored with the traps on the other run). On short screens the podium and the cards sit side by side.
 
 `tools/batchC-test.mjs` checks the wardrobe, the stats, the podium, the phone layout and cosmetics online.
+
+## 22. Worlds you can look around in
+
+- **Level select as a world map** (`src/worldmap.js`). The lobby shows a strip of countryside that scrolls
+  sideways: meadow, clouds, autumn fields, night meadow, a purple dusk, lava caves, snow, a beach and a haunted hill,
+  one region per level, blended with a dithered seam, with little props (trees, flowers, fireflies, lava pools,
+  pines, palms, graves). A dotted trail winds from pin to pin; each pin is a wooden sign with the number, name, stars
+  and your best time, and your runner stands on the chosen one (beside it, on short screens). The pins are ordinary
+  buttons, so the keyboard, gamepad and tests treat them as before.
+- **Richer level backgrounds.** Every world gained a middle distance between its far range and its near trees: a
+  farm with a barn, a windmill, hay and fences (day and sunset), a village with lit windows (night and dusk), snowy
+  hills with pines and a cabin, glowing lava falls, a graveyard. The layers now stand on the horizon: at the start
+  of a round each one's foot sits just below the ground the runner starts on, so hills, farms and trees rise above
+  the level's skyline, and from there they move with the camera at their own parallax.
+- **Weather and light** (cosmetic): rain with distant flashes, golden hour, blossom or leaves on the wind,
+  fireflies, fog banks, a blizzard, ash fall, picked per world from the level and the match so both players see the
+  same sky. Tints touch only the background and the particles are thin, so the level always reads clearly. The
+  level preview names it; Settings → "Weather in levels" turns it off, and Low graphics skips it.
+- **Sound.** Menu buttons clack like wood. The title world has its own sounds (birds by day, crickets and an owl at
+  night, wind in the winter peaks, waves at the sea) and a gentle menu tune that plays in the lobby too. Every song
+  now has a soft chord pad under its bars.
+
+`tools/batchD-test.mjs` checks the map, every world drawing, and that both screens get the same weather;
+`tools/map-shots.mjs` and `tools/weather-shots.mjs` take pictures.
